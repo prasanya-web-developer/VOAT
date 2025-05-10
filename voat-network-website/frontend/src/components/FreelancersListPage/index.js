@@ -13,7 +13,7 @@ class PortfolioList extends Component {
       profession: "",
       experience: "",
     },
-    baseUrl: "http://localhost:5000",
+    baseUrl: "https://your-render-backend-url.onrender.com",
     userImages: {}, // To store user images by userId
     wishlist: [], // Add this to track wishlisted items
   };

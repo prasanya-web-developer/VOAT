@@ -111,13 +111,16 @@ class SignupPage extends React.Component {
   performRegistration = async () => {
     const { name, email, role, profession, password } = this.state;
 
-    return axios.post("http://localhost:5000/api/signup", {
-      name,
-      email,
-      password,
-      role,
-      profession,
-    });
+    return axios.post(
+      "https://your-render-backend-url.onrender.com/api/signup",
+      {
+        name,
+        email,
+        password,
+        role,
+        profession,
+      }
+    );
   };
 
   render() {

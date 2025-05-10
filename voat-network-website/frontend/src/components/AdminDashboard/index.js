@@ -13,7 +13,7 @@ class AdminPanel extends Component {
     portfolioSubmissions: [],
     viewingSubmission: null,
     isLoading: true,
-    baseUrl: "http://localhost:5000",
+    baseUrl: "https://your-render-backend-url.onrender.com",
   };
 
   componentDidMount() {
