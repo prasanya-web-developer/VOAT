@@ -1,0 +1,207 @@
+.register-screen {
+  min-height: 100vh;
+  background-color: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4rem 1rem;
+}
+
+.register-container {
+  max-width: 50rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.register-title {
+  text-align: center;
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #1f2937;
+  margin-bottom: 2rem;
+}
+
+.register-form-wrapper {
+  background-color: white;
+  padding: 3rem;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12),
+    0 4px 6px -1px rgba(0, 0, 0, 0.07);
+  border-radius: 0.75rem;
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.register-row {
+  display: flex;
+  gap: 2rem;
+  width: 100%;
+}
+
+.register-input-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.register-label {
+  display: block;
+  margin-bottom: 0.625rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.register-input {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.register-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.register-input-error {
+  color: #dc2626;
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.register-select-container {
+  position: relative;
+}
+
+.register-select-container select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-color: transparent;
+}
+
+.register-select-icon {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #6b7280;
+}
+
+.register-password-container {
+  position: relative;
+}
+
+.register-password-toggle {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background-color: transparent;
+  color: #6b7280;
+}
+
+.register-password-toggle:hover {
+  color: #4b5563;
+}
+
+.register-submit-button {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  margin-top: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.register-submit-button:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.register-divider {
+  position: relative;
+  margin: 2rem 0;
+}
+
+.register-divider-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.register-divider-text {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.register-divider-content {
+  background-color: white;
+  padding: 0 1.5rem;
+  color: #6b7280;
+  font-size: 0.9375rem;
+  z-index: 10;
+}
+
+.register-login-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: #2563eb;
+  font-weight: 500;
+  margin-top: 1.5rem;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.register-login-link:hover {
+  text-decoration: underline;
+  color: #1d4ed8;
+}
+
+/* Responsive design for mobile screens */
+@media (max-width: 768px) {
+  .register-row {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .register-container {
+    max-width: 32rem;
+  }
+
+  .register-form-wrapper {
+    padding: 2rem;
+  }
+}

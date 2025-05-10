@@ -1,0 +1,339 @@
+/* Modern PortfolioList.css */
+.portfolios-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  margin-top: 120px;
+}
+
+.portfolios-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.portfolio-header {
+  position: relative; /* Add this to ensure the positioning context */
+}
+
+.wishlist-icon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  cursor: pointer;
+  z-index: 2;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.wishlist-icon:hover {
+  transform: scale(1.1);
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.portfolios-header h1 {
+  color: #2d3748;
+  margin-bottom: 16px;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.portfolios-header p {
+  color: #4a5568;
+  font-size: 1.1rem;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* Modern filter section */
+.portfolios-filters {
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  margin-bottom: 40px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 200px;
+}
+
+.filter-group label {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-group select {
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23718096' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  cursor: pointer;
+}
+
+.filter-group select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+}
+
+.reset-filters-btn {
+  background-color: #f1f4f9;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #4a5568;
+  transition: all 0.2s ease;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reset-filters-btn:hover {
+  background-color: #e2e8f0;
+  color: #2d3748;
+}
+
+/* Modern portfolio grid */
+.portfolios-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 30px;
+}
+
+.portfolio-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #f0f0f0;
+}
+
+.portfolio-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.portfolio-header {
+  padding: 24px 24px 16px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.portfolio-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.portfolio-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-initial {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 28px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.portfolio-title {
+  flex-grow: 1;
+}
+
+.portfolio-title h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.3rem;
+  color: #2d3748;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.profession {
+  color: #667eea;
+  font-size: 0.95rem;
+  margin: 0;
+  font-weight: 500;
+  display: inline-block;
+  background-color: #eef2ff;
+  padding: 4px 10px;
+  border-radius: 30px;
+}
+
+.portfolio-details {
+  padding: 16px 24px;
+  flex-grow: 1;
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #4a5568;
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  color: #2d3748;
+}
+
+.portfolio-actions {
+  padding: 16px 24px 24px;
+  display: flex;
+  gap: 12px;
+}
+
+.view-portfolio-btn,
+.contact-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view-portfolio-btn {
+  background-color: #f7fafc;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
+}
+
+.view-portfolio-btn:hover {
+  background-color: #edf2f7;
+  color: #2d3748;
+}
+
+.contact-btn {
+  background-color: #667eea;
+  color: white;
+}
+
+.contact-btn:hover {
+  background-color: #5a67d8;
+  transform: translateY(-2px);
+}
+
+/* No results styling */
+.no-results {
+  padding: 60px 40px;
+  text-align: center;
+  background: #f7fafc;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.no-results-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.no-results h3 {
+  margin: 0 0 12px;
+  color: #2d3748;
+  font-size: 1.5rem;
+}
+
+.no-results p {
+  color: #4a5568;
+  max-width: 500px;
+  margin: 0 auto;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.portfolios-loading,
+.portfolios-error {
+  padding: 60px 40px;
+  text-align: center;
+  background: #f7fafc;
+  border-radius: 12px;
+  color: #4a5568;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .portfolios-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .reset-filters-btn {
+    width: 100%;
+  }
+
+  .portfolios-header h1 {
+    font-size: 2rem;
+  }
+}
