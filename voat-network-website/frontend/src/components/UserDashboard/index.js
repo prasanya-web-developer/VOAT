@@ -42,7 +42,7 @@ class UserDashboard extends Component {
     profileImage: null,
     previewImage: null,
     resumeFileName: "",
-    baseUrl: "https://your-render-backend-url.onrender.com",
+    baseUrl: "https://voat.onrender.com",
   };
 
   componentDidMount() {

@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import { Navigate } from "react-router-dom";
+// import { Navigate } from "react-router-dom";
 import NavBar from "../Navbar";
 import Footer from "../Footer";
 import "./index.css";
@@ -13,7 +13,7 @@ class AdminPanel extends Component {
     portfolioSubmissions: [],
     viewingSubmission: null,
     isLoading: true,
-    baseUrl: "https://your-render-backend-url.onrender.com",
+    baseUrl: "https://voat.onrender.com",
   };
 
   componentDidMount() {

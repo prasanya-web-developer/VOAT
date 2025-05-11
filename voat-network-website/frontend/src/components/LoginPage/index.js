@@ -68,13 +68,10 @@ class LoginPage extends React.Component {
   performLogin = async () => {
     const { email, password } = this.state;
 
-    return axios.post(
-      "https://your-render-backend-url.onrender.com/api/login",
-      {
-        email,
-        password,
-      }
-    );
+    return axios.post("https://voat.onrender.com/api/login", {
+      email,
+      password,
+    });
   };
 
   render() {

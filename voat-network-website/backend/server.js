@@ -15,9 +15,10 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 const corsOptions = {
-  origin: ["https://voat-network.netlify.app/", "http://localhost:3000"],
+  origin: ["https://voat-network.netlify.app", "http://localhost:3000"],
   credentials: true,
 };
+
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
