@@ -301,7 +301,7 @@
   background-color: rgba(255, 255, 255, 0.2);
 }
 
-/* Close button */
+/* Close button - FIXED POSITION */
 .notification-close {
   position: absolute;
   top: 50%;
@@ -319,6 +319,7 @@
   border: none;
   padding: 0;
   z-index: 10000; /* Higher than notification */
+  margin-left: 0; /* FIXED: Removed the margin that was pushing the X too far */
 }
 
 .notification-close:hover {
@@ -605,23 +606,32 @@
     justify-content: center;
   }
 
+  /* UPDATED: Mobile notifications - Smaller, more compact */
   .notifications-container {
     top: 85px; /* Adjust for smaller navbar on mobile */
     right: 10px;
-    max-width: 260px;
+    max-width: 220px; /* REDUCED: from 260px to 220px for smaller notification */
   }
 
   .notification {
-    padding: 10px 14px;
-    padding-right: 30px; /* Adjusted for mobile */
-    font-size: 14px;
+    padding: 8px 12px; /* REDUCED: Smaller padding */
+    padding-right: 35px; /* Ensure space for the X button */
+    font-size: 13px; /* REDUCED: Smaller font size */
+    min-width: auto; /* Remove min-width to allow it to be smaller */
   }
 
   .notification-icon {
+    width: 18px; /* REDUCED: Smaller icon */
+    height: 18px; /* REDUCED: Smaller icon */
+    min-width: 18px; /* REDUCED: Smaller icon */
+    margin-right: 8px; /* REDUCED: Smaller margin */
+  }
+
+  /* Make X button more accessible on mobile */
+  .notification-close {
     width: 20px;
     height: 20px;
-    min-width: 20px;
-    margin-right: 10px;
+    right: 8px;
   }
 }
 
@@ -651,6 +661,19 @@
     font-size: 14px;
     font-weight: 600;
     margin-left: 40px;
+  }
+
+  /* UPDATED: Even smaller notifications for very small screens */
+  .notifications-container {
+    margin-top: 18px;
+    max-width: 200px;
+    right: 5px;
+  }
+
+  .notification {
+    font-size: 12px;
+    padding: 6px 10px;
+    padding-right: 30px;
   }
 }
 

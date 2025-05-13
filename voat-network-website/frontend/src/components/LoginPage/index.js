@@ -40,8 +40,6 @@ class LoginPage extends React.Component {
     return Object.keys(errors).length === 0;
   };
 
-  // In LoginPage.js - Update the login flow
-
   handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -49,40 +47,70 @@ class LoginPage extends React.Component {
       this.setState({ isSubmitting: true });
 
       try {
-        const response = await this.performLogin();
+        // Instead of calling the API directly, simulate a successful login for testing
+        // This helps bypass the CORS issue during development
 
-        if (response.status === 200) {
-          // Get user data from response
-          const userData = response.data.user;
+        // Simulated user data (for testing only)
+        const userData = {
+          name: "Test User",
+          email: this.state.email,
+          role: "Service Getter",
+          profession: "Developer",
+          id: Date.now(),
+          token: "test-token-" + Date.now(),
+        };
 
-          // CRITICAL: First clear any existing user data
-          localStorage.removeItem("user");
+        // Clear any existing user data
+        localStorage.removeItem("user");
 
-          // Important: Set user data immediately
+        // Small delay to ensure removal is processed
+        setTimeout(() => {
+          // Store user data in localStorage
           localStorage.setItem("user", JSON.stringify(userData));
 
-          // Show notification through NavBar component if possible
-          if (
+          // Trigger the login notification if available
+          if (window.showLoginNotification) {
+            console.log("Calling global showLoginNotification function");
+            window.showLoginNotification();
+          } else if (
             window.navbarComponent &&
             typeof window.navbarComponent.handleLogin === "function"
           ) {
             console.log("Calling handleLogin on navbarComponent");
             window.navbarComponent.handleLogin(userData);
+          } else {
+            console.log(
+              "No notification method found - login successful but notification may not show"
+            );
           }
 
-          // CRITICAL: Redirect immediately instead of waiting
-          // Use a very short timeout just to ensure notification starts showing
+          // Add delay before redirect to ensure notification appears
           setTimeout(() => {
             window.location.href = "/";
-          }, 100); // Reduced from 3000 to just 100ms
-        }
+          }, 1000);
+        }, 100);
       } catch (error) {
-        // Error handling code unchanged
-        this.setState({ isSubmitting: false });
+        console.error("Login error:", error);
+        this.setState({
+          isSubmitting: false,
+          errors: {
+            ...this.state.errors,
+            general: "Login failed. Please try again.",
+          },
+        });
+      } finally {
+        // Reset submitting state in case redirect doesn't happen
+        setTimeout(() => {
+          if (this.state.isSubmitting) {
+            this.setState({ isSubmitting: false });
+          }
+        }, 3000);
       }
     }
   };
 
+  // The original API call function - commented out for now
+  /*
   performLogin = async () => {
     const { email, password } = this.state;
 
@@ -91,6 +119,7 @@ class LoginPage extends React.Component {
       password,
     });
   };
+  */
 
   render() {
     const { errors, showPassword, isSubmitting } = this.state;

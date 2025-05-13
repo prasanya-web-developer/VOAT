@@ -26,6 +26,8 @@ import {
   Phone,
   MapPin,
   Youtube,
+  CheckCircle,
+  Loader,
 } from "lucide-react";
 import { FaWhatsapp, FaXTwitter } from "react-icons/fa6";
 
@@ -47,6 +49,11 @@ class LandingPage extends Component {
     phone: "",
     profession: "",
     message: "",
+    // Form submission status
+    formStatus: "", // "submitting", "success", "error"
+    formMessage: "",
+    // Timer for success message
+    successTimer: null,
   };
 
   //scroll animations
@@ -64,6 +71,11 @@ class LandingPage extends Component {
   componentWillUnmount() {
     clearInterval(this.slideInterval);
     window.removeEventListener("scroll", this.handleScroll);
+
+    // Clear any existing success message timer
+    if (this.state.successTimer) {
+      clearTimeout(this.state.successTimer);
+    }
   }
 
   nextSlide() {
@@ -97,17 +109,79 @@ class LandingPage extends Component {
     });
   };
 
-  // Contact form methods
-  handleSubmit = (e) => {
+  // Updated contact form methods with Web3Forms integration
+  handleSubmit = async (e) => {
     e.preventDefault();
-    console.log({
-      fullName: this.state.fullName,
-      email: this.state.email,
-      phone: this.state.phone,
-      profession: this.state.profession,
-      message: this.state.message,
+
+    // Set form status to submitting
+    this.setState({
+      formStatus: "submitting",
+      formMessage: "Submitting your message...",
     });
-    // Add your form submission logic here
+
+    // Create form data
+    const formData = new FormData();
+    formData.append("access_key", "0930f5ef-f569-409a-ba8b-f084d8167fb2");
+    formData.append("name", this.state.fullName);
+    formData.append("email", this.state.email);
+    formData.append("phone", this.state.phone);
+    formData.append("profession", this.state.profession);
+    formData.append("message", this.state.message);
+
+    // Add a honeypot field to prevent spam
+    formData.append("botcheck", "");
+
+    // Add subject to the form
+    formData.append("subject", "New message from VOAT NETWORK website");
+
+    try {
+      // Submit to Web3Forms API
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // On success, clear form and show success message
+        this.setState({
+          fullName: "",
+          email: "",
+          phone: "",
+          profession: "",
+          message: "",
+          formStatus: "success",
+          formMessage:
+            "Thank you! Your message has been submitted successfully.",
+        });
+
+        // Set a timer to clear the success message after 5 seconds
+        const timer = setTimeout(() => {
+          this.setState({
+            formStatus: "",
+            formMessage: "",
+          });
+        }, 5000);
+
+        // Store the timer in state so we can clear it if component unmounts
+        this.setState({ successTimer: timer });
+      } else {
+        // On API error
+        this.setState({
+          formStatus: "error",
+          formMessage:
+            data.message || "Something went wrong. Please try again.",
+        });
+      }
+    } catch (error) {
+      // On network error
+      this.setState({
+        formStatus: "error",
+        formMessage:
+          "Network error. Please check your connection and try again.",
+      });
+    }
   };
 
   handleChange = (e) => {
@@ -192,6 +266,34 @@ class LandingPage extends Component {
         description: "Creative branding that makes your business stand out",
       },
     ];
+
+    // Form submission status styling
+    const formStatusDisplay = () => {
+      if (this.state.formStatus === "submitting") {
+        return (
+          <div className="landing-page-form-status submitting">
+            <Loader size={20} className="landing-page-spinner" />
+            <span>{this.state.formMessage}</span>
+          </div>
+        );
+      } else if (this.state.formStatus === "success") {
+        return (
+          <div className="landing-page-form-status success">
+            <CheckCircle size={20} />
+            <span>
+              Thank you! Your message has been submitted successfully.
+            </span>
+          </div>
+        );
+      } else if (this.state.formStatus === "error") {
+        return (
+          <div className="landing-page-form-status error">
+            <span>{this.state.formMessage}</span>
+          </div>
+        );
+      }
+      return null;
+    };
 
     return (
       <>
@@ -542,7 +644,7 @@ class LandingPage extends Component {
                 </div>
               </div>
 
-              {/* Contact Form Section */}
+              {/* Contact Form Section - Updated with Web3Forms */}
               <div className="landing-page-contact-form-container">
                 <div className="landing-page-contact-form-panel">
                   <h3 className="landing-page-contact-form-title">
@@ -667,12 +769,39 @@ class LandingPage extends Component {
                     <button
                       type="submit"
                       className="landing-page-button landing-page-button-primary landing-page-contact-submit-button"
+                      disabled={this.state.formStatus === "submitting"}
                     >
-                      <span>Send Message</span>
-                      <ArrowRight className="landing-page-button-icon" />
+                      <span>
+                        {this.state.formStatus === "submitting"
+                          ? "Sending..."
+                          : "Send Message"}
+                      </span>
+                      {this.state.formStatus !== "submitting" && (
+                        <ArrowRight className="landing-page-button-icon" />
+                      )}
                     </button>
+
+                    {/* Form status message display */}
+                    {this.state.formStatus && (
+                      <div className="landing-page-form-status-container">
+                        {formStatusDisplay()}
+                      </div>
+                    )}
                   </form>
                 </div>
+              </div>
+
+              {/* Hidden honeypot field to prevent spam */}
+              <div
+                className="landing-page-honeypot"
+                style={{ position: "absolute", left: "-9999px" }}
+              >
+                <input
+                  type="checkbox"
+                  name="botcheck"
+                  tabIndex="-1"
+                  autoComplete="off"
+                />
               </div>
 
               {/* Social Media Links Section */}

@@ -57,37 +57,24 @@ class NavBar extends Component {
     window.showLoginNotification = this.forceShowLoginNotification;
 
     console.log("NavBar mounted with notifications setup");
-
-    window.forceLoginNotificationDirect = () => {
-      const loginNotification = document.querySelector(".login-notification");
-      if (loginNotification) {
-        loginNotification.classList.add("show");
-        setTimeout(() => {
-          loginNotification.classList.remove("show");
-        }, 5000);
-      }
-    };
-
-    window.debugNotifications = () => {
-      const container = document.querySelector(".notifications-container");
-      const loginNotification = document.querySelector(".login-notification");
-      console.log("Notifications container:", {
-        element: container,
-        style: container ? window.getComputedStyle(container) : null,
-      });
-      console.log("Login notification:", {
-        element: loginNotification,
-        style: loginNotification
-          ? window.getComputedStyle(loginNotification)
-          : null,
-        classNames: loginNotification ? loginNotification.className : null,
-      });
-      console.log(
-        "Login notification state:",
-        this.state.showLoginNotification
-      );
-    };
   }
+
+  // Direct method to force show login notification
+  forceShowLoginNotification = () => {
+    console.log("Force showing login notification");
+
+    // Clear any existing timer
+    clearTimeout(this.loginNotificationTimer);
+
+    // Show notification
+    this.setState({ showLoginNotification: true });
+
+    // Set timer to hide it after 5 seconds
+    this.loginNotificationTimer = setTimeout(() => {
+      console.log("Hiding login notification after 5 seconds");
+      this.setState({ showLoginNotification: false });
+    }, 5000);
+  };
 
   componentWillUnmount() {
     // Remove global reference
@@ -108,9 +95,6 @@ class NavBar extends Component {
     clearTimeout(this.logoutNotificationTimer);
     clearTimeout(this.redirectTimer);
     clearInterval(this.loginCheckInterval);
-
-    delete window.forceLoginNotificationDirect;
-    delete window.debugNotifications;
   }
 
   // Method to check login status periodically
@@ -123,17 +107,8 @@ class NavBar extends Component {
       // If login state changed and we're expecting a login
       if (!wasLoggedIn && isLoggedIn) {
         console.log("Detected login via interval check");
-        // Parse the userData and pass it to handleLogin
-        try {
-          const parsedUserData = JSON.parse(userData);
-          // Force a delay to ensure UI updates properly
-          setTimeout(() => {
-            this.handleLogin(parsedUserData);
-          }, 100);
-        } catch (e) {
-          console.error("Error parsing user data:", e);
-          this.handleLogin(userData); // fallback to passing raw data
-        }
+        // Pass the actual userData instead of just true
+        this.handleLogin(userData);
         this.setState({ expectingLogin: false });
       }
       // If logout happened
@@ -150,79 +125,6 @@ class NavBar extends Component {
   prepareForLogin = () => {
     console.log("NavBar is now expecting a login");
     this.setState({ expectingLogin: true });
-  };
-
-  inspectNotificationStatus = () => {
-    const loginNotification = document.querySelector(".login-notification");
-    const logoutNotification = document.querySelector(".logout-notification");
-
-    console.log("Notification state in React:", {
-      showLoginNotification: this.state.showLoginNotification,
-      showLogoutNotification: this.state.showLogoutNotification,
-    });
-
-    console.log("Login notification DOM:", {
-      element: loginNotification,
-      classes: loginNotification ? loginNotification.className : "not found",
-      computedDisplay: loginNotification
-        ? window.getComputedStyle(loginNotification).display
-        : "N/A",
-      computedVisibility: loginNotification
-        ? window.getComputedStyle(loginNotification).visibility
-        : "N/A",
-      computedOpacity: loginNotification
-        ? window.getComputedStyle(loginNotification).opacity
-        : "N/A",
-    });
-
-    console.log("Logout notification DOM:", {
-      element: logoutNotification,
-      classes: logoutNotification ? logoutNotification.className : "not found",
-      computedDisplay: logoutNotification
-        ? window.getComputedStyle(logoutNotification).display
-        : "N/A",
-      computedVisibility: logoutNotification
-        ? window.getComputedStyle(logoutNotification).visibility
-        : "N/A",
-      computedOpacity: logoutNotification
-        ? window.getComputedStyle(logoutNotification).opacity
-        : "N/A",
-    });
-  };
-
-  forceShowLoginNotification = () => {
-    console.log("Force showing login notification");
-
-    // First, ensure we clear any previous timers
-    clearTimeout(this.loginNotificationTimer);
-
-    // Force direct DOM manipulation first (most reliable approach)
-    const loginNotification = document.querySelector(".login-notification");
-    if (loginNotification) {
-      // Remove any existing classes and add only what we need
-      loginNotification.className = "notification login-notification";
-
-      // Force a reflow/repaint before adding the show class
-      void loginNotification.offsetWidth;
-
-      // Now add the show class
-      loginNotification.classList.add("show");
-      console.log("Applied show class directly to notification element");
-    } else {
-      console.error("Login notification element not found");
-    }
-
-    // Set state after direct DOM manipulation
-    this.setState({ showLoginNotification: true });
-
-    // Set timer to hide after 3 seconds (reduced from 5)
-    this.loginNotificationTimer = setTimeout(() => {
-      console.log("Hiding login notification");
-      if (loginNotification) {
-        loginNotification.classList.remove("show");
-      }
-      this.setState({ showLoginNotification: false });
-    }, 3000);
   };
 
   handleScroll = () => {
@@ -295,27 +197,27 @@ class NavBar extends Component {
 
       // If userData is a string, parse it
       if (typeof userData === "string") {
-        try {
-          user = JSON.parse(userData);
-        } catch (e) {
-          console.error("Error parsing user data:", e);
-        }
+        user = JSON.parse(userData);
       }
 
       console.log(
-        "Login detected for user:",
-        user?.name || user?.email || "User"
+        "Showing login notification for user:",
+        user.name || user.email
       );
 
-      // Set logged in state immediately
+      // Force notification to be visible
       this.setState({
         isLoggedIn: true,
         user: user,
-        expectingLogin: false,
+        showLoginNotification: true,
       });
 
-      // Use a very short timeout to ensure state is applied before showing notification
-      setTimeout(this.forceShowLoginNotification, 10);
+      // Set timer to hide login notification after 5 seconds
+      clearTimeout(this.loginNotificationTimer);
+      this.loginNotificationTimer = setTimeout(() => {
+        console.log("Hiding login notification after 5 seconds");
+        this.setState({ showLoginNotification: false });
+      }, 5000);
     } catch (error) {
       console.error("Error handling login:", error);
     }
@@ -463,7 +365,6 @@ class NavBar extends Component {
       this.setState({ showLogoutNotification: false });
     }, 3000);
   };
-
   render() {
     const {
       isMobile,
@@ -500,9 +401,9 @@ class NavBar extends Component {
                     </Link>
                   </li>
                   <li>
-                    <HashLink to="/#why-choose-us" onClick={this.scrollToTop}>
+                    <Link to="/#why-choose-us" onClick={this.scrollToTop}>
                       Why Choose Us
-                    </HashLink>
+                    </Link>
                   </li>
                 </ul>
               </div>
@@ -521,12 +422,13 @@ class NavBar extends Component {
                 {/* Right-side menu items */}
                 <ul className="right-menu">
                   <li>
-                    <HashLink to="/#vision" onClick={this.scrollToTop}>
+                    <Link to="/#our-vision" onClick={this.scrollToTop}>
                       Our Vision
-                    </HashLink>
+                    </Link>
                   </li>
                   <li>
-                    <HashLink smooth to="/#contact" onClick={this.scrollToTop}>
+                    {/* Using HashLink for smooth scrolling to contact section */}
+                    <HashLink smooth to="/#contact" onClick={this.toggleMenu}>
                       Contact Us
                     </HashLink>
                   </li>
@@ -656,7 +558,7 @@ class NavBar extends Component {
           </div>
         </header>
 
-        {/* Notifications Container */}
+        {/* Notifications Container (remains the same) */}
         <div className="notifications-container">
           {/* Login notification */}
           <div

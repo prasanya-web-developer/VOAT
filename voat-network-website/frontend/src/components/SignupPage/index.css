@@ -205,3 +205,9 @@
     padding: 2rem;
   }
 }
+
+@media screen and (max-width: 640px) {
+  .register-divider-content {
+    font-size: 13px;
+  }
+}

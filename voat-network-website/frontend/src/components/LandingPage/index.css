@@ -1474,6 +1474,118 @@ body {
   min-height: 120px;
 }
 
+.landing-page-form-status-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Form status message styling */
+.landing-page-form-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 15px auto 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.landing-page-form-status.submitting {
+  background-color: rgba(92, 77, 244, 0.1);
+  color: #5c4df4;
+}
+
+/* Success message styling to match the design in the image */
+.landing-page-form-status.success {
+  background-color: #f0f9f0;
+  color: #28a745;
+  border-radius: 8px;
+  padding: 15px 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  animation: fadeIn 0.5s ease forwards, fadeOut 0.5s ease forwards 4.5s;
+  width: 100%;
+  justify-content: flex-start; /* Align the items to the left as shown in the image */
+  margin-top: 20px;
+}
+
+.landing-page-form-status.success svg {
+  color: #28a745 !important;
+  margin-right: 10px;
+}
+
+.landing-page-form-status.error {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+
+/* Spinner animation for submitting state */
+.landing-page-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Disabled button state */
+.landing-page-contact-submit-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: 0 8px 15px rgba(92, 77, 244, 0.15) !important;
+}
+
+/* Message fade in/out animations */
+.landing-page-form-status {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Responsive adjustments for form status */
+@media (max-width: 768px) {
+  .landing-page-form-status {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .landing-page-form-status {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+}
+
 .landing-page-contact-submit-button {
   align-self: center;
   padding: 14px 30px;
@@ -1538,9 +1650,6 @@ body {
   font-size: 20px;
 }
 
-/* Enhanced Responsive Styles for VOAT NETWORK Landing Page */
-
-/* Global adjustments for better mobile experience */
 @media (max-width: 1300px) {
   .landing-page-container {
     padding: 0 20px;
