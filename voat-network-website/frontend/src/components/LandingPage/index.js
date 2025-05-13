@@ -528,9 +528,9 @@ class LandingPage extends Component {
                         <MapPin size={28} />
                       </div>
                       <h3>Address</h3>
-                      <p>124; Hogward School of Magic</p>
+                      <p>Vishakapatnam Andhra Pradesh, 531019</p>
                       <a
-                        href="https://maps.google.com"
+                        href="https://maps.app.goo.gl/QeVzKgkZp5htyUUn7"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="landing-page-contact-link"

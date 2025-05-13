@@ -134,7 +134,7 @@ class Footer extends Component {
             </a>
 
             <a
-              href="https://maps.google.com/?q=124;+Hogward+School+of+Magic"
+              href="https://maps.app.goo.gl/QeVzKgkZp5htyUUn7"
               target="_blank"
               rel="noopener noreferrer"
               style={{ textDecoration: "none" }}
@@ -143,7 +143,7 @@ class Footer extends Component {
                 <div className="icon-circle">
                   <FaMapMarkerAlt />
                 </div>
-                <p>124; Hogward School of Magic</p>
+                <p>Vishakapatnam, Andhra Pradesh, 531019</p>
               </div>
             </a>
           </div>

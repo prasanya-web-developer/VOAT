@@ -500,9 +500,9 @@ class NavBar extends Component {
                     </Link>
                   </li>
                   <li>
-                    <Link to="/#why-choose-us" onClick={this.scrollToTop}>
+                    <HashLink to="/#why-choose-us" onClick={this.scrollToTop}>
                       Why Choose Us
-                    </Link>
+                    </HashLink>
                   </li>
                 </ul>
               </div>
@@ -521,13 +521,12 @@ class NavBar extends Component {
                 {/* Right-side menu items */}
                 <ul className="right-menu">
                   <li>
-                    <Link to="/#our-vision" onClick={this.scrollToTop}>
+                    <HashLink to="/#vision" onClick={this.scrollToTop}>
                       Our Vision
-                    </Link>
+                    </HashLink>
                   </li>
                   <li>
-                    {/* Using HashLink for smooth scrolling to contact section */}
-                    <HashLink smooth to="/#contact" onClick={this.toggleMenu}>
+                    <HashLink smooth to="/#contact" onClick={this.scrollToTop}>
                       Contact Us
                     </HashLink>
                   </li>
