@@ -63,6 +63,7 @@ class SignupPage extends React.Component {
     return Object.keys(errors).length === 0;
   };
 
+  // In SignupPage.js - Update the handleSubmit method
   handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -82,27 +83,39 @@ class SignupPage extends React.Component {
             token: response.data.token || null,
           };
 
+          // Clear localStorage first to ensure we trigger storage event
+          localStorage.removeItem("user");
+
           // Store user data in localStorage
           localStorage.setItem("user", JSON.stringify(userData));
 
-          // Show success message
-          alert("Registration successful! Redirecting to login page...");
+          // Use multiple approaches to ensure notification shows
+          if (window.navbarComponent) {
+            console.log("Direct call to navbarComponent");
+            // Use a timeout to ensure the storage event has been processed
+            setTimeout(() => {
+              if (typeof window.navbarComponent.handleLogin === "function") {
+                window.navbarComponent.handleLogin(userData);
+              }
+            }, 100);
+          }
 
-          // Reset form fields
-          this.setState({
-            name: "",
-            email: "",
-            role: "",
-            profession: "",
-            password: "",
-            confirmPassword: "",
-            isSubmitting: false,
-            redirectToLogin: true, // Set redirect flag instead of using window.location
-          });
+          // Reset form fields and redirect with delay
+          setTimeout(() => {
+            this.setState({
+              name: "",
+              email: "",
+              role: "",
+              profession: "",
+              password: "",
+              confirmPassword: "",
+              isSubmitting: false,
+              redirectToLogin: true,
+            });
+          }, 1000);
         }
       } catch (error) {
-        console.error("Registration error:", error);
-        alert(error.response?.data?.message || "Registration failed");
+        // Error handling unchanged...
         this.setState({ isSubmitting: false });
       }
     }
@@ -138,6 +151,10 @@ class SignupPage extends React.Component {
       <div className="register-screen">
         <div className="register-container">
           <h2 className="register-title">Create your account</h2>
+
+          {errors.general && (
+            <div className="register-error-alert">{errors.general}</div>
+          )}
 
           <div className="register-form-wrapper">
             <form className="register-form" onSubmit={this.handleSubmit}>

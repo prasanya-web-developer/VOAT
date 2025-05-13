@@ -17,7 +17,17 @@ import {
   ArrowRight,
   Calculator,
   Camera,
+  Sparkles,
+  Lightbulb,
+  Award,
+  Mail,
+  Instagram,
+  Linkedin,
+  Phone,
+  MapPin,
+  Youtube,
 } from "lucide-react";
+import { FaWhatsapp, FaXTwitter } from "react-icons/fa6";
 
 class LandingPage extends Component {
   state = {
@@ -30,12 +40,20 @@ class LandingPage extends Component {
     servicesInView: false,
     visionInView: false,
     chooseUsInView: false,
+    contactInView: false,
+    // Contact form state
+    fullName: "",
+    email: "",
+    phone: "",
+    profession: "",
+    message: "",
   };
 
   //scroll animations
   servicesRef = React.createRef();
   visionRef = React.createRef();
   chooseUsRef = React.createRef();
+  contactRef = React.createRef();
 
   componentDidMount() {
     this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
@@ -75,6 +93,26 @@ class LandingPage extends Component {
       servicesInView: this.isElementInViewport(this.servicesRef.current),
       visionInView: this.isElementInViewport(this.visionRef.current),
       chooseUsInView: this.isElementInViewport(this.chooseUsRef.current),
+      contactInView: this.isElementInViewport(this.contactRef.current),
+    });
+  };
+
+  // Contact form methods
+  handleSubmit = (e) => {
+    e.preventDefault();
+    console.log({
+      fullName: this.state.fullName,
+      email: this.state.email,
+      phone: this.state.phone,
+      profession: this.state.profession,
+      message: this.state.message,
+    });
+    // Add your form submission logic here
+  };
+
+  handleChange = (e) => {
+    this.setState({
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -97,6 +135,24 @@ class LandingPage extends Component {
         title: "Growth",
         description:
           "Driving sustainable business expansion through strategic planning and market adaptation.",
+      },
+      {
+        icon: <Lightbulb />,
+        title: "Creativity",
+        description:
+          "Encouraging fresh perspectives and unique approaches to solve complex business challenges.",
+      },
+      {
+        icon: <Award />,
+        title: "Excellence",
+        description:
+          "Striving for the highest standards in everything we do to deliver superior results.",
+      },
+      {
+        icon: <Sparkles />,
+        title: "Inspiration",
+        description:
+          "Motivating teams and businesses to reach their full potential through visionary leadership.",
       },
     ];
 
@@ -181,12 +237,12 @@ class LandingPage extends Component {
                     Our Services
                     <ArrowRight className="landing-page-button-icon" />
                   </a>
-                  <Link
-                    to="/contact-us"
+                  <a
+                    href="#contact"
                     className="landing-page-button landing-page-button-outline"
                   >
                     Get In Touch
-                  </Link>
+                  </a>
                 </div>
               </div>
             </div>
@@ -207,49 +263,6 @@ class LandingPage extends Component {
                   aria-label={`Go to slide ${index + 1}`}
                 />
               ))}
-            </div>
-          </section>
-
-          {/* Vision Section - Updated with Modern Design */}
-          <section
-            className={`landing-page-vision-section ${
-              this.state.visionInView ? "in-view" : ""
-            }`}
-            ref={this.visionRef}
-            id="vision"
-          >
-            <div className="landing-page-vision-particles">
-              <div className="landing-page-vision-particle particle-1"></div>
-              <div className="landing-page-vision-particle particle-2"></div>
-              <div className="landing-page-vision-particle particle-3"></div>
-            </div>
-
-            <div className="landing-page-container">
-              <div className="landing-page-section-header">
-                <h2 className="landing-page-section-title">Our Vision</h2>
-                <p className="landing-page-vision-description">
-                  To empower startups by fostering innovation, collaboration,
-                  and growth, creating a thriving ecosystem where entrepreneurs
-                  uplift each other and achieve sustainable success together.
-                </p>
-              </div>
-
-              <div className="landing-page-vision-cards">
-                {visionPoints.map((point, index) => (
-                  <div
-                    key={index}
-                    className={`landing-page-vision-card landing-page-vision-card-${
-                      index + 1
-                    }`}
-                  >
-                    <div className="landing-page-vision-icon-wrapper">
-                      {point.icon}
-                    </div>
-                    <h3>{point.title}</h3>
-                    <p>{point.description}</p>
-                  </div>
-                ))}
-              </div>
             </div>
           </section>
 
@@ -332,10 +345,10 @@ class LandingPage extends Component {
 
               <div className="landing-page-services-view-all">
                 <Link
-                  to="/services"
+                  to={"/services"}
                   className="landing-page-button landing-page-button-primary"
                 >
-                  View All Services
+                  View more
                   <ArrowRight className="landing-page-button-icon" />
                 </Link>
               </div>
@@ -348,6 +361,7 @@ class LandingPage extends Component {
               this.state.chooseUsInView ? "in-view" : ""
             }`}
             ref={this.chooseUsRef}
+            id="why-choose-us"
           >
             <div className="landing-page-container">
               <h2 className="landing-page-section-title">Why Choose Us</h2>
@@ -366,12 +380,12 @@ class LandingPage extends Component {
                     to the resources and expertise they need to bring those
                     ideas to life.
                   </p>
-                  <Link
-                    to="/contact-us"
+                  <a
+                    href="#contact"
                     className="landing-page-button landing-page-button-light"
                   >
                     Partner With Us <ArrowRight size={18} />
-                  </Link>
+                  </a>
                 </div>
 
                 <div className="landing-page-choose-us-points">
@@ -397,6 +411,329 @@ class LandingPage extends Component {
             <div className="landing-page-choose-us-shape"></div>
           </section>
 
+          {/* Vision Section - Redesigned with Modern UI */}
+          <section
+            className={`landing-page-vision-section-new ${
+              this.state.visionInView ? "in-view" : ""
+            }`}
+            ref={this.visionRef}
+            id="vision"
+          >
+            <div className="landing-page-vision-waves"></div>
+            {/* Removed orb-1 which was on the top right */}
+            <div className="landing-page-vision-orb orb-2"></div>
+            <div className="landing-page-vision-orb orb-3"></div>
+
+            <div className="landing-page-container">
+              <div className="landing-page-section-header">
+                <h2 className="landing-page-section-title landing-page-vision-title">
+                  Our Vision
+                </h2>
+                <div className="landing-page-vision-subtitle-container">
+                  <span className="landing-page-vision-subtitle-line"></span>
+                  <p className="landing-page-vision-subtitle">
+                    Shaping the future together
+                  </p>
+                  <span className="landing-page-vision-subtitle-line"></span>
+                </div>
+                <p className="landing-page-vision-description">
+                  To empower startups by fostering innovation, collaboration,
+                  and growth, creating a thriving ecosystem where entrepreneurs
+                  uplift each other and achieve sustainable success together.
+                </p>
+              </div>
+
+              <div className="landing-page-vision-cards-grid">
+                {visionPoints.map((point, index) => (
+                  <div
+                    key={index}
+                    className={`landing-page-vision-card-new landing-page-vision-card-${
+                      index + 1
+                    }`}
+                  >
+                    <div className="landing-page-vision-card-inner">
+                      <div className="landing-page-vision-icon-wrapper-new">
+                        {point.icon}
+                      </div>
+                      <h3>{point.title}</h3>
+                      <p>{point.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Contact Us Section - Styled like other sections */}
+          <section
+            className={`landing-page-contact-section ${
+              this.state.contactInView ? "in-view" : ""
+            }`}
+            ref={this.contactRef}
+            id="contact"
+          >
+            <div className="landing-page-contact-blob landing-page-contact-blob-1"></div>
+            <div className="landing-page-contact-blob landing-page-contact-blob-2"></div>
+
+            <div className="landing-page-container">
+              <div className="landing-page-section-header">
+                <h2 className="landing-page-section-title">Contact Us</h2>
+                <p className="landing-page-contact-description">
+                  Get in touch with our team of experts today. We're here to
+                  help answer your questions and create solutions tailored to
+                  your business needs.
+                </p>
+              </div>
+
+              {/* Contact Card Sections */}
+              <div className="landing-page-contact-cards-container">
+                <div className="landing-page-contact-cards">
+                  <div className="landing-page-contact-card landing-page-contact-card-1">
+                    <div className="landing-page-contact-card-content">
+                      <div className="landing-page-contact-icon-wrapper">
+                        <Mail size={28} />
+                      </div>
+                      <h3>Email</h3>
+                      <p>voatnetwork@gmail.com</p>
+                      <a
+                        href="mailto:voatnetwork@gmail.com"
+                        className="landing-page-contact-link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Send Email <ArrowRight size={16} />
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="landing-page-contact-card landing-page-contact-card-2">
+                    <div className="landing-page-contact-card-content">
+                      <div className="landing-page-contact-icon-wrapper">
+                        <Phone size={28} />
+                      </div>
+                      <h3>Phone</h3>
+                      <p>+91 7799770919</p>
+                      <a
+                        href="tel:+917799770919"
+                        className="landing-page-contact-link"
+                      >
+                        Call Now <ArrowRight size={16} />
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="landing-page-contact-card landing-page-contact-card-3">
+                    <div className="landing-page-contact-card-content">
+                      <div className="landing-page-contact-icon-wrapper">
+                        <MapPin size={28} />
+                      </div>
+                      <h3>Address</h3>
+                      <p>124; Hogward School of Magic</p>
+                      <a
+                        href="https://maps.google.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="landing-page-contact-link"
+                      >
+                        View on Map <ArrowRight size={16} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Form Section */}
+              <div className="landing-page-contact-form-container">
+                <div className="landing-page-contact-form-panel">
+                  <h3 className="landing-page-contact-form-title">
+                    Send us a Message
+                  </h3>
+                  <form
+                    onSubmit={this.handleSubmit}
+                    className="landing-page-contact-form"
+                  >
+                    <div className="landing-page-contact-form-row">
+                      <div className="landing-page-contact-form-group">
+                        <label
+                          htmlFor="fullName"
+                          className="landing-page-contact-form-label"
+                        >
+                          Full Name{" "}
+                          <span className="landing-page-contact-required">
+                            *
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          id="fullName"
+                          name="fullName"
+                          required
+                          value={this.state.fullName}
+                          onChange={this.handleChange}
+                          className="landing-page-contact-form-input"
+                          placeholder="Enter your full name"
+                        />
+                      </div>
+
+                      <div className="landing-page-contact-form-group">
+                        <label
+                          htmlFor="email"
+                          className="landing-page-contact-form-label"
+                        >
+                          Email{" "}
+                          <span className="landing-page-contact-required">
+                            *
+                          </span>
+                        </label>
+                        <input
+                          type="email"
+                          id="email"
+                          name="email"
+                          required
+                          value={this.state.email}
+                          onChange={this.handleChange}
+                          className="landing-page-contact-form-input"
+                          placeholder="example@gmail.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="landing-page-contact-form-row">
+                      <div className="landing-page-contact-form-group">
+                        <label
+                          htmlFor="phone"
+                          className="landing-page-contact-form-label"
+                        >
+                          Phone Number{" "}
+                          <span className="landing-page-contact-required">
+                            *
+                          </span>
+                        </label>
+                        <input
+                          type="tel"
+                          id="phone"
+                          name="phone"
+                          required
+                          value={this.state.phone}
+                          onChange={this.handleChange}
+                          className="landing-page-contact-form-input"
+                          placeholder="+91 "
+                        />
+                      </div>
+
+                      <div className="landing-page-contact-form-group">
+                        <label
+                          htmlFor="profession"
+                          className="landing-page-contact-form-label"
+                        >
+                          Profession{" "}
+                          <span className="landing-page-contact-required">
+                            *
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          id="profession"
+                          name="profession"
+                          required
+                          value={this.state.profession}
+                          onChange={this.handleChange}
+                          className="landing-page-contact-form-input"
+                          placeholder="Web Developer"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="landing-page-contact-form-group">
+                      <label
+                        htmlFor="message"
+                        className="landing-page-contact-form-label"
+                      >
+                        Message{" "}
+                        <span className="landing-page-contact-required">*</span>
+                      </label>
+                      <textarea
+                        id="message"
+                        name="message"
+                        required
+                        value={this.state.message}
+                        onChange={this.handleChange}
+                        rows={5}
+                        className="landing-page-contact-form-textarea"
+                        placeholder="Your message here..."
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="landing-page-button landing-page-button-primary landing-page-contact-submit-button"
+                    >
+                      <span>Send Message</span>
+                      <ArrowRight className="landing-page-button-icon" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Social Media Links Section */}
+              <div className="landing-page-contact-social-container">
+                <h3 className="landing-page-contact-social-title">
+                  Connect With Us
+                </h3>
+                <div className="landing-page-contact-social-icons">
+                  <a
+                    href="mailto:voatnetwork@gmail.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="landing-page-contact-social-link"
+                  >
+                    <Mail className="landing-page-contact-social-icon" />
+                  </a>
+                  <a
+                    href="https://wa.me/917799770919"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="landing-page-contact-social-link"
+                  >
+                    <FaWhatsapp className="landing-page-contact-social-icon" />
+                  </a>
+                  <a
+                    href="https://instagram.com/voatnetwork"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="landing-page-contact-social-link"
+                  >
+                    <Instagram className="landing-page-contact-social-icon" />
+                  </a>
+                  <a
+                    href="https://linkedin.com/company/voatnetwork"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="landing-page-contact-social-link"
+                  >
+                    <Linkedin className="landing-page-contact-social-icon" />
+                  </a>
+                  <a
+                    href="https://x.com/voatnetwork"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="landing-page-contact-social-link"
+                  >
+                    <FaXTwitter className="landing-page-contact-social-icon" />
+                  </a>
+                  <a
+                    href="https://youtube.com/@voatnetwork"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="landing-page-contact-social-link"
+                  >
+                    <Youtube className="landing-page-contact-social-icon" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Call to Action - New Section */}
           <section className="landing-page-cta-section">
             <div className="landing-page-container">
@@ -406,12 +743,12 @@ class LandingPage extends Component {
                   Let's work together to bring your vision to life and take your
                   business to the next level.
                 </p>
-                <Link
-                  to="/contact-us"
+                <a
+                  href="#contact"
                   className="landing-page-button landing-page-button-cta"
                 >
                   Get Started Today <ArrowRight size={18} />
-                </Link>
+                </a>
               </div>
             </div>
           </section>

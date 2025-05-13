@@ -175,6 +175,12 @@
   .login-title {
     font-size: 1.75rem;
   }
+
+  .login-divider-content {
+    font-size: 12px;
+
+    padding: 2px;
+  }
 }
 
 @media (min-width: 641px) and (max-width: 1024px) {

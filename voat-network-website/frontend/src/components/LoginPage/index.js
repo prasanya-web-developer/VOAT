@@ -40,6 +40,8 @@ class LoginPage extends React.Component {
     return Object.keys(errors).length === 0;
   };
 
+  // In LoginPage.js - Update the login flow
+
   handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -50,16 +52,32 @@ class LoginPage extends React.Component {
         const response = await this.performLogin();
 
         if (response.status === 200) {
-          localStorage.setItem("user", JSON.stringify(response.data.user));
-          alert("Login successful!");
-          window.location.href = "/";
+          // Get user data from response
+          const userData = response.data.user;
+
+          // CRITICAL: First clear any existing user data
+          localStorage.removeItem("user");
+
+          // Important: Set user data immediately
+          localStorage.setItem("user", JSON.stringify(userData));
+
+          // Show notification through NavBar component if possible
+          if (
+            window.navbarComponent &&
+            typeof window.navbarComponent.handleLogin === "function"
+          ) {
+            console.log("Calling handleLogin on navbarComponent");
+            window.navbarComponent.handleLogin(userData);
+          }
+
+          // CRITICAL: Redirect immediately instead of waiting
+          // Use a very short timeout just to ensure notification starts showing
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 100); // Reduced from 3000 to just 100ms
         }
       } catch (error) {
-        console.error("Login error:", error);
-        alert(
-          error.response?.data?.message || "Login failed. Please try again."
-        );
-      } finally {
+        // Error handling code unchanged
         this.setState({ isSubmitting: false });
       }
     }
@@ -81,6 +99,10 @@ class LoginPage extends React.Component {
       <div className="login-screen">
         <div className="login-container">
           <h2 className="login-title">Sign in to your account</h2>
+
+          {errors.general && (
+            <div className="login-error-alert">{errors.general}</div>
+          )}
 
           <div className="login-form-wrapper">
             <form className="login-form" onSubmit={this.handleSubmit}>

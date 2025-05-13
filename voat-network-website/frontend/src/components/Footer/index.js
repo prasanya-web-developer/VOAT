@@ -14,12 +14,18 @@ import { FaXTwitter } from "react-icons/fa6";
 import "./Footer.css";
 
 class Footer extends Component {
+  scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
   render() {
     return (
       <div className="footer-main-container">
         <div className="footer-content-container">
           {/* Logo, Description and About Section */}
-
           <div className="footer-column logo-about-container">
             <img
               src="https://res.cloudinary.com/dffu1ungl/image/upload/v1744022957/VOAT_Network_LOGO_cfdzrf.png"
@@ -33,145 +39,189 @@ class Footer extends Component {
           </div>
 
           {/* Quick Links Section */}
-
           <div className="footer-column menu-list-container">
             <h1>Quick Links</h1>
             <div className="section-divider"></div>
             <ul>
               <li>
-                <HashLink className="footer-links" to="/#home">
+                <HashLink
+                  className="footer-links"
+                  to="/#home"
+                  onClick={this.scrollToTop}
+                >
                   Home
                 </HashLink>
               </li>
               <li>
-                <HashLink className="footer-links" to="/#vision">
+                <HashLink
+                  className="footer-links"
+                  to="/#vision"
+                  onClick={this.scrollToTop}
+                >
                   Our Vision
                 </HashLink>
               </li>
               <li>
-                <Link className="footer-links" to="/services">
+                <Link
+                  className="footer-links"
+                  to="/services"
+                  onClick={this.scrollToTop}
+                >
                   Services
                 </Link>
               </li>
-              <li>
-                <Link className="footer-links" to="/portfolio-list">
+              {/* <li>
+                <Link
+                  className="footer-links"
+                  to="/portfolio-list"
+                  onClick={this.scrollToTop}
+                >
                   Portfolios
                 </Link>
+              </li> */}
+              <li>
+                <HashLink
+                  className="footer-links"
+                  to="/#why-choose-us"
+                  onClick={this.scrollToTop}
+                >
+                  Why Choose Us
+                </HashLink>
               </li>
               <li>
-                <HashLink className="footer-links" to="#why-choose-us">
-                  Why Choose Us
+                <HashLink
+                  className="footer-links"
+                  to="/#contact"
+                  onClick={this.scrollToTop}
+                >
+                  Contact Us
                 </HashLink>
               </li>
             </ul>
           </div>
 
-          {/* Contact Us Section */}
-
+          {/* Contact Us Section - Updated to make both icon and text clickable */}
           <div className="footer-column footer-contact-container">
             <h1>Contact Us</h1>
             <div className="section-divider"></div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaEnvelope />
+
+            <a
+              href="mailto:voatnetwork@gmail.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaEnvelope />
+                </div>
+                <p>voatnetwork@gmail.com</p>
               </div>
-              <p>voatnetwork@gmail.com</p>
-            </div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaPhone />
+            </a>
+
+            <a
+              href="tel:+917799770919"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaPhone />
+                </div>
+                <p>+91 7799770919</p>
               </div>
-              <p>+91 7799770919</p>
-            </div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaMapMarkerAlt />
+            </a>
+
+            <a
+              href="https://maps.google.com/?q=124;+Hogward+School+of+Magic"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaMapMarkerAlt />
+                </div>
+                <p>124; Hogward School of Magic</p>
               </div>
-              <p>124; Hogward School of Magic</p>
-            </div>
+            </a>
           </div>
 
-          {/* Connect With Us Section */}
-
+          {/* Connect With Us Section - Updated to make both icon and text clickable */}
           <div className="footer-column footer-social-container">
             <h1>Connect With Us</h1>
             <div className="section-divider"></div>
 
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaWhatsapp />
+            <a
+              href="https://wa.me/917799770919"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaWhatsapp />
+                </div>
+                <p className="social-media-icons-text">Whatsapp</p>
               </div>
-              <p>
-                <a
-                  href="https://wa.me/917799770919"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="social-media-icons-text"
-                >
-                  Whatsapp
-                </a>
-              </p>
-            </div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaInstagram />
+            </a>
+
+            <a
+              href="https://www.instagram.com/voatnetwork/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaInstagram />
+                </div>
+                <p className="social-media-icons-text">Instagram</p>
               </div>
-              <p>
-                <a
-                  href="https://www.instagram.com/voatnetwork/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="social-media-icons-text"
-                >
-                  Instagram
-                </a>
-              </p>
-            </div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaXTwitter />
+            </a>
+
+            <a
+              href="https://x.com/voatnetwork"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaXTwitter />
+                </div>
+                <p className="social-media-icons-text">X (Twitter)</p>
               </div>
-              <p>
-                <a
-                  href="https://x.com/voatnetwork"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="social-media-icons-text"
-                >
-                  X (Twitter)
-                </a>
-              </p>
-            </div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaYoutube />
+            </a>
+
+            <a
+              href="https://www.youtube.com/@voatnetwork/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaYoutube />
+                </div>
+                <p className="social-media-icons-text">YouTube</p>
               </div>
-              <p>
-                <a
-                  href="https://www.youtube.com/@voatnetwork/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="social-media-icons-text"
-                >
-                  YouTube
-                </a>
-              </p>
-            </div>
-            <div className="footer-icon-container">
-              <div className="icon-circle">
-                <FaLinkedinIn />
+            </a>
+
+            <a
+              href="https://www.linkedin.com/company/voat-network/?viewAsMember=true"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <div className="footer-icon-container">
+                <div className="icon-circle">
+                  <FaLinkedinIn />
+                </div>
+                <p className="social-media-icons-text">LinkedIn</p>
               </div>
-              <p>
-                <a
-                  href="https://www.linkedin.com/company/voat-network/?viewAsMember=true"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="social-media-icons-text"
-                >
-                  LinkedIn
-                </a>
-              </p>
-            </div>
+            </a>
           </div>
         </div>
 

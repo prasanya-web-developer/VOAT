@@ -1,5 +1,5 @@
 import { Component } from "react";
-import { Link } from "react-router-dom";
+// import { Link } from "react-router-dom";
 import NavBar from "../Navbar";
 import Footer from "../Footer";
 import {
@@ -13,6 +13,7 @@ import {
   Home,
 } from "lucide-react";
 import "./index.css";
+import { HashLink } from "react-router-hash-link";
 
 class ServicesPage extends Component {
   render() {
@@ -123,9 +124,9 @@ class ServicesPage extends Component {
                 Contact us today for a free consultation and discover how our
                 services can help you achieve your goals.
               </p>
-              <Link to="/contact-us" className="service-page-cta-button">
+              <HashLink to="/#contact-us" className="service-page-cta-button">
                 Get Started
-              </Link>
+              </HashLink>
             </div>
             <div className="service-page-cta-blob"></div>
             <div className="service-page-cta-blob blob-2"></div>
