@@ -3,6 +3,7 @@ import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignupPage";
 import LandingPage from "./components/LandingPage";
 import ServicesPage from "./components/ServicesPage";
+
 // import AdminDashboard from "./components/AdminDashboard";
 // import UserDashboard from "./components/UserDashboard";
 // import FreelancerPortfolioPage from "./components/FreelancerPortfolioPage";
@@ -18,6 +19,7 @@ const App = () => (
     <Route path="/signup" element={<SignupPage />} />
     <Route path="/" element={<LandingPage />} />
     <Route path="/services" element={<ServicesPage />} />
+
     {/* <Route path="/admin-dashboard" element={<AdminDashboard />} />
     <Route path="/user-dashboard" element={<UserDashboard />} />
     <Route path="/my-portfolio" element={<FreelancerPortfolioPage />} />

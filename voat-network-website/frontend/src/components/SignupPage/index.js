@@ -5,6 +5,74 @@ import { Eye, EyeOff, ChevronDown } from "lucide-react";
 import axios from "axios";
 import "./index.css";
 
+// Add CSS for welcome card if not already present
+const welcomeCardStyles = `
+.welcome-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 90%;
+  width: 400px;
+  z-index: 1000;
+  animation: fadeInOut 5s forwards;
+  opacity: 0;
+}
+
+.welcome-card-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2563eb;
+  margin-bottom: 0.75rem;
+}
+
+.welcome-card-message {
+  font-size: 1.125rem;
+  color: #4b5563;
+  margin-bottom: 1rem;
+}
+
+.welcome-card-emoji {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+}
+`;
+
+// Inject styles once when component is imported
+(function injectStyles() {
+  // Check if styles are already injected
+  if (!document.getElementById("welcome-card-styles")) {
+    const styleElement = document.createElement("style");
+    styleElement.id = "welcome-card-styles";
+    styleElement.innerHTML = welcomeCardStyles;
+    document.head.appendChild(styleElement);
+  }
+})();
+
 class SignupPage extends React.Component {
   state = {
     name: "",
@@ -18,6 +86,7 @@ class SignupPage extends React.Component {
     errors: {},
     isSubmitting: false,
     redirectToLogin: false,
+    showWelcomeCard: false,
   };
 
   handleInputChange = (e) => {
@@ -92,35 +161,52 @@ class SignupPage extends React.Component {
           // Store user data in localStorage
           localStorage.setItem("user", JSON.stringify(userData));
 
-          // Trigger the login notification if available
-          if (window.showLoginNotification) {
+          // Show welcome message if available
+          if (window.showWelcomeMessage) {
             console.log(
-              "Calling global showLoginNotification function after signup"
+              "Calling global showWelcomeMessage function after signup"
             );
-            window.showLoginNotification();
+            window.showWelcomeMessage();
           } else if (
             window.navbarComponent &&
-            typeof window.navbarComponent.handleLogin === "function"
+            typeof window.navbarComponent.showWelcomeMessage === "function"
           ) {
-            console.log("Calling handleLogin on navbarComponent after signup");
-            window.navbarComponent.handleLogin(userData);
-          } else {
             console.log(
-              "No notification method found - signup successful but notification may not show"
+              "Calling showWelcomeMessage on navbarComponent after signup"
             );
+            window.navbarComponent.showWelcomeMessage();
+          } else {
+            // If no welcome message function is available, trigger login notification as fallback
+            if (window.showLoginNotification) {
+              console.log(
+                "Calling global showLoginNotification function after signup"
+              );
+              window.showLoginNotification();
+            } else if (
+              window.navbarComponent &&
+              typeof window.navbarComponent.handleLogin === "function"
+            ) {
+              console.log(
+                "Calling handleLogin on navbarComponent after signup"
+              );
+              window.navbarComponent.handleLogin(userData);
+            } else {
+              console.log(
+                "No notification method found - signup successful but notification may not show"
+              );
+            }
           }
 
-          // Reset form fields and redirect
-          this.setState({
-            name: "",
-            email: "",
-            role: "",
-            profession: "",
-            password: "",
-            confirmPassword: "",
-            isSubmitting: false,
-            redirectToLogin: true,
-          });
+          // Show welcome card
+          this.setState({ showWelcomeCard: true });
+
+          // Hide welcome card and redirect after 5 seconds
+          setTimeout(() => {
+            this.setState({
+              showWelcomeCard: false,
+              redirectToLogin: true,
+            });
+          }, 5000);
         }, 100);
       } catch (error) {
         console.error("Registration error:", error);
@@ -144,21 +230,6 @@ class SignupPage extends React.Component {
     }
   };
 
-  // The original API call function - commented out for now
-  /*
-  performRegistration = async () => {
-    const { name, email, role, profession, password } = this.state;
-
-    return axios.post("https://voat.onrender.com/api/signup", {
-      name,
-      email,
-      password,
-      role,
-      profession,
-    });
-  };
-  */
-
   render() {
     const {
       errors,
@@ -166,6 +237,8 @@ class SignupPage extends React.Component {
       showConfirmPassword,
       isSubmitting,
       redirectToLogin,
+      showWelcomeCard,
+      name,
     } = this.state;
 
     // Redirect to login page if registration was successful
@@ -348,7 +421,7 @@ class SignupPage extends React.Component {
                 className="register-submit-button"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? "Creating account..." : "Create account"}
+                {isSubmitting ? "Creating account..." : "Register"}
               </button>
             </form>
 
@@ -367,6 +440,17 @@ class SignupPage extends React.Component {
             </Link>
           </div>
         </div>
+
+        {/* Welcome Card */}
+        {showWelcomeCard && (
+          <div className="welcome-card">
+            <div className="welcome-card-emoji">🚀</div>
+            <h2 className="welcome-card-title">Thank You for Registering!</h2>
+            <p className="welcome-card-message">
+              Welcome to VOAT Network, {name}!
+            </p>
+          </div>
+        )}
       </div>
     );
   }

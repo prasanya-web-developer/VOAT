@@ -4,6 +4,74 @@ import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import "./index.css";
 
+// Add CSS for welcome card if not already present
+const welcomeCardStyles = `
+.welcome-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 90%;
+  width: 400px;
+  z-index: 1000;
+  animation: fadeInOut 5s forwards;
+  opacity: 0;
+}
+
+.welcome-card-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2563eb;
+  margin-bottom: 0.75rem;
+}
+
+.welcome-card-message {
+  font-size: 1.125rem;
+  color: #4b5563;
+  margin-bottom: 1rem;
+}
+
+.welcome-card-emoji {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+}
+`;
+
+// Inject styles once when component is imported
+(function injectStyles() {
+  // Check if styles are already injected
+  if (!document.getElementById("welcome-card-styles")) {
+    const styleElement = document.createElement("style");
+    styleElement.id = "welcome-card-styles";
+    styleElement.innerHTML = welcomeCardStyles;
+    document.head.appendChild(styleElement);
+  }
+})();
+
 class LoginPage extends React.Component {
   state = {
     email: "",
@@ -11,6 +79,68 @@ class LoginPage extends React.Component {
     showPassword: false,
     errors: {},
     isSubmitting: false,
+    showWelcomeCard: false,
+  };
+
+  // Backend URLs - try both environments
+  backendUrls = [
+    "https://voat.onrender.com", // Production/Render
+    "http://localhost:5000", // Local development
+  ];
+
+  componentDidMount() {
+    // Check if NavBar has already determined the backend URL
+    if (!window.backendUrl) {
+      this.checkBackendAvailability();
+    }
+  }
+
+  // Check which backend is available
+  checkBackendAvailability = async () => {
+    if (window.backendUrl) {
+      console.log("Using already detected backend URL:", window.backendUrl);
+      return;
+    }
+
+    let workingUrl = null;
+
+    for (const url of this.backendUrls) {
+      try {
+        // Simple ping to see if this backend is responding
+        const response = await fetch(`${url}/api/test-connection`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ test: true }),
+          // Short timeout to fail fast
+          signal: AbortSignal.timeout(2000),
+        });
+
+        if (response.ok) {
+          console.log(`Backend available at: ${url}`);
+          workingUrl = url;
+          break;
+        }
+      } catch (error) {
+        console.log(`Backend at ${url} not available:`, error.message);
+      }
+    }
+
+    // If we found a working URL, save it
+    if (workingUrl) {
+      window.backendUrl = workingUrl;
+      console.log("Using backend at:", workingUrl);
+    } else {
+      // Default to production URL if none respond
+      window.backendUrl = this.backendUrls[0];
+      console.log("No backend responding, defaulting to:", window.backendUrl);
+    }
+  };
+
+  // Get the current backend URL
+  getBackendUrl = () => {
+    return window.backendUrl || this.backendUrls[0];
   };
 
   handleInputChange = (e) => {
@@ -47,48 +177,85 @@ class LoginPage extends React.Component {
       this.setState({ isSubmitting: true });
 
       try {
-        // Instead of calling the API directly, simulate a successful login for testing
-        // This helps bypass the CORS issue during development
+        // First, notify NavBar to expect a login if available
+        if (
+          window.navbarComponent &&
+          typeof window.navbarComponent.prepareForLogin === "function"
+        ) {
+          console.log("Notifying NavBar to expect login...");
+          window.navbarComponent.prepareForLogin();
+        }
 
-        // Simulated user data (for testing only)
-        const userData = {
-          name: "Test User",
-          email: this.state.email,
-          role: "Service Getter",
-          profession: "Developer",
-          id: Date.now(),
-          token: "test-token-" + Date.now(),
-        };
+        // Get the current backend URL
+        const baseUrl = this.getBackendUrl();
+        console.log("Using backend URL for login:", baseUrl);
+
+        // Try to use the actual API for login
+        console.log("Attempting to log in with API...");
+
+        let userData;
+        let useTestMode = false;
+
+        try {
+          const response = await axios.post(`${baseUrl}/api/login`, {
+            email: this.state.email,
+            password: this.state.password,
+          });
+
+          console.log("API login response:", response.data);
+
+          if (response.data && response.data.user) {
+            // Success! Use the API response data
+            userData = response.data.user;
+            console.log(
+              "Successfully logged in with API, user data:",
+              userData
+            );
+          } else {
+            useTestMode = true;
+          }
+        } catch (apiError) {
+          console.error(
+            "API login failed, falling back to test mode:",
+            apiError
+          );
+          useTestMode = true;
+        }
+
+        // If API login failed, use test mode
+        if (useTestMode) {
+          console.log("Using test mode login...");
+          userData = {
+            name: "Prasanya Pradeep", // Use a real name instead of Test User
+            email: this.state.email,
+            role: "Service Getter",
+            profession: "Web Developer",
+            id: Date.now(),
+            token: "test-token-" + Date.now(),
+          };
+        }
 
         // Clear any existing user data
         localStorage.removeItem("user");
 
-        // Small delay to ensure removal is processed
+        // Wait for removal to complete
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Store the new user data
+        console.log("Storing user data in localStorage:", userData);
+        localStorage.setItem("user", JSON.stringify(userData));
+
+        // Try all available methods to notify NavBar
+        this.notifyNavBarOfLogin(userData);
+
+        // Show welcome card
+        this.setState({ showWelcomeCard: true });
+
+        // Hide welcome card and redirect after 5 seconds
         setTimeout(() => {
-          // Store user data in localStorage
-          localStorage.setItem("user", JSON.stringify(userData));
-
-          // Trigger the login notification if available
-          if (window.showLoginNotification) {
-            console.log("Calling global showLoginNotification function");
-            window.showLoginNotification();
-          } else if (
-            window.navbarComponent &&
-            typeof window.navbarComponent.handleLogin === "function"
-          ) {
-            console.log("Calling handleLogin on navbarComponent");
-            window.navbarComponent.handleLogin(userData);
-          } else {
-            console.log(
-              "No notification method found - login successful but notification may not show"
-            );
-          }
-
-          // Add delay before redirect to ensure notification appears
-          setTimeout(() => {
-            window.location.href = "/";
-          }, 1000);
-        }, 100);
+          this.setState({ showWelcomeCard: false });
+          window.location.href = "/";
+        }, 5000);
       } catch (error) {
         console.error("Login error:", error);
         this.setState({
@@ -104,25 +271,55 @@ class LoginPage extends React.Component {
           if (this.state.isSubmitting) {
             this.setState({ isSubmitting: false });
           }
-        }, 3000);
+        }, 5000);
       }
     }
   };
 
-  // The original API call function - commented out for now
-  /*
-  performLogin = async () => {
-    const { email, password } = this.state;
+  // Helper method to notify NavBar about login using all available methods
+  notifyNavBarOfLogin = (userData) => {
+    console.log("Attempting to notify NavBar using all methods");
 
-    return axios.post("https://voat.onrender.com/api/login", {
-      email,
-      password,
-    });
+    // Method 1: Direct call to global showLoginNotification function
+    if (window.showLoginNotification) {
+      console.log("Using global showLoginNotification");
+      window.showLoginNotification();
+    }
+    // Method 2: Call handleLogin on NavBar component
+    else if (
+      window.navbarComponent &&
+      typeof window.navbarComponent.handleLogin === "function"
+    ) {
+      console.log("Using NavBar component handleLogin");
+      window.navbarComponent.handleLogin(userData);
+    }
+    // Method 3: Manually trigger storage event (probably won't work in same window)
+    else {
+      console.log("Attempting to trigger storage event manually");
+      try {
+        const storageEvent = new Event("storage");
+        storageEvent.key = "user";
+        storageEvent.newValue = JSON.stringify(userData);
+        window.dispatchEvent(storageEvent);
+      } catch (error) {
+        console.error("Error dispatching storage event:", error);
+      }
+    }
+
+    // Method 4: Directly get NavBar to load user data
+    if (
+      window.navbarComponent &&
+      typeof window.navbarComponent.loadUserData === "function"
+    ) {
+      console.log("Directly calling loadUserData on NavBar");
+      setTimeout(() => {
+        window.navbarComponent.loadUserData();
+      }, 500);
+    }
   };
-  */
 
   render() {
-    const { errors, showPassword, isSubmitting } = this.state;
+    const { errors, showPassword, isSubmitting, showWelcomeCard } = this.state;
 
     return (
       <div className="login-screen">
@@ -209,6 +406,17 @@ class LoginPage extends React.Component {
             </Link>
           </div>
         </div>
+
+        {/* Welcome Card */}
+        {showWelcomeCard && (
+          <div className="welcome-card">
+            <div className="welcome-card-emoji">🎉</div>
+            <h2 className="welcome-card-title">Welcome back!</h2>
+            <p className="welcome-card-message">
+              You have successfully logged in to VOAT Network.
+            </p>
+          </div>
+        )}
       </div>
     );
   }

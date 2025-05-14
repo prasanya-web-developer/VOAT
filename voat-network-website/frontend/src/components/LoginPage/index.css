@@ -193,3 +193,83 @@
     max-width: 36rem;
   }
 }
+
+.notification-container {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  max-width: 350px;
+  width: calc(100% - 2rem);
+  transform: translateX(120%);
+  transition: transform 0.3s ease-in-out;
+}
+
+.notification-container.visible {
+  transform: translateX(0);
+}
+
+.notification-container.hidden {
+  transform: translateX(120%);
+}
+
+.notification {
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background-color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-bottom: 1rem;
+  border-left: 4px solid #2563eb;
+}
+
+.notification-content {
+  flex: 1;
+  margin-right: 0.75rem;
+}
+
+.notification-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.notification-message {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #4b5563;
+  line-height: 1.4;
+}
+
+.notification-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.notification-close:hover {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+@media (max-width: 640px) {
+  .notification-container {
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+    width: auto;
+  }
+
+  .notification {
+    width: 100%;
+  }
+}

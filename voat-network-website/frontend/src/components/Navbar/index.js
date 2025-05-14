@@ -1,15 +1,7 @@
 import React, { Component } from "react";
 import { Link } from "react-router-dom";
-import { HashLink } from "react-router-hash-link"; // Import HashLink for smooth scrolling
-import {
-  Search,
-  ShoppingCart,
-  User,
-  Menu,
-  LogOut,
-  X,
-  Check,
-} from "lucide-react";
+import { HashLink } from "react-router-hash-link";
+import { User, Menu, LogOut, X, Check } from "lucide-react";
 import "./index.css";
 
 class NavBar extends Component {
@@ -24,14 +16,22 @@ class NavBar extends Component {
     prevScrollPos: window.pageYOffset,
     showLogoutNotification: false,
     showLoginNotification: false,
-    expectingLogin: false, // Flag to expect login
+    showWelcomeMessage: false,
   };
+
+  // Backend URLs - will try both environments
+  backendUrls = [
+    "https://voat.onrender.com", // Production/Render
+    "http://localhost:5000", // Local development
+  ];
 
   // Initialize class properties for notification timers
   loginNotificationTimer = null;
   logoutNotificationTimer = null;
   redirectTimer = null;
   loginCheckInterval = null;
+  welcomeMessageTimer = null;
+  storageEventBound = false;
 
   componentDidMount() {
     // Make the NavBar component accessible globally for testing
@@ -41,23 +41,134 @@ class NavBar extends Component {
 
     window.addEventListener("resize", this.checkScreenSize);
     document.addEventListener("mousedown", this.handleClickOutside);
-    window.addEventListener("storage", this.handleStorageEvent);
+
+    // Ensure we only bind the storage event listener once
+    if (!this.storageEventBound) {
+      window.addEventListener("storage", this.handleStorageEvent);
+      this.storageEventBound = true;
+    }
+
     window.addEventListener("scroll", this.handleScroll);
 
-    // Check initial login status without showing notifications
-    this.checkInitialLoginStatus();
+    // Check which backend is available
+    this.checkBackendAvailability();
 
-    // Set up interval to check for login status changes
+    // Check initial login status without showing notifications
+    this.loadUserData();
+
+    // Set up interval to check for login status changes (reduced frequency)
     this.loginCheckInterval = setInterval(
       this.checkLoginStatusPeriodically,
-      1000
+      2000
     );
 
     // Add a direct method to force show login notification
     window.showLoginNotification = this.forceShowLoginNotification;
 
+    // Add a method to show welcome message
+    window.showWelcomeMessage = this.showWelcomeMessage;
+
     console.log("NavBar mounted with notifications setup");
   }
+
+  // Check which backend is available
+  checkBackendAvailability = async () => {
+    let workingUrl = null;
+
+    for (const url of this.backendUrls) {
+      try {
+        // Simple ping to see if this backend is responding
+        const response = await fetch(`${url}/api/test-connection`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ test: true }),
+          // Short timeout to fail fast
+          signal: AbortSignal.timeout(2000),
+        });
+
+        if (response.ok) {
+          console.log(`Backend available at: ${url}`);
+          workingUrl = url;
+          break;
+        }
+      } catch (error) {
+        console.log(`Backend at ${url} not available:`, error.message);
+      }
+    }
+
+    // If we found a working URL, save it
+    if (workingUrl) {
+      window.backendUrl = workingUrl;
+      console.log("Using backend at:", workingUrl);
+    } else {
+      // Default to production URL if none respond
+      window.backendUrl = this.backendUrls[0];
+      console.log("No backend responding, defaulting to:", window.backendUrl);
+    }
+  };
+
+  // Get the current backend URL
+  getBackendUrl = () => {
+    return window.backendUrl || this.backendUrls[0];
+  };
+
+  // Load user data directly from localStorage only
+  loadUserData = () => {
+    try {
+      const userDataString = localStorage.getItem("user");
+      if (userDataString) {
+        try {
+          const userData = JSON.parse(userDataString);
+          console.log("User data loaded from localStorage:", userData);
+
+          // Direct update state with localStorage data
+          this.setState({
+            user: userData,
+            isLoggedIn: true,
+          });
+        } catch (error) {
+          console.error("Error parsing user data:", error);
+          this.setState({
+            isLoggedIn: false,
+            user: null,
+          });
+        }
+      } else {
+        this.setState({
+          isLoggedIn: false,
+          user: null,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error);
+      this.setState({
+        isLoggedIn: false,
+        user: null,
+      });
+    }
+  };
+
+  // Show welcome message
+  showWelcomeMessage = () => {
+    console.log("Showing welcome message");
+
+    // Clear any existing timer
+    clearTimeout(this.welcomeMessageTimer);
+
+    // First load user data to make sure we have the latest
+    this.loadUserData();
+
+    // Show welcome message
+    this.setState({ showWelcomeMessage: true });
+
+    // Set timer to hide it after 8 seconds
+    this.welcomeMessageTimer = setTimeout(() => {
+      console.log("Hiding welcome message after 8 seconds");
+      this.setState({ showWelcomeMessage: false });
+    }, 8000);
+  };
 
   // Direct method to force show login notification
   forceShowLoginNotification = () => {
@@ -65,6 +176,9 @@ class NavBar extends Component {
 
     // Clear any existing timer
     clearTimeout(this.loginNotificationTimer);
+
+    // First load user data to make sure we have the latest
+    this.loadUserData();
 
     // Show notification
     this.setState({ showLoginNotification: true });
@@ -84,37 +198,66 @@ class NavBar extends Component {
 
     // Remove global notification function
     delete window.showLoginNotification;
+    delete window.showWelcomeMessage;
 
     window.removeEventListener("resize", this.checkScreenSize);
     document.removeEventListener("mousedown", this.handleClickOutside);
-    window.removeEventListener("storage", this.handleStorageEvent);
+
+    if (this.storageEventBound) {
+      window.removeEventListener("storage", this.handleStorageEvent);
+      this.storageEventBound = false;
+    }
+
     window.removeEventListener("scroll", this.handleScroll);
 
     // Clean up notification timers and intervals
     clearTimeout(this.loginNotificationTimer);
     clearTimeout(this.logoutNotificationTimer);
     clearTimeout(this.redirectTimer);
+    clearTimeout(this.welcomeMessageTimer);
     clearInterval(this.loginCheckInterval);
   }
 
   // Method to check login status periodically
   checkLoginStatusPeriodically = () => {
     try {
-      const userData = localStorage.getItem("user");
+      let userData = null;
+      try {
+        const userDataStr = localStorage.getItem("user");
+        userData = userDataStr ? JSON.parse(userDataStr) : null;
+      } catch (e) {
+        console.error("Error parsing user data:", e);
+        userData = null;
+      }
+
       const wasLoggedIn = this.state.isLoggedIn;
       const isLoggedIn = !!userData;
 
-      // If login state changed and we're expecting a login
+      // If login state changed to logged in
       if (!wasLoggedIn && isLoggedIn) {
         console.log("Detected login via interval check");
-        // Pass the actual userData instead of just true
-        this.handleLogin(userData);
+        // Load latest user data from localStorage
+        this.loadUserData();
         this.setState({ expectingLogin: false });
       }
       // If logout happened
       else if (wasLoggedIn && !isLoggedIn) {
         console.log("Detected logout via interval check");
         this.handleExternalLogout();
+      }
+      // Update user data from localStorage if it changed
+      else if (isLoggedIn && userData && this.state.user) {
+        // Compare current state with localStorage data
+        const currentUser = this.state.user;
+        if (
+          userData.name !== currentUser.name ||
+          userData.email !== currentUser.email ||
+          userData.id !== currentUser.id ||
+          userData.role !== currentUser.role
+        ) {
+          console.log("User data changed in localStorage, updating state");
+          this.setState({ user: userData });
+        }
       }
     } catch (error) {
       console.error("Error in periodic login check:", error);
@@ -152,8 +295,17 @@ class NavBar extends Component {
       // Check if user was added (login) or removed (logout)
       if (event.newValue) {
         // User data was added - login occurred
-        if (!this.state.isLoggedIn) {
-          this.handleLogin(event.newValue);
+        try {
+          const userData = JSON.parse(event.newValue);
+          if (!this.state.isLoggedIn) {
+            console.log("Handling login from storage event");
+            this.handleLogin(userData);
+          } else {
+            // Just update user data without notification
+            this.setState({ user: userData });
+          }
+        } catch (e) {
+          console.error("Error parsing user data from storage event:", e);
         }
       } else {
         // User data was removed - logout occurred
@@ -161,32 +313,6 @@ class NavBar extends Component {
           this.handleExternalLogout();
         }
       }
-    }
-  };
-
-  // Initial check on mount - sets state without showing notifications
-  checkInitialLoginStatus = () => {
-    try {
-      const userData = localStorage.getItem("user");
-      if (userData) {
-        const user = JSON.parse(userData);
-        this.setState({
-          isLoggedIn: true,
-          user: user,
-        });
-      } else {
-        this.setState({
-          isLoggedIn: false,
-          user: null,
-        });
-      }
-    } catch (error) {
-      console.error("Error checking initial login status:", error);
-      localStorage.removeItem("user");
-      this.setState({
-        isLoggedIn: false,
-        user: null,
-      });
     }
   };
 
@@ -200,12 +326,9 @@ class NavBar extends Component {
         user = JSON.parse(userData);
       }
 
-      console.log(
-        "Showing login notification for user:",
-        user.name || user.email
-      );
+      console.log("Handling login for user:", user.name || user.email);
 
-      // Force notification to be visible
+      // Force notification to be visible and update state with user data
       this.setState({
         isLoggedIn: true,
         user: user,
@@ -308,6 +431,9 @@ class NavBar extends Component {
     } else if (type === "logout") {
       clearTimeout(this.logoutNotificationTimer);
       this.setState({ showLogoutNotification: false });
+    } else if (type === "welcome") {
+      clearTimeout(this.welcomeMessageTimer);
+      this.setState({ showWelcomeMessage: false });
     }
   };
 
@@ -342,29 +468,11 @@ class NavBar extends Component {
     });
   };
 
-  // Test methods for developer debugging
-  testLoginNotification = () => {
-    const testUser = {
-      name: "Test User",
-      email: "test@example.com",
-      role: "Freelancer/Service Provider",
-    };
-
-    console.log("Testing login notification");
-    this.handleLogin(testUser);
+  // Manual update method for testing/debugging
+  updateUserFromLocalStorage = () => {
+    this.loadUserData();
   };
 
-  testLogoutNotification = () => {
-    console.log("Testing logout notification");
-    this.setState({
-      showLogoutNotification: true,
-    });
-
-    clearTimeout(this.logoutNotificationTimer);
-    this.logoutNotificationTimer = setTimeout(() => {
-      this.setState({ showLogoutNotification: false });
-    }, 3000);
-  };
   render() {
     const {
       isMobile,
@@ -375,7 +483,11 @@ class NavBar extends Component {
       user,
       showLogoutNotification,
       showLoginNotification,
+      showWelcomeMessage,
     } = this.state;
+
+    // Debug log to see what user information we have
+    console.log("Current user state in NavBar render:", user);
 
     return (
       <>
@@ -388,7 +500,7 @@ class NavBar extends Component {
               className={`navbar ${showSpecialOffer ? "" : "navbar-no-offer"}`}
             >
               <div className="navbar-left-section">
-                {/* Left-side menu items */}
+                {/* Left-side menu items - UPDATED */}
                 <ul className="left-menu">
                   <li>
                     <Link to="/" onClick={this.scrollToTop}>
@@ -401,9 +513,10 @@ class NavBar extends Component {
                     </Link>
                   </li>
                   <li>
-                    <Link to="/#why-choose-us" onClick={this.scrollToTop}>
-                      Why Choose Us
-                    </Link>
+                    {/* Moved Contact Us to left menu */}
+                    <HashLink smooth to="/#contact" onClick={this.toggleMenu}>
+                      Contact Us
+                    </HashLink>
                   </li>
                 </ul>
               </div>
@@ -419,20 +532,15 @@ class NavBar extends Component {
               </div>
 
               <div className="navbar-right-section">
-                {/* Right-side menu items */}
-                <ul className="right-menu">
-                  <li>
-                    <Link to="/#our-vision" onClick={this.scrollToTop}>
-                      Our Vision
-                    </Link>
-                  </li>
-                  <li>
-                    {/* Using HashLink for smooth scrolling to contact section */}
-                    <HashLink smooth to="/#contact" onClick={this.toggleMenu}>
-                      Contact Us
-                    </HashLink>
-                  </li>
-                </ul>
+                {/* Right-side - User profile when logged in */}
+                {isLoggedIn && user && (
+                  <div className="navbar-user-profile">
+                    <div className="navbar-user-info">
+                      <User size={16} className="navbar-user-icon" />
+                      <span className="navbar-user-name">{user.name}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Desktop auth button */}
                 {!isLoggedIn && (
@@ -442,7 +550,7 @@ class NavBar extends Component {
                       className="get-started-btn"
                       onClick={this.scrollToTop}
                     >
-                      Get Started
+                      Register
                     </Link>
                   </div>
                 )}
@@ -450,11 +558,11 @@ class NavBar extends Component {
                 {isLoggedIn && (
                   <div className="navbar-auth desktop-auth">
                     <button
-                      className="get-started-btn"
+                      className="get-started-btn logout-btn"
                       onClick={this.handleLogout}
+                      aria-label="Logout"
                     >
                       <LogOut size={16} className="logout-icon" />
-                      <span>Logout</span>
                     </button>
                   </div>
                 )}
@@ -469,7 +577,7 @@ class NavBar extends Component {
                       className="get-started-btn mobile-auth"
                       onClick={this.scrollToTop}
                     >
-                      Get Started
+                      Register
                     </Link>
                   )}
 
@@ -479,13 +587,18 @@ class NavBar extends Component {
                 </div>
               )}
 
-              {/* Mobile menu */}
+              {/* Mobile menu - UPDATED */}
               <div className={`mobile-menu ${menuOpen ? "active" : ""}`}>
                 <div className="mobile-menu-header">
                   <div className="mobile-menu-close" onClick={this.toggleMenu}>
                     <X size={24} />
                   </div>
                 </div>
+
+                <li className="mobile-user-info">
+                  <User size={16} className="navbar-user-icon" />
+                  <span className="navbar-user-name">{user?.name}</span>
+                </li>
 
                 <ul className="mobile-menu-items">
                   <li>
@@ -512,28 +625,6 @@ class NavBar extends Component {
                   </li>
                   <li>
                     <HashLink
-                      to="/#why-choose-us"
-                      onClick={() => {
-                        this.scrollToTop();
-                        this.toggleMenu();
-                      }}
-                    >
-                      Why Choose Us
-                    </HashLink>
-                  </li>
-                  <li>
-                    <HashLink
-                      to="/#vision"
-                      onClick={() => {
-                        this.scrollToTop();
-                        this.toggleMenu();
-                      }}
-                    >
-                      Our Vision
-                    </HashLink>
-                  </li>
-                  <li>
-                    <HashLink
                       smooth
                       to="/#contact"
                       onClick={() => {
@@ -543,14 +634,16 @@ class NavBar extends Component {
                       Contact Us
                     </HashLink>
                   </li>
-                  {isLoggedIn && (
-                    <button
-                      className="get-started-btn mobile-auth"
-                      onClick={this.handleLogout}
-                    >
-                      <LogOut size={16} className="logout-icon" />
-                      <span>Logout</span>
-                    </button>
+                  {isLoggedIn && user && (
+                    <>
+                      <button
+                        className="get-started-btn mobile-auth"
+                        onClick={this.handleLogout}
+                      >
+                        <LogOut size={16} className="logout-icon" />
+                        <span>Logout</span>
+                      </button>
+                    </>
                   )}
                 </ul>
               </div>
@@ -558,7 +651,7 @@ class NavBar extends Component {
           </div>
         </header>
 
-        {/* Notifications Container (remains the same) */}
+        {/* Notifications Container */}
         <div className="notifications-container">
           {/* Login notification */}
           <div
@@ -592,6 +685,28 @@ class NavBar extends Component {
             <button
               className="notification-close"
               onClick={() => this.closeNotification("logout")}
+              aria-label="Close"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* Welcome message notification */}
+          <div
+            className={`notification welcome-notification ${
+              showWelcomeMessage ? "show" : ""
+            }`}
+          >
+            <span className="notification-icon">
+              <Check size={14} strokeWidth={3} />
+            </span>
+            <span>
+              You have registered successfully. Welcome to VOAT network{" "}
+              {user?.name}!
+            </span>
+            <button
+              className="notification-close"
+              onClick={() => this.closeNotification("welcome")}
               aria-label="Close"
             >
               <X size={14} />
