@@ -194,6 +194,8 @@ class SignupPage extends React.Component {
     return Object.keys(errors).length === 0;
   };
 
+  // In SignupPage.js handleSubmit method:
+
   handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -205,109 +207,77 @@ class SignupPage extends React.Component {
         const baseUrl = this.getBackendUrl();
         console.log("Using backend URL for signup:", baseUrl);
 
-        let userData = null;
-        let useTestMode = false;
+        // ONLY use the actual API for signup - no test mode fallback
+        console.log("Attempting to sign up with API...");
 
-        // Try to use the actual API for signup
-        try {
-          console.log("Attempting to sign up with API...");
-          const response = await axios.post(`${baseUrl}/api/signup`, {
+        const response = await axios.post(
+          `${baseUrl}/api/signup`,
+          {
             name: this.state.name,
             email: this.state.email,
             password: this.state.password,
             role: this.state.role,
             profession: this.state.profession,
-          });
-
-          console.log("API signup response:", response.data);
-
-          if (response.data && response.data.success && response.data.user) {
-            // Success! Use the API response data
-            userData = response.data.user;
-            console.log(
-              "Successfully signed up with API, user data:",
-              userData
-            );
-          } else {
-            // API response was not as expected
-            console.warn("API response format unexpected:", response.data);
-            useTestMode = true;
+          },
+          {
+            withCredentials: true,
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            timeout: 10000, // Increased timeout
           }
-        } catch (apiError) {
-          console.error(
-            "API signup failed, falling back to test mode:",
-            apiError
-          );
-          useTestMode = true;
-        }
+        );
 
-        // If API signup failed, use test mode
-        if (useTestMode) {
-          console.log("Using test mode signup...");
-          userData = {
-            name: this.state.name,
-            email: this.state.email,
-            role: this.state.role,
-            profession: this.state.profession,
-            id: Date.now(),
-            token: "test-token-" + Date.now(),
-          };
-        }
+        console.log("API signup response:", response.data);
 
-        // Clear localStorage first to ensure we trigger storage event
-        localStorage.removeItem("user");
+        if (response.data && response.data.success && response.data.user) {
+          // Success! Use the API response data
+          const userData = response.data.user;
+          console.log("Successfully signed up with API, user data:", userData);
 
-        // Small delay to ensure removal is processed
-        await new Promise((resolve) => setTimeout(resolve, 100));
+          // Clear localStorage first to ensure we trigger storage event
+          localStorage.removeItem("user");
 
-        // Store user data in localStorage
-        console.log("Storing user data in localStorage:", userData);
-        localStorage.setItem("user", JSON.stringify(userData));
+          // Small delay to ensure removal is processed
+          await new Promise((resolve) => setTimeout(resolve, 100));
 
-        // Show welcome message if available
-        if (window.showWelcomeMessage) {
-          console.log(
-            "Calling global showWelcomeMessage function after signup"
-          );
-          window.showWelcomeMessage();
-        } else if (
-          window.navbarComponent &&
-          typeof window.navbarComponent.showWelcomeMessage === "function"
-        ) {
-          console.log(
-            "Calling showWelcomeMessage on navbarComponent after signup"
-          );
-          window.navbarComponent.showWelcomeMessage();
-        } else {
-          // If no welcome message function is available, trigger login notification as fallback
-          if (window.showLoginNotification) {
-            console.log(
-              "Calling global showLoginNotification function after signup"
-            );
-            window.showLoginNotification();
+          // Store user data in localStorage
+          console.log("Storing user data in localStorage:", userData);
+          localStorage.setItem("user", JSON.stringify(userData));
+
+          // Show welcome message if available
+          if (window.showWelcomeMessage) {
+            window.showWelcomeMessage();
           } else if (
             window.navbarComponent &&
-            typeof window.navbarComponent.handleLogin === "function"
+            typeof window.navbarComponent.showWelcomeMessage === "function"
           ) {
-            console.log("Calling handleLogin on navbarComponent after signup");
-            window.navbarComponent.handleLogin(userData);
+            window.navbarComponent.showWelcomeMessage();
           } else {
-            console.log(
-              "No notification method found - signup successful but notification may not show"
-            );
+            // If no welcome message function is available, trigger login notification as fallback
+            if (
+              window.navbarComponent &&
+              typeof window.navbarComponent.handleLogin === "function"
+            ) {
+              window.navbarComponent.handleLogin(userData);
+            }
           }
+
+          // Show welcome card
+          this.setState({ showWelcomeCard: true });
+
+          // Hide welcome card and redirect after 5 seconds
+          setTimeout(() => {
+            this.setState({
+              showWelcomeCard: false,
+              redirectToLogin: true,
+            });
+          }, 5000);
+        } else {
+          // API response was not as expected
+          throw new Error("Invalid response from API");
         }
-
-        // Show welcome card
-        this.setState({ showWelcomeCard: true });
-
-        // Hide welcome card and redirect after 5 seconds
-        setTimeout(() => {
-          this.setState({
-            showWelcomeCard: false,
-            redirectToLogin: true,
-          });
-        }, 5000);
       } catch (error) {
         console.error("Registration error:", error);
 

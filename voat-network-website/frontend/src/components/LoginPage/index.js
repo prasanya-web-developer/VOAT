@@ -170,6 +170,8 @@ class LoginPage extends React.Component {
     return Object.keys(errors).length === 0;
   };
 
+  // In LoginPage.js handleSubmit method:
+
   handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -182,7 +184,6 @@ class LoginPage extends React.Component {
           window.navbarComponent &&
           typeof window.navbarComponent.prepareForLogin === "function"
         ) {
-          console.log("Notifying NavBar to expect login...");
           window.navbarComponent.prepareForLogin();
         }
 
@@ -190,92 +191,65 @@ class LoginPage extends React.Component {
         const baseUrl = this.getBackendUrl();
         console.log("Using backend URL for login:", baseUrl);
 
-        // Try to use the actual API for login
+        // ONLY use the actual API for login - no test mode fallback
         console.log("Attempting to log in with API...");
 
-        let userData;
-        let useTestMode = false;
-
-        try {
-          const response = await axios.post(`${baseUrl}/api/login`, {
+        const response = await axios.post(
+          `${baseUrl}/api/login`,
+          {
             email: this.state.email,
             password: this.state.password,
-          });
-
-          console.log("API login response:", response.data);
-
-          if (response.data && response.data.user) {
-            // Success! Use the API response data
-            userData = response.data.user;
-            console.log(
-              "Successfully logged in with API, user data:",
-              userData
-            );
-          } else {
-            useTestMode = true;
+          },
+          {
+            withCredentials: true,
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            timeout: 10000, // Increase timeout for slow server response
           }
-        } catch (apiError) {
-          console.error(
-            "API login failed, falling back to test mode:",
-            apiError
-          );
-          useTestMode = true;
+        );
+
+        console.log("API login response:", response.data);
+
+        if (response.data && response.data.user) {
+          // Success! Use the API response data
+          const userData = response.data.user;
+          console.log("Successfully logged in with API, user data:", userData);
+
+          // Clear any existing user data
+          localStorage.removeItem("user");
+
+          // Wait for removal to complete
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          // Store the new user data
+          console.log("Storing user data in localStorage:", userData);
+          localStorage.setItem("user", JSON.stringify(userData));
+
+          // Try all available methods to notify NavBar
+          this.notifyNavBarOfLogin(userData);
+
+          // Show welcome card
+          this.setState({ showWelcomeCard: true });
+
+          // Hide welcome card and redirect after 5 seconds
+          setTimeout(() => {
+            this.setState({ showWelcomeCard: false });
+            window.location.href = "/";
+          }, 5000);
+        } else {
+          // Handle case where API responded but user data is missing
+          throw new Error("Invalid response from API");
         }
-
-        // If API login failed, use test mode
-        if (useTestMode) {
-          console.log("Using test mode login...");
-
-          // Use email to generate a more dynamic test user name rather than hardcoding
-          // Extract the name part from the email (everything before the @ symbol)
-          const emailNamePart = this.state.email.split("@")[0];
-          // Convert to title case for a more natural name appearance
-          const generatedName = emailNamePart
-            .split(/[._-]/) // Split on common email separators
-            .map(
-              (word) =>
-                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-            )
-            .join(" ");
-
-          userData = {
-            name: generatedName, // Use the generated name instead of hardcoded name
-            email: this.state.email,
-            role: "Service Getter",
-            profession: "Web Developer",
-            id: Date.now(),
-            token: "test-token-" + Date.now(),
-          };
-        }
-
-        // Clear any existing user data
-        localStorage.removeItem("user");
-
-        // Wait for removal to complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        // Store the new user data
-        console.log("Storing user data in localStorage:", userData);
-        localStorage.setItem("user", JSON.stringify(userData));
-
-        // Try all available methods to notify NavBar
-        this.notifyNavBarOfLogin(userData);
-
-        // Show welcome card
-        this.setState({ showWelcomeCard: true });
-
-        // Hide welcome card and redirect after 5 seconds
-        setTimeout(() => {
-          this.setState({ showWelcomeCard: false });
-          window.location.href = "/";
-        }, 5000);
       } catch (error) {
         console.error("Login error:", error);
         this.setState({
           isSubmitting: false,
           errors: {
             ...this.state.errors,
-            general: "Login failed. Please try again.",
+            general:
+              "Login failed. Please check your credentials and try again.",
           },
         });
       } finally {

@@ -123,11 +123,21 @@ class NavBar extends Component {
           const userData = JSON.parse(userDataString);
           console.log("User data loaded from localStorage:", userData);
 
-          // Update state with localStorage data
-          this.setState({
-            user: userData,
-            isLoggedIn: true,
-          });
+          // Make sure we have a name and it's not generated
+          if (userData && userData.name) {
+            // Update state with localStorage data
+            this.setState({
+              user: userData,
+              isLoggedIn: true,
+            });
+          } else {
+            // Handle missing name
+            console.error("User data missing name property");
+            this.setState({
+              isLoggedIn: false,
+              user: null,
+            });
+          }
         } catch (error) {
           console.error("Error parsing user data:", error);
           this.setState({
@@ -486,7 +496,7 @@ class NavBar extends Component {
       showWelcomeMessage,
     } = this.state;
 
-    // Debug log to see what user information we have
+    // Debug log
     console.log("Current user state in NavBar render:", user);
 
     return (
@@ -538,7 +548,7 @@ class NavBar extends Component {
                     <div className="navbar-user-info">
                       <User size={16} className="navbar-user-icon" />
                       <span className="navbar-user-name">
-                        {user?.name || "Welcome User"}
+                        {user.name || "Unknown User"}
                       </span>
                     </div>
                   </div>

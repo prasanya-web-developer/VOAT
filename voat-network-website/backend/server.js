@@ -16,14 +16,19 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 const corsOptions = {
   origin: [
-    "https://voatnetwork.com/",
+    "https://voatnetwork.com",
     "http://localhost:3000",
-    "https://voat-network.netlify.app/",
+    "https://voat-network.netlify.app",
   ],
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
+
+// Add a preflight handler for OPTIONS requests
+app.options("*", cors(corsOptions));
 app.use(bodyParser.json());
 
 // Create uploads directory if it doesn't exist
@@ -486,11 +491,23 @@ app.post("/api/update-user-data", async (req, res) => {
   }
 });
 
+app.get("/api/status", (req, res) => {
+  res.status(200).json({
+    status: "online",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+  });
+});
+
+// Improved test-connection endpoint
 app.post("/api/test-connection", (req, res) => {
-  console.log("Test connection endpoint hit");
-  res
-    .status(200)
-    .json({ status: "success", message: "Connection test successful" });
+  console.log("Test connection request received from:", req.headers.origin);
+  res.status(200).json({
+    status: "success",
+    message: "Connection test successful",
+    server: process.env.NODE_ENV || "development",
+    time: new Date().toISOString(),
+  });
 });
 
 // Updated /api/portfolio endpoint to handle both headline and profession fields
