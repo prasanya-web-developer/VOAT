@@ -187,9 +187,25 @@ app.post("/api/signup", async (req, res) => {
   try {
     const { name, email, password, role, profession } = req.body;
 
+    // Log the request data (without password) for debugging
+    console.log("Signup request received:", { name, email, role, profession });
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      console.log("Missing required fields in signup");
+      return res.status(400).json({
+        success: false,
+        message: "All required fields must be provided",
+      });
+    }
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      console.log(`User with email ${email} already exists`);
+      return res.status(400).json({
+        success: false,
+        message: "User already exists",
+      });
     }
 
     // Generate VOAT ID during signup
@@ -198,7 +214,7 @@ app.post("/api/signup", async (req, res) => {
       4,
       8
     )}`;
-    console.log(`Generated VOAT ID for new user: ${voatId}`); // Debug log
+    console.log(`Generated VOAT ID for new user: ${voatId}`);
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -209,15 +225,18 @@ app.post("/api/signup", async (req, res) => {
       password: hashedPassword,
       role,
       profession,
-      voatId, // Set the VOAT ID at creation
+      voatId,
       voatPoints: 0,
       badge: "bronze",
     });
 
     const savedUser = await newUser.save();
-    console.log(`User saved with VOAT ID: ${savedUser.voatId}`); // Debug log
+    console.log(
+      `User saved with ID: ${savedUser._id}, VOAT ID: ${savedUser.voatId}`
+    );
 
     res.status(201).json({
+      success: true,
       message: "User registered successfully",
       user: {
         id: savedUser._id,
@@ -232,7 +251,11 @@ app.post("/api/signup", async (req, res) => {
     });
   } catch (error) {
     console.error("Signup error:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      message: error.message || "Failed to register user",
+    });
   }
 });
 
