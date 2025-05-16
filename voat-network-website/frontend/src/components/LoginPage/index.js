@@ -82,66 +82,14 @@ class LoginPage extends React.Component {
     showWelcomeCard: false,
   };
 
-  // Backend URLs - try both environments
-  backendUrls = [
-    "https://voat.onrender.com", // Production/Render
-    "http://localhost:5000", // Local development
-  ];
+  // Backend URL - use only the production URL
+  backendUrl = "https://voat.onrender.com";
 
   componentDidMount() {
-    // Check if NavBar has already determined the backend URL
-    if (!window.backendUrl) {
-      this.checkBackendAvailability();
-    }
+    // Use production URL by default
+    window.backendUrl = this.backendUrl;
+    console.log("Using production backend URL:", window.backendUrl);
   }
-
-  // Check which backend is available
-  checkBackendAvailability = async () => {
-    if (window.backendUrl) {
-      console.log("Using already detected backend URL:", window.backendUrl);
-      return;
-    }
-
-    let workingUrl = null;
-
-    for (const url of this.backendUrls) {
-      try {
-        // Simple ping to see if this backend is responding
-        const response = await fetch(`${url}/api/test-connection`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ test: true }),
-          // Short timeout to fail fast
-          signal: AbortSignal.timeout(2000),
-        });
-
-        if (response.ok) {
-          console.log(`Backend available at: ${url}`);
-          workingUrl = url;
-          break;
-        }
-      } catch (error) {
-        console.log(`Backend at ${url} not available:`, error.message);
-      }
-    }
-
-    // If we found a working URL, save it
-    if (workingUrl) {
-      window.backendUrl = workingUrl;
-      console.log("Using backend at:", workingUrl);
-    } else {
-      // Default to production URL if none respond
-      window.backendUrl = this.backendUrls[0];
-      console.log("No backend responding, defaulting to:", window.backendUrl);
-    }
-  };
-
-  // Get the current backend URL
-  getBackendUrl = () => {
-    return window.backendUrl || this.backendUrls[0];
-  };
 
   handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -186,18 +134,14 @@ class LoginPage extends React.Component {
           window.navbarComponent.prepareForLogin();
         }
 
-        // Get the current backend URL
-        const baseUrl = this.getBackendUrl();
-        console.log("Using backend URL for login:", baseUrl);
+        // Use the production backend URL
+        console.log("Using backend URL for login:", this.backendUrl);
 
-        // Try to use the actual API for login
+        // Attempt to log in with the API
         console.log("Attempting to log in with API...");
 
-        let userData;
-        let useTestMode = false;
-
         try {
-          const response = await axios.post(`${baseUrl}/api/login`, {
+          const response = await axios.post(`${this.backendUrl}/api/login`, {
             email: this.state.email,
             password: this.state.password,
           });
@@ -206,69 +150,47 @@ class LoginPage extends React.Component {
 
           if (response.data && response.data.user) {
             // Success! Use the API response data
-            userData = response.data.user;
+            const userData = response.data.user;
             console.log(
               "Successfully logged in with API, user data:",
               userData
             );
+
+            // Clear any existing user data
+            localStorage.removeItem("user");
+
+            // Wait for removal to complete
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Store the new user data - ensure name is preserved from the server response
+            console.log("Storing user data in localStorage:", userData);
+            localStorage.setItem("user", JSON.stringify(userData));
+
+            // Try all available methods to notify NavBar
+            this.notifyNavBarOfLogin(userData);
+
+            // Show welcome card
+            this.setState({ showWelcomeCard: true });
+
+            // Hide welcome card and redirect after 5 seconds
+            setTimeout(() => {
+              this.setState({ showWelcomeCard: false });
+              window.location.href = "/";
+            }, 5000);
           } else {
-            useTestMode = true;
+            throw new Error("Invalid user data in response");
           }
         } catch (apiError) {
-          console.error(
-            "API login failed, falling back to test mode:",
-            apiError
-          );
-          useTestMode = true;
+          console.error("API login failed:", apiError);
+          this.setState({
+            isSubmitting: false,
+            errors: {
+              ...this.state.errors,
+              general:
+                "Login failed. Please check your credentials and try again.",
+            },
+          });
         }
-
-        // If API login failed, use test mode
-        if (useTestMode) {
-          console.log("Using test mode login...");
-
-          // Use email to generate a more dynamic test user name rather than hardcoding
-          // Extract the name part from the email (everything before the @ symbol)
-          const emailNamePart = this.state.email.split("@")[0];
-          // Convert to title case for a more natural name appearance
-          const generatedName = emailNamePart
-            .split(/[._-]/) // Split on common email separators
-            .map(
-              (word) =>
-                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-            )
-            .join(" ");
-
-          userData = {
-            name: generatedName, // Use the generated name instead of hardcoded name
-            email: this.state.email,
-            role: "Service Getter",
-            profession: "Web Developer",
-            id: Date.now(),
-            token: "test-token-" + Date.now(),
-          };
-        }
-
-        // Clear any existing user data
-        localStorage.removeItem("user");
-
-        // Wait for removal to complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        // Store the new user data
-        console.log("Storing user data in localStorage:", userData);
-        localStorage.setItem("user", JSON.stringify(userData));
-
-        // Try all available methods to notify NavBar
-        this.notifyNavBarOfLogin(userData);
-
-        // Show welcome card
-        this.setState({ showWelcomeCard: true });
-
-        // Hide welcome card and redirect after 5 seconds
-        setTimeout(() => {
-          this.setState({ showWelcomeCard: false });
-          window.location.href = "/";
-        }, 5000);
       } catch (error) {
         console.error("Login error:", error);
         this.setState({
