@@ -225,8 +225,21 @@ class LoginPage extends React.Component {
         // If API login failed, use test mode
         if (useTestMode) {
           console.log("Using test mode login...");
+
+          // Use email to generate a more dynamic test user name rather than hardcoding
+          // Extract the name part from the email (everything before the @ symbol)
+          const emailNamePart = this.state.email.split("@")[0];
+          // Convert to title case for a more natural name appearance
+          const generatedName = emailNamePart
+            .split(/[._-]/) // Split on common email separators
+            .map(
+              (word) =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            )
+            .join(" ");
+
           userData = {
-            name: "Prasanya Pradeep", // Use a real name instead of Test User
+            name: generatedName, // Use the generated name instead of hardcoded name
             email: this.state.email,
             role: "Service Getter",
             profession: "Web Developer",
