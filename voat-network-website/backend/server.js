@@ -13,18 +13,82 @@ const { v4: uuidv4 } = require("uuid");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Backend CORS Configuration Update
+
 const corsOptions = {
-  origin: [
-    "https://voatnetwork.com/",
-    "http://localhost:3000",
-    "https://voat-network.netlify.app/",
-  ],
+  origin: function (origin, callback) {
+    // List of allowed origins - expanded to include netlify domains and subdomains
+    const allowedOrigins = [
+      "https://voat-network.netlify.app",
+      "https://voatnetwork.com",
+      "http://localhost:3000",
+    ];
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (
+      allowedOrigins.indexOf(origin) !== -1 ||
+      origin.match(/\.netlify\.app$/) ||
+      origin.endsWith("voatnetwork.com")
+    ) {
+      callback(null, true);
+    } else {
+      console.log("CORS blocked for origin:", origin);
+      callback(null, false); // Don't throw error, just reject
+    }
+  },
   credentials: true,
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 };
 
+// Apply CORS at the top level
 app.use(cors(corsOptions));
-app.use(bodyParser.json());
+
+// Handle OPTIONS requests explicitly to ensure proper CORS headers
+app.options("*", cors(corsOptions));
+
+// Middleware to handle CORS headers for every response
+app.use((req, res, next) => {
+  // Get the origin from the request
+  const origin = req.headers.origin;
+
+  // Check if the origin is allowed
+  if (
+    origin &&
+    (corsOptions.origin === "*" ||
+      (typeof corsOptions.origin === "function" &&
+        corsOptions.origin.toString().indexOf("return callback(null, true)") !==
+          -1) ||
+      (Array.isArray(corsOptions.origin) &&
+        corsOptions.origin.indexOf(origin) !== -1) ||
+      origin.match(/\.netlify\.app$/) ||
+      origin.endsWith("voatnetwork.com"))
+  ) {
+    // Set CORS headers explicitly
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+    );
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+
+  next();
+});
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, "uploads");
