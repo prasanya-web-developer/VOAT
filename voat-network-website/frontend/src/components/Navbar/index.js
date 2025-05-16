@@ -123,28 +123,7 @@ class NavBar extends Component {
           const userData = JSON.parse(userDataString);
           console.log("User data loaded from localStorage:", userData);
 
-          // Ensure the name is properly set
-          if (!userData.name || userData.name === "") {
-            // If name is missing, try to use email to create a name
-            if (userData.email && userData.email.includes("@")) {
-              const namePart = userData.email.split("@")[0];
-              // Format the name part nicely
-              userData.name = namePart
-                .split(/[._-]/)
-                .map(
-                  (word) =>
-                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-                )
-                .join(" ");
-
-              // Save the updated user data back to localStorage
-              localStorage.setItem("user", JSON.stringify(userData));
-            } else {
-              userData.name = "User"; // Default fallback
-            }
-          }
-
-          // Direct update state with localStorage data
+          // Update state with localStorage data
           this.setState({
             user: userData,
             isLoggedIn: true,
@@ -345,27 +324,6 @@ class NavBar extends Component {
       // If userData is a string, parse it
       if (typeof userData === "string") {
         user = JSON.parse(userData);
-      }
-
-      // Make sure the name is properly set
-      if (!user.name || user.name === "") {
-        // If name is missing, try to use email to create a name
-        if (user.email && user.email.includes("@")) {
-          const namePart = user.email.split("@")[0];
-          // Format the name part nicely
-          user.name = namePart
-            .split(/[._-]/)
-            .map(
-              (word) =>
-                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-            )
-            .join(" ");
-
-          // Save the updated user data back to localStorage
-          localStorage.setItem("user", JSON.stringify(user));
-        } else {
-          user.name = "User"; // Default fallback
-        }
       }
 
       console.log("Handling login for user:", user.name);
@@ -580,9 +538,7 @@ class NavBar extends Component {
                     <div className="navbar-user-info">
                       <User size={16} className="navbar-user-icon" />
                       <span className="navbar-user-name">
-                        {user?.name && user.name !== ""
-                          ? user.name
-                          : "Welcome User"}
+                        {user?.name || "Welcome User"}
                       </span>
                     </div>
                   </div>
@@ -646,9 +602,7 @@ class NavBar extends Component {
                   <li className="mobile-user-info">
                     <User size={16} className="navbar-user-icon" />
                     <span className="navbar-user-name">
-                      {user?.name && user.name !== ""
-                        ? user.name
-                        : "Welcome User"}
+                      {user?.name || "Welcome User"}
                     </span>
                   </li>
                 )}
@@ -755,7 +709,7 @@ class NavBar extends Component {
             </span>
             <span>
               You have registered successfully. Welcome to VOAT network{" "}
-              {user?.name && user.name !== "" ? user.name : "new user"}!
+              {user?.name || "new user"}!
             </span>
             <button
               className="notification-close"
