@@ -42,9 +42,8 @@ class UserDashboard extends Component {
     profileImage: null,
     previewImage: null,
     resumeFileName: "",
-    baseUrl: "http://localhost:8000",
+    baseUrl: "https://voat.onrender.com",
     showMobileSidebar: false,
-    // "https://voat.onrender.com"
   };
 
   checkWishlistConsistency = async () => {

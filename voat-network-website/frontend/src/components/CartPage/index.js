@@ -5,7 +5,7 @@ class CartSlider extends Component {
   state = {
     isLoading: false,
     error: null,
-    baseUrl: "http://localhost:8000",
+    baseUrl: "https://voat.onrender.com",
   };
 
   componentDidMount() {

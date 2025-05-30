@@ -32,8 +32,8 @@ class NavBar extends Component {
 
   // Backend URLs - will try both environments
   backendUrls = [
-    "http://localhost:8000", // Production/Render
-    "http://localhost:5000", // Local development
+    "https://voat.onrender.com", // Production/Render
+    "http://localhost:5000", // Local development (keep for dev)
   ];
 
   // Initialize class properties for notification timers

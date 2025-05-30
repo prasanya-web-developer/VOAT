@@ -14,7 +14,7 @@ class PortfolioList extends Component {
       experience: "",
       amount: [],
     },
-    baseUrl: "http://localhost:8000",
+    baseUrl: "https://voat.onrender.com",
     userImages: {},
     wishlist: [],
     isMobileFilterOpen: false,

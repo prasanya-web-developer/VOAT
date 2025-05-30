@@ -12,7 +12,7 @@ class AdminPanel extends Component {
     portfolioSubmissions: [],
     viewingSubmission: null,
     isLoading: true,
-    baseUrl: "http://localhost:8000",
+    baseUrl: "https://voat.onrender.com",
 
     searchTerm: "",
     statusFilter: "all",

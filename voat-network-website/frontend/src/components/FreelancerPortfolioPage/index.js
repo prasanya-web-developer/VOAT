@@ -10,7 +10,7 @@ class MyPortfolio extends Component {
     isLoading: true,
     isEditingProfile: false,
     isEditingServices: false,
-    baseUrl: "http://localhost:8000",
+    baseUrl: "https://voat.onrender.com",
     activeServiceTab: "",
     showAddServiceForm: false,
     showEditServiceForm: false,
