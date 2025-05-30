@@ -12,34 +12,34 @@ class PortfolioList extends Component {
     filters: {
       profession: "",
       experience: "",
+      amount: [],
     },
-    baseUrl: "https://voat.onrender.com",
-    userImages: {}, // To store user images by userId
-    wishlist: [], // Add this to track wishlisted items
+    baseUrl: "http://localhost:8000",
+    userImages: {},
+    wishlist: [],
+    isMobileFilterOpen: false,
+    notification: null,
   };
 
   getColorForName = (name) => {
-    // Professional color palette
     const colors = [
-      "#4C51BF", // Indigo
-      "#667EEA", // Purple
-      "#2B6CB0", // Blue
-      "#319795", // Teal
-      "#38A169", // Green
-      "#D69E2E", // Yellow
-      "#DD6B20", // Orange
-      "#E53E3E", // Red
-      "#805AD5", // Purple
-      "#3182CE", // Blue
+      "#4C51BF",
+      "#667EEA",
+      "#2B6CB0",
+      "#319795",
+      "#38A169",
+      "#D69E2E",
+      "#DD6B20",
+      "#E53E3E",
+      "#805AD5",
+      "#3182CE",
     ];
 
-    // Generate a hash code from the name
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
 
-    // Use the hash to pick a color
     const colorIndex = Math.abs(hash) % colors.length;
     return colors[colorIndex];
   };
@@ -47,16 +47,63 @@ class PortfolioList extends Component {
   componentDidMount() {
     this.fetchApprovedPortfolios();
     this.loadUserImages();
-    this.loadWishlist(); // Add this line
+    this.loadWishlist();
+    this.handleUrlParams();
   }
+
+  // Handle URL parameters for filtering
+  handleUrlParams = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const professionFromUrl = urlParams.get("profession");
+
+    if (professionFromUrl) {
+      this.setState((prevState) => ({
+        filters: {
+          ...prevState.filters,
+          profession: decodeURIComponent(professionFromUrl),
+        },
+      }));
+    }
+  };
+
+  showNotification = (message, type = "success") => {
+    this.setState({
+      notification: {
+        message,
+        type,
+      },
+    });
+
+    setTimeout(() => {
+      this.setState({ notification: null });
+    }, 3000);
+  };
+
+  renderNotification = () => {
+    if (!this.state.notification) return null;
+
+    const { message, type } = this.state.notification;
+    const isError = type === "error";
+
+    return (
+      <div className={`notification-toast ${isError ? "error" : "success"}`}>
+        <div className="notification-content">
+          <i
+            className={`fas fa-${
+              isError ? "exclamation-circle" : "check-circle"
+            }`}
+          ></i>
+          <span>{message}</span>
+        </div>
+      </div>
+    );
+  };
 
   loadUserImages = () => {
     try {
-      // Try to get all users from localStorage
       const users = JSON.parse(localStorage.getItem("users") || "[]");
       const userImages = {};
 
-      // Store each user's image by their ID
       users.forEach((user) => {
         if (user._id || user.id) {
           const userId = user._id || user.id;
@@ -66,7 +113,6 @@ class PortfolioList extends Component {
         }
       });
 
-      // Also check approved submissions for image data
       const approvedSubmissions = JSON.parse(
         localStorage.getItem("approvedSubmissions") || "[]"
       );
@@ -80,17 +126,14 @@ class PortfolioList extends Component {
         }
       });
 
-      // Detect if we're running in development mode and make adjustments for testing
       const isDevelopment =
         window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1";
 
       if (isDevelopment) {
-        // Add mock images for development testing
         this.addDevelopmentImages(userImages);
       }
 
-      // Set the images in state
       this.setState({ userImages });
     } catch (error) {
       console.error("Error loading user images:", error);
@@ -98,13 +141,10 @@ class PortfolioList extends Component {
   };
 
   addDevelopmentImages = (userImages) => {
-    // Add mock images for the user IDs we know exist
-    // These match the IDs used in the mockdata
     userImages["user1"] = "/api/placeholder/100/100";
     userImages["user2"] = "/api/placeholder/100/100";
     userImages["user3"] = "/api/placeholder/100/100";
 
-    // Check if we have any users from the MongoDB in image 2
     if (!userImages["6800b8b34a5c2842c84499c7"]) {
       userImages["6800b8b34a5c2842c84499c7"] =
         "/uploads/1744895090022-download (15).jpeg";
@@ -113,7 +153,6 @@ class PortfolioList extends Component {
 
   fetchApprovedPortfolios = async () => {
     try {
-      // Try to get data from API
       const response = await fetch(`${this.state.baseUrl}/api/portfolios`);
 
       let portfolioData = [];
@@ -121,33 +160,26 @@ class PortfolioList extends Component {
       if (response.ok) {
         portfolioData = await response.json();
 
-        // Ensure we only use profession field - explicitly remove headline if it exists
         portfolioData = portfolioData.map((portfolio) => {
-          // If no profession but headline exists, use headline as profession
           if (!portfolio.profession && portfolio.headline) {
-            portfolio.profession = portfolio.headline;
+            portfolio.profession = portfolio.profession;
+            portfolio.headline = portfolio.headline;
           }
 
-          // Create a new object without headline
           const { headline, ...portfolioWithoutHeadline } = portfolio;
           return portfolioWithoutHeadline;
         });
       } else {
-        // Fallback: Get data from localStorage (for when API fails or during development)
         let approvedPortfolios = JSON.parse(
           localStorage.getItem("approvedSubmissions") || "[]"
         );
 
-        // If no approved submissions in localStorage, use mock data
         if (approvedPortfolios.length === 0) {
-          approvedPortfolios = [
-            // your mock data here...
-          ];
+          approvedPortfolios = [];
         }
 
         portfolioData = approvedPortfolios;
 
-        // Ensure we only use profession field in mock data too
         portfolioData = portfolioData.map((portfolio) => {
           if (!portfolio.profession && portfolio.headline) {
             portfolio.profession = portfolio.headline;
@@ -157,11 +189,8 @@ class PortfolioList extends Component {
         });
       }
 
-      // Apply our improved deduplication method
       const uniquePortfolios = this.removeDuplicatePortfolios(portfolioData);
-
-      // Also try to fetch any missing user data that might contain profile images
-      this.fetchUserData(uniquePortfolios);
+      await this.fetchUserData(uniquePortfolios);
 
       this.setState({
         portfolios: uniquePortfolios,
@@ -170,17 +199,14 @@ class PortfolioList extends Component {
     } catch (error) {
       console.error("Error fetching portfolios:", error);
 
-      // Fallback to localStorage data
       const approvedPortfolios = JSON.parse(
         localStorage.getItem("approvedSubmissions") || "[]"
       );
 
       if (approvedPortfolios.length > 0) {
-        // Apply our improved deduplication method to fallback data
         const uniquePortfolios =
           this.removeDuplicatePortfolios(approvedPortfolios);
 
-        // Ensure we only use profession field in fallback data too
         const cleanedPortfolios = uniquePortfolios.map((portfolio) => {
           if (!portfolio.profession && portfolio.headline) {
             portfolio.profession = portfolio.headline;
@@ -204,35 +230,57 @@ class PortfolioList extends Component {
 
   fetchUserData = async (portfolios) => {
     try {
-      // Create a copy of current userImages
       const userImages = { ...this.state.userImages };
+      const updatedPortfolios = [...portfolios];
 
-      // Try to fetch data for each portfolio
-      for (const portfolio of portfolios) {
+      for (let i = 0; i < portfolios.length; i++) {
+        const portfolio = portfolios[i];
         const userId = portfolio.userId || portfolio._id || portfolio.id;
 
-        // Skip if we already have an image for this user
-        if (userImages[userId]) continue;
-
         try {
-          // Try to get user data from API
+          console.log(`Fetching data for user: ${userId}`);
+
           const response = await fetch(
-            `${this.state.baseUrl}/api/users/${userId}`
+            `${this.state.baseUrl}/api/user/${userId}`
           );
 
           if (response.ok) {
             const userData = await response.json();
-            if (userData && userData.profileImage) {
-              userImages[userId] = userData.profileImage;
+            console.log(`User data received:`, userData);
+
+            if (userData.user && userData.user.profileImage) {
+              userImages[userId] = userData.user.profileImage;
+            }
+
+            if (userData.user && userData.user.voatId) {
+              console.log(`VOAT ID found: ${userData.user.voatId}`);
+              updatedPortfolios[i] = {
+                ...updatedPortfolios[i],
+                voatId: userData.user.voatId,
+              };
+            } else {
+              console.log(`No VOAT ID found for user ${userId}`);
+              updatedPortfolios[i] = {
+                ...updatedPortfolios[i],
+                voatId: null,
+              };
             }
           }
         } catch (userError) {
-          console.log(`Could not fetch user data for ${userId}`);
+          console.log(`Could not fetch user data for ${userId}:`, userError);
+          updatedPortfolios[i] = {
+            ...updatedPortfolios[i],
+            voatId: null,
+          };
         }
       }
 
-      // Update state with any new images
-      this.setState({ userImages });
+      console.log("Updated portfolios with VOAT IDs:", updatedPortfolios);
+
+      this.setState({
+        userImages,
+        portfolios: updatedPortfolios,
+      });
     } catch (error) {
       console.error("Error fetching additional user data:", error);
     }
@@ -241,22 +289,17 @@ class PortfolioList extends Component {
   removeDuplicatePortfolios = (portfolios) => {
     const uniqueUserEmails = new Map();
 
-    // Sort by submission date first (newest first) or by ID if no date
     const sortedPortfolios = [...portfolios].sort((a, b) => {
-      // Use submittedDate if available for both
       if (a.submittedDate && b.submittedDate) {
         return new Date(b.submittedDate) - new Date(a.submittedDate);
       }
-      // Otherwise fallback to ID comparison (if they're numerical)
       return (b.id || 0) - (a.id || 0);
     });
 
-    // For each item, use a combination of identifiers to ensure uniqueness
     return sortedPortfolios.filter((portfolio) => {
-      // Use email as primary unique identifier, or name as fallback
       const uniqueKey = portfolio.email || portfolio.name;
 
-      if (!uniqueKey) return false; // Skip entries without identifiers
+      if (!uniqueKey) return false;
 
       if (!uniqueUserEmails.has(uniqueKey)) {
         uniqueUserEmails.set(uniqueKey, portfolio);
@@ -277,20 +320,44 @@ class PortfolioList extends Component {
     }));
   };
 
+  handleAmountFilterChange = (e) => {
+    const { value, checked } = e.target;
+    this.setState((prevState) => {
+      let updatedAmount = [...prevState.filters.amount];
+
+      if (checked) {
+        updatedAmount.push(value);
+      } else {
+        updatedAmount = updatedAmount.filter((amount) => amount !== value);
+      }
+
+      return {
+        filters: {
+          ...prevState.filters,
+          amount: updatedAmount,
+        },
+      };
+    });
+  };
+
   resetFilters = () => {
     this.setState({
       filters: {
         profession: "",
         experience: "",
+        amount: [],
       },
     });
+
+    // Also update URL to remove query parameters
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, "", newUrl);
   };
 
   loadWishlist = () => {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
     if (userData && userData.id) {
-      // Try to get wishlist from localStorage first
       try {
         const wishlist = JSON.parse(
           localStorage.getItem(`wishlist_${userData.id}`) || "[]"
@@ -301,15 +368,16 @@ class PortfolioList extends Component {
         this.setState({ wishlist: [] });
       }
 
-      // Then try to fetch from API
-      fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`)
+      const baseUrl = this.state.baseUrl || "http://localhost:8000";
+      const wishlistUrl = `${baseUrl}/api/wishlist/${userData.id}`;
+
+      fetch(wishlistUrl)
         .then((response) => {
           if (response.ok) return response.json();
-          throw new Error("Failed to fetch wishlist");
+          throw new Error(`Failed to fetch wishlist: ${response.status}`);
         })
         .then((wishlist) => {
-          this.setState({ wishlist });
-          // Update localStorage
+          this.setState({ wishlist: Array.isArray(wishlist) ? wishlist : [] });
           localStorage.setItem(
             `wishlist_${userData.id}`,
             JSON.stringify(wishlist)
@@ -317,16 +385,14 @@ class PortfolioList extends Component {
         })
         .catch((error) => {
           console.error("Error fetching wishlist:", error);
-          // We already loaded from localStorage, so it's fine if this fails
         });
     }
   };
 
-  handleWishlistToggle = (portfolio) => {
+  handleWishlistToggle = async (portfolio) => {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
     if (!userData || !userData.id) {
-      // Redirect to login if not logged in
       alert("Please login to add items to your wishlist");
       window.location.href = "/login";
       return;
@@ -335,54 +401,72 @@ class PortfolioList extends Component {
     const { wishlist } = this.state;
     const portfolioId = portfolio.userId || portfolio._id || portfolio.id;
 
-    // Check if item is already in wishlist
     const isWishlisted = wishlist.some(
-      (item) => item.id === portfolioId || item.serviceId === portfolioId
+      (item) => item.serviceId === portfolioId || item.id === portfolioId
     );
 
     let updatedWishlist;
+    let actionMessage;
 
     if (isWishlisted) {
-      // Remove from wishlist
       updatedWishlist = wishlist.filter(
-        (item) => item.id !== portfolioId && item.serviceId !== portfolioId
+        (item) => item.serviceId !== portfolioId && item.id !== portfolioId
       );
+      actionMessage = `${portfolio.name} removed from wishlist`;
     } else {
-      // Add to wishlist
+      const firstServicePrice = this.getFirstServicePrice(portfolio);
+
       const newWishlistItem = {
-        id: Math.random().toString(36).substr(2, 9), // Generate unique ID for wishlist item
+        id: Math.random().toString(36).substr(2, 9),
         serviceId: portfolioId,
-        service: portfolio.profession,
-        price: portfolio.workExperience
-          ? parseFloat(portfolio.workExperience) * 100
-          : 0, // Just a mock price based on experience
-        provider: portfolio.name,
+        service: portfolio.profession || "Service",
+        price: firstServicePrice,
+        provider: portfolio.name || "Provider",
         profileImage: this.getProfileImageUrl(portfolio),
+        rating: 4.5,
+        addedDate: new Date().toISOString(),
       };
 
       updatedWishlist = [...wishlist, newWishlistItem];
+      actionMessage = `${portfolio.name} added to wishlist`;
     }
 
-    // Update state
     this.setState({ wishlist: updatedWishlist });
-
-    // Save to localStorage
     localStorage.setItem(
       `wishlist_${userData.id}`,
       JSON.stringify(updatedWishlist)
     );
 
-    // Send to server
-    fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(updatedWishlist),
-    }).catch((error) => {
-      console.error("Error updating wishlist:", error);
-      // We already updated localStorage, so it's fine if this fails
-    });
+    try {
+      const baseUrl = this.state.baseUrl || "http://localhost:8000";
+      const wishlistUrl = `${baseUrl}/api/wishlist/${userData.id}`;
+
+      const response = await fetch(wishlistUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(updatedWishlist),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      this.showNotification(actionMessage);
+    } catch (error) {
+      console.error("Wishlist error:", error);
+
+      this.setState({ wishlist });
+      localStorage.setItem(`wishlist_${userData.id}`, JSON.stringify(wishlist));
+
+      this.showNotification(
+        `Failed to update wishlist: ${error.message}`,
+        "error"
+      );
+    }
   };
 
   isWishlisted = (portfolioId) => {
@@ -395,7 +479,6 @@ class PortfolioList extends Component {
   getUniqueOptions = (field) => {
     const { portfolios } = this.state;
 
-    // Special handling for profession to ensure we never use headline
     if (field === "profession") {
       const values = [
         ...new Set(
@@ -407,7 +490,6 @@ class PortfolioList extends Component {
       return values.sort();
     }
 
-    // Default handling for other fields
     const values = [
       ...new Set(
         portfolios
@@ -421,7 +503,6 @@ class PortfolioList extends Component {
   getProfileImageUrl = (portfolio) => {
     const userId = portfolio.userId || portfolio._id || portfolio.id;
 
-    // Check if profileImage is valid
     if (portfolio.profileImage) {
       if (
         portfolio.profileImage.startsWith("http") ||
@@ -430,18 +511,15 @@ class PortfolioList extends Component {
         return portfolio.profileImage;
       }
 
-      // Handle uploads path
       if (portfolio.profileImage.startsWith("/uploads")) {
         return `${this.state.baseUrl}${portfolio.profileImage}`;
       }
     }
 
-    // Check userImages state
     if (this.state.userImages[userId]) {
       return this.state.userImages[userId];
     }
 
-    // Fallback to placeholder
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(
       portfolio.name
     )}&background=random&color=fff&size=100`;
@@ -450,7 +528,6 @@ class PortfolioList extends Component {
   isValidImageUrl = (url) => {
     if (!url) return false;
 
-    // Check if it's a valid URL format or a path we expect to work
     return (
       url.startsWith("http") ||
       url.startsWith("data:image") ||
@@ -459,49 +536,70 @@ class PortfolioList extends Component {
     );
   };
 
-  handleViewPortfolio = (portfolio) => {
-    // Get the userId from the portfolio, ensuring we get the MongoDB ObjectId when possible
-    const userId = portfolio.userId || portfolio._id || portfolio.id;
-
-    // Check if this is a MongoDB ObjectId string (24 hex characters)
-    if (userId && typeof userId === "string" && userId.length === 24) {
-      // Redirect to my-portfolio/:userId using the proper MongoDB ID
-      window.location.href = `/my-portfolio/${userId}`;
-    } else {
-      // Handle case where we don't have a valid MongoDB ID
-      console.log("Using non-MongoDB ID:", userId);
-      // Still try to navigate with whatever ID we have
-      window.location.href = `/my-portfolio/${userId}`;
+  getFirstServicePrice = (portfolio) => {
+    if (portfolio.services && portfolio.services.length > 0) {
+      const firstService = portfolio.services[0];
+      if (firstService.pricing && firstService.pricing.length > 0) {
+        return firstService.pricing[0].price || 0;
+      }
     }
+
+    const exp = parseInt(portfolio.workExperience) || 0;
+    if (exp <= 2) return 1000 + exp * 500;
+    if (exp <= 5) return 2000 + (exp - 2) * 800;
+    if (exp <= 8) return 4400 + (exp - 5) * 1200;
+    return 8000 + (exp - 8) * 1500;
+  };
+
+  toggleMobileFilters = () => {
+    this.setState((prevState) => ({
+      isMobileFilterOpen: !prevState.isMobileFilterOpen,
+    }));
   };
 
   render() {
-    const { portfolios, isLoading, error, filters } = this.state;
+    const { portfolios, isLoading, error, filters, isMobileFilterOpen } =
+      this.state;
 
-    // Apply filters
     const filteredPortfolios = portfolios.filter((portfolio) => {
-      // Only show approved portfolios
       if (portfolio.status !== "approved") {
         return false;
       }
 
-      // Filter by profession if selected
       if (filters.profession && portfolio.profession !== filters.profession) {
         return false;
       }
 
-      // Filter by experience if selected
       if (filters.experience) {
-        const expValue = parseInt(portfolio.workExperience);
+        const expValue = parseInt(portfolio.workExperience) || 0;
+        const filterExp = parseInt(filters.experience);
 
-        if (filters.experience === "1-3" && (expValue < 1 || expValue > 3)) {
+        if (filterExp && expValue < filterExp) {
           return false;
-        } else if (
-          filters.experience === "4-7" &&
-          (expValue < 4 || expValue > 7)
-        ) {
-          return false;
-        } else if (filters.experience === "8+" && expValue < 8) {
+        }
+      }
+
+      if (filters.amount.length > 0) {
+        const firstServicePrice = this.getFirstServicePrice(portfolio);
+
+        const matchesAmount = filters.amount.some((range) => {
+          switch (range) {
+            case "1000-5000":
+              return firstServicePrice >= 1000 && firstServicePrice <= 5000;
+            case "5000-10000":
+              return firstServicePrice >= 5000 && firstServicePrice <= 10000;
+            case "10000-15000":
+              return firstServicePrice >= 10000 && firstServicePrice <= 15000;
+            case "15000-20000":
+              return firstServicePrice >= 15000 && firstServicePrice <= 20000;
+            case "20000+":
+              return firstServicePrice >= 20000;
+            default:
+              return false;
+          }
+        });
+
+        if (!matchesAmount) {
           return false;
         }
       }
@@ -510,138 +608,318 @@ class PortfolioList extends Component {
     });
 
     if (isLoading) {
-      return <div className="portfolios-loading">Loading portfolios...</div>;
+      return (
+        <>
+          <NavBar />
+          <div className="portfolios-loading">
+            <div className="loading-spinner"></div>
+            <p>Loading amazing freelancers...</p>
+          </div>
+        </>
+      );
     }
 
     if (error) {
-      return <div className="portfolios-error">{error}</div>;
+      return (
+        <>
+          <NavBar />
+          <div className="portfolios-error">{error}</div>
+        </>
+      );
     }
 
     const professions = this.getUniqueOptions("profession");
 
     return (
-      <>
+      <div className="app-container">
         <NavBar />
-        <div className="portfolios-container">
-          <div className="portfolios-header">
-            <h1>Professional Portfolio Directory</h1>
-            <p>
-              Connect with talented freelancers and professionals in your
-              industry
-            </p>
-          </div>
+        {this.renderNotification()}
+        <div className="portfolios-main-container">
+          {/* Mobile Filter Toggle */}
+          <button
+            className="mobile-filter-toggle"
+            onClick={this.toggleMobileFilters}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+            Filters ({filteredPortfolios.length})
+          </button>
 
-          <div className="portfolios-filters">
-            <div className="filter-controls">
-              <div className="filter-group">
-                <label htmlFor="profession">Profession</label>
-                <select
-                  id="profession"
-                  name="profession"
-                  value={filters.profession}
-                  onChange={this.handleFilterChange}
-                >
-                  <option value="">All Professions</option>
-                  {professions.map((profession, index) => (
-                    <option key={index} value={profession}>
-                      {profession}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label htmlFor="experience">Experience</label>
-                <select
-                  id="experience"
-                  name="experience"
-                  value={filters.experience}
-                  onChange={this.handleFilterChange}
-                >
-                  <option value="">All Experience Levels</option>
-                  <option value="1-3">1-3 Years</option>
-                  <option value="4-7">4-7 Years</option>
-                  <option value="8+">8+ Years</option>
-                </select>
-              </div>
-
+          {/* Left Sidebar - Filters */}
+          <div
+            className={`filters-sidebar ${
+              isMobileFilterOpen ? "mobile-open" : ""
+            }`}
+          >
+            <div className="filters-header">
+              <h3>Filter Freelancers</h3>
               <button className="reset-filters-btn" onClick={this.resetFilters}>
-                Reset Filters
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M3 6h18M8 12h8M11 18h2" />
+                </svg>
+                Clear All
               </button>
             </div>
+
+            {/* Show active filter indicator */}
+            {filters.profession && (
+              <div className="active-filter-indicator">
+                <span className="filter-tag">
+                  {filters.profession}
+                  <button
+                    onClick={() =>
+                      this.handleFilterChange({
+                        target: { name: "profession", value: "" },
+                      })
+                    }
+                    className="remove-filter-btn"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+            )}
+
+            <div className="filter-section">
+              <label className="filter-label">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Role/Profession
+              </label>
+              <select
+                name="profession"
+                value={filters.profession}
+                onChange={this.handleFilterChange}
+                className="filter-select"
+              >
+                <option value="">All Roles</option>
+                {professions.map((profession, index) => (
+                  <option key={index} value={profession}>
+                    {profession}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="filter-section">
+              <label className="filter-label">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 2v6m6 2a10 10 0 1 1-10-10" />
+                </svg>
+                Min Experience (Years)
+              </label>
+              <input
+                type="number"
+                name="experience"
+                value={filters.experience}
+                onChange={this.handleFilterChange}
+                placeholder="e.g., 3"
+                min="0"
+                max="20"
+                className="filter-input"
+              />
+            </div>
+
+            <div className="filter-section">
+              <label className="filter-label">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="12" y1="1" x2="12" y2="23" />
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                Budget Range
+              </label>
+              <div className="amount-checkboxes">
+                {[
+                  { value: "1000-5000", label: "$1K - $5K" },
+                  { value: "5000-10000", label: "$5K - $10K" },
+                  { value: "10000-15000", label: "$10K - $15K" },
+                  { value: "15000-20000", label: "$15K - $20K" },
+                  { value: "20000+", label: "$20K+" },
+                ].map((option) => (
+                  <label key={option.value} className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      value={option.value}
+                      checked={filters.amount.includes(option.value)}
+                      onChange={this.handleAmountFilterChange}
+                      className="filter-checkbox"
+                    />
+                    <span className="checkbox-custom"></span>
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="filter-results">
+              <div className="results-badge">
+                {filteredPortfolios.length} freelancer
+                {filteredPortfolios.length !== 1 ? "s" : ""}
+              </div>
+            </div>
           </div>
 
-          {filteredPortfolios.length === 0 ? (
-            <div className="no-results">
-              <div className="no-results-icon">🔍</div>
-              <h3>No Portfolios Found</h3>
-              <p>
-                Try adjusting your filters or check back later for new
-                professionals.
-              </p>
+          {/* Right Content Area */}
+          <div className="portfolios-content">
+            <div className="portfolios-header">
+              <div className="header-content">
+                <div className="header-left">
+                  <h1>Find Expert Freelancers</h1>
+                  <p>
+                    Connect with top-rated professionals for your next project
+                    {filters.profession && ` in ${filters.profession}`}
+                  </p>
+                </div>
+                <div className="header-right">
+                  <button className="quick-booking-btn">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    Quick Booking
+                  </button>
+                  <button className="voat-recommended-btn">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                    </svg>
+                    VOAT Recommended
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="portfolios-grid">
-              {filteredPortfolios.map((portfolio) => {
-                // Get the profile image URL
-                const profileImageUrl = this.getProfileImageUrl(portfolio);
-                const userId =
-                  portfolio.userId || portfolio._id || portfolio.id;
-                const hasValidImage = this.isValidImageUrl(profileImageUrl);
 
-                // Ensure profession is available without headline fallback
-                const profession = portfolio.profession || "";
+            {filteredPortfolios.length === 0 ? (
+              <div className="no-results">
+                <div className="no-results-icon">
+                  <svg
+                    width="48"
+                    height="48"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                </div>
+                <h3>No Freelancers Found</h3>
+                <p>
+                  {filters.profession
+                    ? `No ${filters.profession}s found matching your criteria. Try adjusting your filters.`
+                    : "Try adjusting your filters to see more results"}
+                </p>
+              </div>
+            ) : (
+              <div className="portfolios-grid">
+                {filteredPortfolios.map((portfolio) => {
+                  const profileImageUrl = this.getProfileImageUrl(portfolio);
+                  const userId =
+                    portfolio.userId || portfolio._id || portfolio.id;
+                  const hasValidImage = this.isValidImageUrl(profileImageUrl);
+                  const profession = portfolio.profession || "";
+                  const firstServicePrice =
+                    this.getFirstServicePrice(portfolio);
+                  const voatId = portfolio.voatId || "Not Available";
 
-                return (
-                  <div key={userId} className="portfolio-card">
-                    <div className="portfolio-header">
-                      <div
-                        className="wishlist-icon"
+                  return (
+                    <div key={userId} className="portfolio-card-simple">
+                      {/* Wishlist Heart Icon */}
+                      <button
+                        className={`wishlist-heart-btn ${
+                          this.isWishlisted(userId) ? "wishlisted" : ""
+                        }`}
                         onClick={(e) => {
                           e.stopPropagation();
                           this.handleWishlistToggle(portfolio);
                         }}
                       >
-                        {this.isWishlisted(userId) ? (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="red"
-                            stroke="red"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                          </svg>
-                        ) : (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                          </svg>
-                        )}
-                      </div>
-                      <div className="portfolio-image">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill={
+                            this.isWishlisted(userId) ? "currentColor" : "none"
+                          }
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                      </button>
+
+                      {/* Profile Image */}
+                      <div className="card-image">
                         {hasValidImage ? (
                           <img
                             src={profileImageUrl}
                             alt={`${portfolio.name}'s profile`}
-                            className="profile-img"
                             onError={(e) => {
                               e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                                 portfolio.name
-                              )}&background=random&color=fff&size=100`;
+                              )}&background=667eea&color=fff&size=120`;
                             }}
                           />
                         ) : (
@@ -657,40 +935,91 @@ class PortfolioList extends Component {
                           </div>
                         )}
                       </div>
-                      <div className="portfolio-title">
-                        <h3>{portfolio.name}</h3>
-                        <p className="profession">{profession}</p>
+
+                      {/* Card Content */}
+                      <div className="card-content">
+                        <h3 className="freelancer-name">{portfolio.name}</h3>
+                        <p className="profession">{portfolio.profession}</p>
+
+                        {/* VOAT ID */}
+                        <div className="voat-id">
+                          <span className="voat-label">VOAT ID:</span>
+                          <span className="voat-value">
+                            {portfolio.uservoatId}
+                          </span>
+                        </div>
+
+                        <div className="experience">
+                          <span className="experience-label">Experience:</span>
+                          <span className="experience-value">
+                            {portfolio.workExperience} years
+                          </span>
+                        </div>
+                        <div className="price">
+                          <span className="price-label">Starting at:</span>
+                          <span className="price-value">
+                            ${firstServicePrice.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Actions */}
+                      <div className="card-actions">
+                        <Link
+                          to={`/my-portfolio/${userId}`}
+                          className="view-portfolio-btn"
+                        >
+                          View Portfolio
+                        </Link>
+                        <button
+                          className={`add-to-cart-btn ${
+                            this.isWishlisted(userId) ? "in-cart" : ""
+                          }`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            this.handleWishlistToggle(portfolio);
+                          }}
+                        >
+                          {this.isWishlisted(userId) ? (
+                            <>
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                              >
+                                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" />
+                              </svg>
+                              In Cart
+                            </>
+                          ) : (
+                            <>
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                                <line x1="3" y1="6" x2="21" y2="6" />
+                                <path d="M16 10a4 4 0 0 1-8 0" />
+                              </svg>
+                              Add to Cart
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
-
-                    <div className="portfolio-details">
-                      <div className="detail-row">
-                        <span className="detail-label">Experience</span>
-                        <span className="detail-value">
-                          {portfolio.workExperience} years
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="portfolio-actions">
-                      <Link
-                        to={`/my-portfolio/${
-                          portfolio.userId || portfolio._id || portfolio.id
-                        }`}
-                        className="view-portfolio-btn"
-                      >
-                        View Portfolio
-                      </Link>
-                      <button className="contact-btn">Contact</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <Footer />
-      </>
+      </div>
     );
   }
 }

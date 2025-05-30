@@ -1,3 +1,4 @@
+/* NavBar Styles */
 .navbar-container {
   width: 100%;
   position: fixed;
@@ -16,6 +17,7 @@
 
 .navbar-sticky .navbar-container {
   transform: translateY(-35px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
 .navbar-special-offer {
@@ -40,7 +42,12 @@
   background-color: #0a385b;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   transition: padding 0.3s ease;
-  height: 70px; /* Reduced height to match reference */
+  height: 70px;
+}
+
+.navbar-no-offer {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 /* Navbar sections */
@@ -60,17 +67,6 @@
   justify-content: flex-end;
 }
 
-/* Add this class for when navbar is sticky without special offer */
-.navbar-no-offer {
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
-/* Add class for when navbar is sticky (without special offer) */
-.navbar-sticky .navbar-container {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-}
-
 /* Logo styles */
 .navbar-logo {
   display: flex;
@@ -82,7 +78,7 @@
 
 .nav-logo {
   height: 45px;
-  margin-top: 3px; /* Small top margin to match reference image */
+  margin-top: 3px;
 }
 
 .navbar-logo a {
@@ -102,9 +98,9 @@
   gap: 30px;
   margin: 0;
   padding: 0;
-  flex-wrap: nowrap; /* Prevent wrapping */
-  white-space: nowrap; /* Keep text on single line */
-  align-items: center; /* Center items vertically */
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  align-items: center;
   height: 100%;
 }
 
@@ -113,16 +109,16 @@
 }
 
 .right-menu {
-  padding-right: 20px; /* Added padding to give space before Get Started button */
+  padding-right: 20px;
 }
 
 .left-menu li,
 .right-menu li {
-  flex: 0 0 auto; /* Don't grow or shrink */
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   height: 100%;
-  padding-top: 3px; /* Small top padding to align with logo */
+  padding-top: 3px;
 }
 
 .left-menu li a,
@@ -140,7 +136,25 @@
   color: #fccf2b;
 }
 
-/* Get Started and Logout button styles - UNIFIED */
+/* Active menu styling */
+.left-menu li.active a,
+.mobile-menu-items li.active a {
+  color: #fccf2b;
+  font-weight: 600;
+  position: relative;
+}
+
+.left-menu li.active a::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #fccf2b;
+}
+
+/* Get Started and Logout button styles */
 .get-started-btn {
   background-color: #fff;
   color: #333;
@@ -163,6 +177,202 @@
 
 .logout-icon {
   margin-right: 8px;
+}
+
+/* User profile container - NEW DESIGN */
+.user-profile-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 4px 4px 4px 4px;
+  transition: background-color 0.3s;
+}
+
+.user-profile-container:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-avatar-wrapper {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #4c74af;
+}
+
+/* Mobile user profile container */
+.mobile-user-profile-container {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 4px;
+}
+
+.user-avatar-wrapper-mobile {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #4c74af;
+}
+
+/* User initials styling */
+.user-initials {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #4c74af;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.user-initials-mobile {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #4c74af;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+/* VOAT ID styling - REDESIGNED */
+.navbar-voat-id {
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  padding: 4px 10px;
+  margin-left: 8px;
+  margin-right: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.mobile-voat-id {
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  padding: 4px 10px;
+  margin-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* Additional styling for profile image */
+.navbar-user-image {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.navbar-user-image-mobile {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* NavBar and user profile styles */
+.navbar-user-profile {
+  display: flex;
+  align-items: center;
+  margin-left: 20px;
+  position: relative;
+}
+
+.navbar-cart {
+  display: flex;
+  margin-right: 15px;
+}
+
+.navbar-cart svg {
+  color: #fff;
+  transition: color 0.3s;
+}
+
+.navbar-cart svg:hover {
+  color: #dedaf5;
+}
+
+/* Search bar styles */
+.navbar-search {
+  position: relative;
+  display: flex;
+  margin-right: 15px;
+}
+
+.navbar-search input {
+  padding: 8px 35px 8px 15px;
+  border-radius: 20px;
+  border: 1px solid #e0e0e0;
+  background-color: #f5f5f5;
+  font-size: 14px;
+  width: 200px;
+  outline: none;
+}
+
+.navbar-search button {
+  position: absolute;
+  right: 10px;
+  top: 55%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #777;
+}
+
+/* Profile dropdown styles */
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 180px;
+  padding: 8px 0;
+}
+
+.profile-dropdown .dropdown-item {
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  color: #333;
+  transition: background-color 0.2s;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.profile-dropdown .dropdown-item:hover {
+  background-color: #f5f5f5;
+}
+
+.profile-dropdown .dropdown-item svg {
+  margin-right: 10px;
+  color: #666;
 }
 
 /* Mobile menu styles */
@@ -237,13 +447,22 @@
   margin-top: 10px;
 }
 
-/* NOTIFICATION STYLES - UPDATED */
+/* Enhance mobile user info display */
+.mobile-user-info {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  justify-content: center;
+}
+
+/* NOTIFICATION STYLES */
 .notifications-container {
   position: fixed;
   top: 105px;
   right: 20px;
-  z-index: 30000; /* Extremely high z-index */
-  display: block !important; /* Changed from flex to block */
+  z-index: 30000;
+  display: block !important;
   pointer-events: auto;
 }
 
@@ -268,10 +487,22 @@
   transform: translateX(0);
 }
 
-/* Add specific styling for login notification */
+/* Add specific styling for notifications */
 .login-notification {
-  background-color: #4caf50; /* Green for success */
+  background-color: #4caf50;
   color: white;
+}
+
+.logout-notification {
+  background-color: #ef5350;
+  color: white;
+  border-radius: 6px;
+}
+
+.welcome-notification {
+  background-color: #4caf50;
+  color: white;
+  max-width: 320px;
 }
 
 .notification-icon {
@@ -284,24 +515,10 @@
   margin-right: 12px;
   border-radius: 50%;
   color: white;
-}
-
-.login-notification .notification-icon {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
-/* Logout notification styles */
-.logout-notification {
-  background-color: #ef5350; /* Red */
-  color: white;
-  border-radius: 6px;
-}
-
-.logout-notification .notification-icon {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-/* Close button - FIXED POSITION */
+/* Close button */
 .notification-close {
   position: absolute;
   top: 50%;
@@ -318,8 +535,7 @@
   background-color: transparent;
   border: none;
   padding: 0;
-  z-index: 10000; /* Higher than notification */
-  margin-left: 0; /* FIXED: Removed the margin that was pushing the X too far */
+  z-index: 10000;
 }
 
 .notification-close:hover {
@@ -368,233 +584,24 @@
   }
 }
 
-/* LOGOUT BUTTON STYLE */
-.get-started-btn {
-  background-color: #fff;
-  color: #333;
-  padding: 8px 20px;
-  border-radius: 20px;
-  text-decoration: none;
-  font-weight: 500;
-  transition: background-color 0.3s;
-  display: flex;
+/* Mobile nav controls */
+.mobile-nav-controls {
+  display: none;
   align-items: center;
-  border: none;
-  cursor: pointer;
-}
-
-.get-started-btn:hover {
-  background-color: #fccf2b;
-}
-
-.logout-icon {
-  margin-right: 8px;
-}
-
-/* Commented out search bar styles - keeping them */
-.navbar-search {
-  position: relative;
-  display: flex;
-}
-
-.navbar-search input {
-  padding: 8px 35px 8px 15px;
-  border-radius: 20px;
-  border: 1px solid #e0e0e0;
-  background-color: #f5f5f5;
-  font-size: 14px;
-  width: 200px;
-  outline: none;
-}
-
-.navbar-search button {
   position: absolute;
-  right: 10px;
-  top: 55%;
+  right: 8px;
+  top: 68%;
   transform: translateY(-50%);
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #777;
 }
 
-/* Commented out cart styles - keeping them */
-.navbar-cart svg {
-  color: #fff;
-  transition: color 0.3s;
-}
-
-.navbar-cart svg:hover {
-  color: #dedaf5;
-}
-
-/* Commented out profile styles - keeping them */
-.navbar-profile-container {
-  position: relative;
-}
-
-.navbar-profile {
-  cursor: pointer;
-  color: #fff;
-  transition: color 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-}
-
-.navbar-profile:hover {
-  color: #5c4df4;
-  background-color: #f5f5f5;
-}
-
-.profile-dropdown {
-  position: absolute;
-  top: 45px;
-  right: 0;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  width: 180px;
-  z-index: 100;
-  overflow: hidden;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 15px;
-  color: #333;
-  text-decoration: none;
-  transition: background-color 0.3s;
-  cursor: pointer;
-}
-
-.dropdown-item:hover {
-  background-color: #f5f5f5;
-  color: #5c4df4;
-}
-
-.dropdown-item svg {
-  color: inherit;
-}
-
-/* NavBar and user profile styles */
-
-/* User profile in the navbar */
-.navbar-user-profile {
-  display: flex;
-  align-items: center;
-  margin-right: 15px;
-}
-
-.navbar-user-info {
-  display: flex;
-  align-items: center;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
+.mobile-nav-controls .mobile-auth {
+  margin-right: 60px;
   padding: 6px 12px;
-  border-radius: 20px;
-  background-color: rgba(255, 255, 255, 0.1);
-  transition: background-color 0.3s;
+  font-size: 14px;
 }
 
-.navbar-user-info:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.navbar-user-icon {
-  margin-right: 8px;
-}
-
-.navbar-user-name {
-  max-width: 150px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Logout button without text */
-.logout-btn {
-  width: 40px;
-  height: 40px;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-
-.logout-btn .logout-icon {
-  margin-right: 0;
-}
-
-/* Welcome notification styles */
-.welcome-notification {
-  background-color: #4caf50; /* Green for success */
-  color: white;
-  max-width: 320px;
-}
-
-.welcome-notification .notification-icon {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-/* Make notification container more prominent */
-.notifications-container {
-  z-index: 10000;
-}
-
-/* Mobile user info styles */
-.mobile-user-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  padding: 10px 15px;
-  margin-top: 15px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  width: 70%;
-  align-self: center;
-}
-
-.mobile-user-info .navbar-user-icon {
-  margin-right: 8px;
-}
-
-.mobile-user-info .navbar-user-name {
-  font-weight: 500;
-  font-size: 12px;
-}
-
-/* Mobile notification adjustments to ensure they don't overlap */
-@media (max-width: 768px) {
-  .notifications-container {
-    z-index: 10010; /* Ensure it's above the mobile menu */
-  }
-
-  .welcome-notification {
-    max-width: 90%;
-    right: 5%;
-    font-size: 13px;
-    line-height: 1.3;
-  }
-
-  .navbar-user-info {
-    font-size: 13px;
-    padding: 5px 10px;
-  }
-
-  .logout-btn {
-    width: 36px;
-    height: 36px;
-    padding: 6px;
-  }
+.desktop-auth {
+  display: block;
 }
 
 /* Media queries for responsiveness */
@@ -632,6 +639,10 @@
   .nav-logo {
     height: 40px;
   }
+
+  .navbar-search input {
+    width: 150px;
+  }
 }
 
 @media (max-width: 992px) {
@@ -647,6 +658,10 @@
   .right-menu {
     gap: 10px;
   }
+
+  .navbar-search input {
+    width: 120px;
+  }
 }
 
 @media (max-width: 850px) {
@@ -658,6 +673,10 @@
   .get-started-btn {
     padding: 6px 10px;
     font-size: 13px;
+  }
+
+  .navbar-search {
+    display: none;
   }
 }
 
@@ -707,6 +726,14 @@
     height: 40px;
   }
 
+  .mobile-nav-controls {
+    display: flex;
+  }
+
+  .desktop-auth {
+    display: none;
+  }
+
   /* Fix for mobile menu items */
   .mobile-menu-items li a {
     text-align: center;
@@ -721,25 +748,25 @@
     justify-content: center;
   }
 
-  /* UPDATED: Mobile notifications - Smaller, more compact */
+  /* Mobile notifications - Smaller, more compact */
   .notifications-container {
-    top: 85px; /* Adjust for smaller navbar on mobile */
+    top: 85px;
     right: 10px;
-    max-width: 220px; /* REDUCED: from 260px to 220px for smaller notification */
+    max-width: 220px;
   }
 
   .notification {
-    padding: 8px 12px; /* REDUCED: Smaller padding */
-    padding-right: 35px; /* Ensure space for the X button */
-    font-size: 13px; /* REDUCED: Smaller font size */
-    min-width: auto; /* Remove min-width to allow it to be smaller */
+    padding: 8px 12px;
+    padding-right: 35px;
+    font-size: 13px;
+    min-width: auto;
   }
 
   .notification-icon {
-    width: 18px; /* REDUCED: Smaller icon */
-    height: 18px; /* REDUCED: Smaller icon */
-    min-width: 18px; /* REDUCED: Smaller icon */
-    margin-right: 8px; /* REDUCED: Smaller margin */
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    margin-right: 8px;
   }
 
   /* Make X button more accessible on mobile */
@@ -747,6 +774,16 @@
     width: 20px;
     height: 20px;
     right: 8px;
+  }
+
+  .navbar-voat-id {
+    color: #fff;
+    background-color: transparent;
+  }
+
+  .mobile-voat-id {
+    color: #fff;
+    background-color: transparent;
   }
 }
 
@@ -778,7 +815,7 @@
     margin-left: 40px;
   }
 
-  /* UPDATED: Even smaller notifications for very small screens */
+  /* Even smaller notifications for very small screens */
   .notifications-container {
     margin-top: 18px;
     max-width: 200px;
@@ -790,35 +827,10 @@
     padding: 6px 10px;
     padding-right: 30px;
   }
-}
 
-@media (max-width: 768px) {
-  .mobile-nav-controls {
-    display: flex;
-    align-items: center;
-    position: absolute;
-    right: 8px;
-    top: 68%;
-    transform: translateY(-50%);
-  }
-
-  .mobile-nav-controls .mobile-auth {
-    margin-right: 60px;
-    padding: 6px 12px;
-    font-size: 14px;
-  }
-
-  .desktop-auth {
-    display: none;
-  }
-
-  .navbar-hamburger {
-    display: flex;
-  }
-}
-
-@media (min-width: 769px) {
-  .mobile-nav-controls {
-    display: none;
+  .mobile-voat-id {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

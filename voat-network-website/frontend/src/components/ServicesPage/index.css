@@ -580,3 +580,121 @@
     padding-top: 60px;
   }
 }
+
+/* Add these styles to your existing CSS files */
+
+/* Services Page Styles */
+.service-page-service-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.service-page-service-card-link:hover {
+  transform: translateY(-5px);
+  text-decoration: none;
+  color: inherit;
+}
+
+.service-page-service-card-link:hover .service-page-service-card {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+}
+
+.service-page-service-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* Portfolio List Active Filter Styles */
+.active-filter-indicator {
+  margin-bottom: 20px;
+  padding: 10px 0;
+}
+
+.filter-tag {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.remove-filter-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.remove-filter-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Enhanced Service Card Hover Effects */
+.service-page-service-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.service-page-service-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.service-page-service-card-link:hover .service-page-service-card::before {
+  left: 100%;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 768px) {
+  .service-page-service-card-link:hover {
+    transform: none;
+  }
+
+  .active-filter-indicator {
+    margin-bottom: 15px;
+  }
+
+  .filter-tag {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+}
+
+/* Additional Portfolio List Enhancements */
+.portfolios-header .header-left p {
+  transition: all 0.3s ease;
+}
+
+.no-results p {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}

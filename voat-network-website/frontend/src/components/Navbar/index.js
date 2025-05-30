@@ -1,7 +1,16 @@
 import React, { Component } from "react";
 import { Link } from "react-router-dom";
 import { HashLink } from "react-router-hash-link";
-import { User, Menu, LogOut, X, Check } from "lucide-react";
+import {
+  User,
+  Menu,
+  LogOut,
+  X,
+  Check,
+  Search,
+  ShoppingCart,
+  ChevronDown,
+} from "lucide-react";
 import "./index.css";
 
 class NavBar extends Component {
@@ -17,11 +26,13 @@ class NavBar extends Component {
     showLogoutNotification: false,
     showLoginNotification: false,
     showWelcomeMessage: false,
+    searchQuery: "",
+    activeMenu: "",
   };
 
   // Backend URLs - will try both environments
   backendUrls = [
-    "https://voat.onrender.com", // Production/Render
+    "http://localhost:8000", // Production/Render
     "http://localhost:5000", // Local development
   ];
 
@@ -38,6 +49,7 @@ class NavBar extends Component {
     window.navbarComponent = this;
 
     this.checkScreenSize();
+    this.updateActiveMenu();
 
     window.addEventListener("resize", this.checkScreenSize);
     document.addEventListener("mousedown", this.handleClickOutside);
@@ -70,6 +82,37 @@ class NavBar extends Component {
 
     console.log("NavBar mounted with notifications setup");
   }
+
+  // Method to determine active menu based on current path
+  updateActiveMenu = () => {
+    const { pathname } = window.location;
+
+    if (pathname === "/") {
+      this.setState({ activeMenu: "home" });
+    } else if (pathname.includes("/services")) {
+      this.setState({ activeMenu: "services" });
+    } else if (pathname.includes("/portfolio-list")) {
+      this.setState({ activeMenu: "portfolio" });
+    } else if (pathname.includes("/#contact")) {
+      this.setState({ activeMenu: "contact" });
+    } else {
+      this.setState({ activeMenu: "" });
+    }
+  };
+
+  // Get initials from user name
+  getUserInitials = (name) => {
+    if (!name) return "U";
+
+    const names = name.split(" ");
+    if (names.length === 1) {
+      return names[0].charAt(0).toUpperCase();
+    } else {
+      return (
+        names[0].charAt(0) + names[names.length - 1].charAt(0)
+      ).toUpperCase();
+    }
+  };
 
   // Check which backend is available
   checkBackendAvailability = async () => {
@@ -122,6 +165,30 @@ class NavBar extends Component {
         try {
           const userData = JSON.parse(userDataString);
           console.log("User data loaded from localStorage:", userData);
+
+          // Ensure profile image path is properly formatted with full URL if needed
+          if (userData && userData.profileImage) {
+            // Check if it's a relative path or already has a domain
+            if (
+              !userData.profileImage.startsWith("http") &&
+              !userData.profileImage.startsWith("/")
+            ) {
+              userData.profileImage = "/" + userData.profileImage;
+            }
+
+            // If it's a relative path, ensure it's properly formatted
+            if (userData.profileImage.startsWith("/uploads/")) {
+              // Check if we need to prepend the backend URL
+              const backendUrl = this.getBackendUrl();
+              if (!userData.profileImage.includes(backendUrl)) {
+                // Remove any duplicate slashes
+                const cleanPath = userData.profileImage.replace(/^\/+/, "");
+                userData.profileImage = `${backendUrl}/${cleanPath}`;
+              }
+            }
+
+            console.log("Formatted profile image path:", userData.profileImage);
+          }
 
           // Make sure we have a name and it's not generated
           if (userData && userData.name) {
@@ -235,6 +302,17 @@ class NavBar extends Component {
       try {
         const userDataStr = localStorage.getItem("user");
         userData = userDataStr ? JSON.parse(userDataStr) : null;
+
+        // Format profile image path if exists
+        if (userData && userData.profileImage) {
+          // If profile image doesn't start with http or /, add /
+          if (
+            !userData.profileImage.startsWith("http") &&
+            !userData.profileImage.startsWith("/")
+          ) {
+            userData.profileImage = "/" + userData.profileImage;
+          }
+        }
       } catch (e) {
         console.error("Error parsing user data:", e);
         userData = null;
@@ -263,7 +341,9 @@ class NavBar extends Component {
           userData.name !== currentUser.name ||
           userData.email !== currentUser.email ||
           userData.id !== currentUser.id ||
-          userData.role !== currentUser.role
+          userData.role !== currentUser.role ||
+          userData.profileImage !== currentUser.profileImage ||
+          userData.voatId !== currentUser.voatId
         ) {
           console.log("User data changed in localStorage, updating state");
           this.setState({ user: userData });
@@ -307,10 +387,23 @@ class NavBar extends Component {
         // User data was added - login occurred
         try {
           const userData = JSON.parse(event.newValue);
+
+          // Format profile image path if exists
+          if (userData && userData.profileImage) {
+            // If profile image doesn't start with http or /, add /
+            if (
+              !userData.profileImage.startsWith("http") &&
+              !userData.profileImage.startsWith("/")
+            ) {
+              userData.profileImage = "/" + userData.profileImage;
+            }
+          }
+
           if (!this.state.isLoggedIn) {
             console.log("Handling login from storage event");
             this.handleLogin(userData);
           } else {
+            console.log(userData, "userData--userData");
             // Just update user data without notification
             this.setState({ user: userData });
           }
@@ -337,6 +430,18 @@ class NavBar extends Component {
       }
 
       console.log("Handling login for user:", user.name);
+
+      // Format profile image path if exists
+      if (user && user.profileImage) {
+        // If profile image doesn't start with http or /, add /
+        if (
+          !user.profileImage.startsWith("http") &&
+          !user.profileImage.startsWith("/")
+        ) {
+          user.profileImage = "/" + user.profileImage;
+        }
+        console.log("Formatted profile image path:", user.profileImage);
+      }
 
       // Force notification to be visible and update state with user data
       this.setState({
@@ -478,6 +583,19 @@ class NavBar extends Component {
     });
   };
 
+  // Handle search input change
+  handleSearchChange = (e) => {
+    this.setState({ searchQuery: e.target.value });
+  };
+
+  // Handle search form submission
+  handleSearchSubmit = (e) => {
+    e.preventDefault();
+    // Implement search functionality here
+    console.log("Search query:", this.state.searchQuery);
+    // You can redirect to search results page or handle search in another way
+  };
+
   // Manual update method for testing/debugging
   updateUserFromLocalStorage = () => {
     this.loadUserData();
@@ -494,10 +612,18 @@ class NavBar extends Component {
       showLogoutNotification,
       showLoginNotification,
       showWelcomeMessage,
+      searchQuery,
+      activeMenu,
     } = this.state;
 
     // Debug log
     console.log("Current user state in NavBar render:", user);
+
+    // Determine profile image to use - debug the profile image path
+    console.log("Profile image path:", user?.profileImage);
+    const profileImage = user?.profileImage || null;
+    const userInitials = user ? this.getUserInitials(user.name) : "";
+    const voatId = user?.voatId || "";
 
     return (
       <>
@@ -510,21 +636,51 @@ class NavBar extends Component {
               className={`navbar ${showSpecialOffer ? "" : "navbar-no-offer"}`}
             >
               <div className="navbar-left-section">
-                {/* Left-side menu items - UPDATED */}
+                {/* Left-side menu items - UPDATED with active classes */}
                 <ul className="left-menu">
-                  <li>
-                    <Link to="/" onClick={this.scrollToTop}>
+                  <li className={activeMenu === "home" ? "active" : ""}>
+                    <Link
+                      to="/"
+                      onClick={() => {
+                        this.scrollToTop();
+                        this.setState({ activeMenu: "home" });
+                      }}
+                    >
                       Home
                     </Link>
                   </li>
-                  <li>
-                    <Link to="/services" onClick={this.scrollToTop}>
+                  <li className={activeMenu === "services" ? "active" : ""}>
+                    <Link
+                      to="/services"
+                      onClick={() => {
+                        this.scrollToTop();
+                        this.setState({ activeMenu: "services" });
+                      }}
+                    >
                       Services
                     </Link>
                   </li>
-                  <li>
+                  <li className={activeMenu === "portfolio" ? "active" : ""}>
+                    <Link
+                      to="/portfolio-list"
+                      onClick={() => {
+                        this.scrollToTop();
+                        this.setState({ activeMenu: "portfolio" });
+                      }}
+                    >
+                      Portfolios
+                    </Link>
+                  </li>
+                  <li className={activeMenu === "contact" ? "active" : ""}>
                     {/* Moved Contact Us to left menu */}
-                    <HashLink smooth to="/#contact" onClick={this.scrollToTop}>
+                    <HashLink
+                      smooth
+                      to="/#contact"
+                      onClick={() => {
+                        this.scrollToTop();
+                        this.setState({ activeMenu: "contact" });
+                      }}
+                    >
                       Contact Us
                     </HashLink>
                   </li>
@@ -542,15 +698,113 @@ class NavBar extends Component {
               </div>
 
               <div className="navbar-right-section">
-                {/* Right-side - User profile when logged in */}
+                {/* Search bar */}
+                <div className="navbar-search">
+                  <form onSubmit={this.handleSearchSubmit}>
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={this.handleSearchChange}
+                      aria-label="Search"
+                    />
+                    <button type="submit" aria-label="Submit search">
+                      <Search size={16} />
+                    </button>
+                  </form>
+                </div>
+
+                {/* User profile when logged in with profile image or initials */}
                 {isLoggedIn && user && (
-                  <div className="navbar-user-profile">
-                    <div className="navbar-user-info">
-                      <User size={16} className="navbar-user-icon" />
-                      <span className="navbar-user-name">
-                        {user.name || "Unknown User"}
-                      </span>
+                  <div
+                    className="navbar-user-profile"
+                    ref={this.profileDropdownRef}
+                  >
+                    {/* Cart Icon */}
+                    <Link to="/cart" className="navbar-cart">
+                      <ShoppingCart size={20} />
+                    </Link>
+
+                    {/* User profile with VOAT ID - REDESIGNED */}
+                    <div
+                      className="user-profile-container"
+                      onClick={this.toggleProfileDropdown}
+                    >
+                      <div className="user-avatar-wrapper">
+                        {profileImage ? (
+                          <img
+                            src={profileImage}
+                            alt="User"
+                            className="navbar-user-image"
+                            onError={(e) => {
+                              console.log("Image load error:", e);
+                              e.target.onerror = null;
+
+                              // Try with backend URL if it's a relative path
+                              if (
+                                !profileImage.startsWith("http") &&
+                                this.getBackendUrl()
+                              ) {
+                                const backendUrl = this.getBackendUrl();
+                                const cleanPath = profileImage.replace(
+                                  /^\/+/,
+                                  ""
+                                );
+                                e.target.src = `${backendUrl}/${cleanPath}`;
+                                return; // Give it another chance to load
+                              }
+
+                              e.target.src = ""; // Clear the source if second attempt fails
+                              e.target.style.display = "none"; // Hide the img
+
+                              // Add initials to the parent element
+                              const parent = e.target.parentNode;
+                              if (
+                                parent &&
+                                !parent.querySelector(".user-initials")
+                              ) {
+                                const initialsElem =
+                                  document.createElement("div");
+                                initialsElem.className = "user-initials";
+                                initialsElem.innerText = userInitials;
+                                parent.appendChild(initialsElem);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="user-initials">{userInitials}</div>
+                        )}
+                      </div>
+
+                      {voatId && (
+                        <div className="navbar-voat-id">
+                          <span title="VOAT ID">{voatId}</span>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Profile Dropdown Menu */}
+                    {profileDropdownOpen && (
+                      <div className="profile-dropdown">
+                        <Link
+                          to="/user-dashboard"
+                          className="dropdown-item"
+                          onClick={() =>
+                            this.setState({ profileDropdownOpen: false })
+                          }
+                        >
+                          <User size={16} />
+                          <span>Dashboard</span>
+                        </Link>
+                        <div
+                          className="dropdown-item"
+                          onClick={this.handleLogout}
+                        >
+                          <LogOut size={16} />
+                          <span>Logout</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -564,18 +818,6 @@ class NavBar extends Component {
                     >
                       Register
                     </Link>
-                  </div>
-                )}
-
-                {isLoggedIn && (
-                  <div className="navbar-auth desktop-auth">
-                    <button
-                      className="get-started-btn logout-btn"
-                      onClick={this.handleLogout}
-                      aria-label="Logout"
-                    >
-                      <LogOut size={16} className="logout-icon" />
-                    </button>
                   </div>
                 )}
               </div>
@@ -599,7 +841,7 @@ class NavBar extends Component {
                 </div>
               )}
 
-              {/* Mobile menu - UPDATED */}
+              {/* Mobile menu - UPDATED with active classes */}
               <div className={`mobile-menu ${menuOpen ? "active" : ""}`}>
                 <div className="mobile-menu-header">
                   <div className="mobile-menu-close" onClick={this.toggleMenu}>
@@ -607,44 +849,106 @@ class NavBar extends Component {
                   </div>
                 </div>
 
-                {/* Updated to properly display user name */}
+                {/* Mobile user profile with VOAT ID */}
                 {isLoggedIn && user && (
                   <li className="mobile-user-info">
-                    <User size={16} className="navbar-user-icon" />
-                    <span className="navbar-user-name">
-                      {user?.name || "Welcome User"}
-                    </span>
+                    <div className="mobile-user-profile-container">
+                      <div className="user-avatar-wrapper-mobile">
+                        {profileImage ? (
+                          <img
+                            src={profileImage}
+                            alt="User"
+                            className="navbar-user-image-mobile"
+                            onError={(e) => {
+                              console.log("Mobile image load error:", e);
+                              e.target.onerror = null;
+
+                              // Try with backend URL if it's a relative path
+                              if (
+                                !profileImage.startsWith("http") &&
+                                this.getBackendUrl()
+                              ) {
+                                const backendUrl = this.getBackendUrl();
+                                const cleanPath = profileImage.replace(
+                                  /^\/+/,
+                                  ""
+                                );
+                                e.target.src = `${backendUrl}/${cleanPath}`;
+                                return; // Give it another chance to load
+                              }
+
+                              e.target.src = ""; // Clear the source if second attempt fails
+                              e.target.style.display = "none"; // Hide the img
+
+                              // Add initials to the parent element
+                              const parent = e.target.parentNode;
+                              if (
+                                parent &&
+                                !parent.querySelector(".user-initials-mobile")
+                              ) {
+                                const initialsElem =
+                                  document.createElement("div");
+                                initialsElem.className = "user-initials-mobile";
+                                initialsElem.innerText = userInitials;
+                                parent.appendChild(initialsElem);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="user-initials-mobile">
+                            {userInitials}
+                          </div>
+                        )}
+                      </div>
+
+                      {voatId && <div className="mobile-voat-id">{voatId}</div>}
+                    </div>
                   </li>
                 )}
 
                 <ul className="mobile-menu-items">
-                  <li>
+                  <li className={activeMenu === "home" ? "active" : ""}>
                     <Link
                       to="/"
                       onClick={() => {
                         this.scrollToTop();
+                        this.setState({ activeMenu: "home" });
                         this.toggleMenu();
                       }}
                     >
                       Home
                     </Link>
                   </li>
-                  <li>
+                  <li className={activeMenu === "services" ? "active" : ""}>
                     <Link
                       to="/services"
                       onClick={() => {
                         this.scrollToTop();
+                        this.setState({ activeMenu: "services" });
                         this.toggleMenu();
                       }}
                     >
                       Services
                     </Link>
                   </li>
-                  <li>
+                  <li className={activeMenu === "portfolio" ? "active" : ""}>
+                    <Link
+                      to="/portfolio-list"
+                      onClick={() => {
+                        this.scrollToTop();
+                        this.setState({ activeMenu: "portfolio" });
+                        this.toggleMenu();
+                      }}
+                    >
+                      Portfolio
+                    </Link>
+                  </li>
+                  <li className={activeMenu === "contact" ? "active" : ""}>
                     <HashLink
                       smooth
                       to="/#contact"
                       onClick={() => {
+                        this.setState({ activeMenu: "contact" });
                         this.toggleMenu();
                       }}
                     >
@@ -653,13 +957,37 @@ class NavBar extends Component {
                   </li>
                   {isLoggedIn && user && (
                     <>
-                      <button
-                        className="get-started-btn mobile-auth"
-                        onClick={this.handleLogout}
-                      >
-                        <LogOut size={16} className="logout-icon" />
-                        <span>Logout</span>
-                      </button>
+                      <li>
+                        <Link
+                          to="/cart"
+                          onClick={() => {
+                            this.toggleMenu();
+                          }}
+                        >
+                          <ShoppingCart size={16} className="menu-icon" />
+                          <span>Cart</span>
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          to="/user-dashboard"
+                          onClick={() => {
+                            this.toggleMenu();
+                          }}
+                        >
+                          <User size={16} className="menu-icon" />
+                          <span>Dashboard</span>
+                        </Link>
+                      </li>
+                      <li className="mobile-logout-item">
+                        <button
+                          className="get-started-btn mobile-auth"
+                          onClick={this.handleLogout}
+                        >
+                          <LogOut size={16} className="logout-icon" />
+                          <span>Logout</span>
+                        </button>
+                      </li>
                     </>
                   )}
                 </ul>
@@ -735,4 +1063,5 @@ class NavBar extends Component {
   }
 }
 
+// Wrap with withRouter to access location props
 export default NavBar;

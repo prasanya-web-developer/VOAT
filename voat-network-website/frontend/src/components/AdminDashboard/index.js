@@ -1,5 +1,4 @@
 import React, { Component } from "react";
-// import { Navigate } from "react-router-dom";
 import NavBar from "../Navbar";
 import Footer from "../Footer";
 import "./index.css";
@@ -13,7 +12,13 @@ class AdminPanel extends Component {
     portfolioSubmissions: [],
     viewingSubmission: null,
     isLoading: true,
-    baseUrl: "https://voat.onrender.com",
+    baseUrl: "http://localhost:8000",
+
+    searchTerm: "",
+    statusFilter: "all",
+    sortBy: "newest",
+    currentPage: 1,
+    itemsPerPage: 10,
   };
 
   componentDidMount() {
@@ -79,9 +84,8 @@ class AdminPanel extends Component {
       }
 
       const data = await response.json();
-      console.log("Fetched submissions:", data); // Debug log
+      console.log("Fetched submissions:", data);
 
-      // Apply deduplication before setting state
       const uniqueSubmissions = this.removeDuplicateSubmissions(data);
 
       this.setState({
@@ -92,12 +96,102 @@ class AdminPanel extends Component {
       console.error("Error fetching portfolio submissions:", error);
       this.setState({ isLoading: false });
 
-      // Fallback to mock data if API fails
+      // Using dummy data for design purposes
       const mockSubmissions = [
-        // your mock data here...
+        {
+          _id: "1",
+          name: "Sarah Johnson",
+          email: "sarah.johnson@email.com",
+          profession: "UI/UX Designer",
+          workExperience: "5",
+          status: "pending",
+          submittedDate: "2024-03-15T10:30:00Z",
+          about:
+            "Passionate UI/UX designer with 5 years of experience creating user-centered digital experiences.",
+          headline: "Creating intuitive digital experiences",
+          portfolioLink: "https://sarahjohnson.design",
+          services: [
+            {
+              name: "UI Design",
+              description: "Modern and intuitive user interface design",
+              pricing: [
+                { level: "Basic", price: "500", timeFrame: "3 days" },
+                { level: "Premium", price: "1200", timeFrame: "7 days" },
+              ],
+            },
+          ],
+        },
+        {
+          _id: "2",
+          name: "Michael Chen",
+          email: "michael.chen@email.com",
+          profession: "Full Stack Developer",
+          workExperience: "7",
+          status: "approved",
+          submittedDate: "2024-03-14T14:20:00Z",
+          about:
+            "Full-stack developer specializing in React, Node.js, and cloud technologies.",
+          headline: "Building scalable web solutions",
+          portfolioLink: "https://michaelchen.dev",
+          services: [
+            {
+              name: "Web Development",
+              description: "Full-stack web application development",
+              pricing: [
+                { level: "Basic", price: "800", timeFrame: "5 days" },
+                { level: "Premium", price: "2000", timeFrame: "14 days" },
+              ],
+            },
+          ],
+        },
+        {
+          _id: "3",
+          name: "Emily Rodriguez",
+          email: "emily.rodriguez@email.com",
+          profession: "Digital Marketer",
+          workExperience: "4",
+          status: "rejected",
+          submittedDate: "2024-03-13T09:15:00Z",
+          about:
+            "Digital marketing specialist focused on growth hacking and conversion optimization.",
+          headline: "Driving growth through data-driven marketing",
+          portfolioLink: "https://emilyrodriguez.marketing",
+          services: [
+            {
+              name: "SEO Optimization",
+              description: "Complete SEO audit and optimization",
+              pricing: [
+                { level: "Basic", price: "300", timeFrame: "2 days" },
+                { level: "Premium", price: "800", timeFrame: "7 days" },
+              ],
+            },
+          ],
+        },
+        {
+          _id: "4",
+          name: "David Kumar",
+          email: "david.kumar@email.com",
+          profession: "Mobile App Developer",
+          workExperience: "6",
+          status: "pending",
+          submittedDate: "2024-03-12T16:45:00Z",
+          about:
+            "Mobile app developer with expertise in React Native and Flutter.",
+          headline: "Building next-gen mobile experiences",
+          portfolioLink: "https://davidkumar.app",
+          services: [
+            {
+              name: "Mobile App Development",
+              description: "Cross-platform mobile application development",
+              pricing: [
+                { level: "Basic", price: "1500", timeFrame: "14 days" },
+                { level: "Premium", price: "3500", timeFrame: "30 days" },
+              ],
+            },
+          ],
+        },
       ];
 
-      // Apply deduplication to mock data too
       const uniqueMockSubmissions =
         this.removeDuplicateSubmissions(mockSubmissions);
 
@@ -112,8 +206,6 @@ class AdminPanel extends Component {
     console.log("View submission clicked for:", submission);
 
     try {
-      // Get full submission details from server to ensure we have complete data
-      // This is important because the submission in the list might not include all service details
       const response = await fetch(
         `${this.state.baseUrl}/api/admin/portfolio-submission/${
           submission._id || submission.id
@@ -125,7 +217,6 @@ class AdminPanel extends Component {
         console.log("Detailed submission data:", detailedSubmission);
         this.setState({ viewingSubmission: detailedSubmission });
       } else {
-        // Fallback to using the original submission object if API fails
         console.warn(
           "Failed to fetch detailed submission, using original data"
         );
@@ -133,7 +224,6 @@ class AdminPanel extends Component {
       }
     } catch (error) {
       console.error("Error fetching detailed submission:", error);
-      // Use the original submission as fallback
       this.setState({ viewingSubmission: submission });
     }
   };
@@ -146,7 +236,6 @@ class AdminPanel extends Component {
     try {
       this.setState({ isLoading: true });
 
-      // Send request to update status in the database
       const response = await fetch(
         `${this.state.baseUrl}/api/admin/portfolio-submissions/${submissionId}/status`,
         {
@@ -161,7 +250,6 @@ class AdminPanel extends Component {
       if (!response.ok) throw new Error("Failed to update status");
       const updatedSubmission = await response.json();
 
-      // Update local state with the response from the database
       const updatedSubmissions = this.state.portfolioSubmissions.map((sub) =>
         sub._id === submissionId || sub.id === submissionId
           ? { ...updatedSubmission }
@@ -184,7 +272,6 @@ class AdminPanel extends Component {
       this.setState({ isLoading: false });
       alert("Failed to update submission status. Please try again.");
 
-      // Fallback for demo/testing - update state directly
       const updatedSubmissions = this.state.portfolioSubmissions.map((sub) =>
         sub._id === submissionId || sub.id === submissionId
           ? { ...sub, status: newStatus }
@@ -202,147 +289,381 @@ class AdminPanel extends Component {
     }
   };
 
+  // New modern filter and search methods
+  handleSearchChange = (e) => {
+    this.setState({ searchTerm: e.target.value, currentPage: 1 });
+  };
+
+  handleStatusFilter = (status) => {
+    this.setState({ statusFilter: status, currentPage: 1 });
+  };
+
+  handleSortChange = (sortBy) => {
+    this.setState({ sortBy, currentPage: 1 });
+  };
+
+  getFilteredSubmissions = () => {
+    const { portfolioSubmissions, searchTerm, statusFilter, sortBy } =
+      this.state;
+
+    let filtered = portfolioSubmissions.filter((submission) => {
+      const matchesSearch =
+        submission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        submission.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        submission.profession
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        submission.headline.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" || submission.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+
+    // Sort submissions
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "newest":
+          return new Date(b.submittedDate) - new Date(a.submittedDate);
+        case "oldest":
+          return new Date(a.submittedDate) - new Date(b.submittedDate);
+        case "name":
+          return a.name.localeCompare(b.name);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  };
+
+  getStats = () => {
+    const { portfolioSubmissions } = this.state;
+    return {
+      total: portfolioSubmissions.length,
+      pending: portfolioSubmissions.filter(
+        (sub) => sub.status === "pending" || !sub.status
+      ).length,
+      approved: portfolioSubmissions.filter((sub) => sub.status === "approved")
+        .length,
+      rejected: portfolioSubmissions.filter((sub) => sub.status === "rejected")
+        .length,
+    };
+  };
+
   renderLoginForm() {
     return (
-      <div className="admin-login-container">
-        <div className="admin-login-card">
-          <h2>Admin Login</h2>
-          {this.state.loginError && (
-            <div className="login-error">{this.state.loginError}</div>
-          )}
-          <form onSubmit={this.handleLogin}>
-            <div className="form-group">
-              <label htmlFor="email">Email:</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={this.state.email}
-                onChange={this.handleInputChange}
-                required
-              />
+      <div className="adminpanel-login-wrapper">
+        <div className="adminpanel-login-container">
+          <div className="adminpanel-login-card">
+            <div className="adminpanel-login-header">
+              <div className="adminpanel-brand-logo">
+                <div className="adminpanel-logo-icon">
+                  <i className="fas fa-shield-alt"></i>
+                </div>
+                <div className="adminpanel-brand-text">
+                  <h1>VOAT Admin</h1>
+                  <p>Secure Portal Access</p>
+                </div>
+              </div>
             </div>
-            <div className="form-group">
-              <label htmlFor="password">Password:</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={this.state.password}
-                onChange={this.handleInputChange}
-                required
-              />
+
+            {this.state.loginError && (
+              <div className="adminpanel-error-alert">
+                <i className="fas fa-exclamation-circle"></i>
+                <span>{this.state.loginError}</span>
+              </div>
+            )}
+
+            <form onSubmit={this.handleLogin} className="adminpanel-login-form">
+              <div className="adminpanel-input-group">
+                <div className="adminpanel-input-wrapper">
+                  <i className="fas fa-envelope adminpanel-input-icon"></i>
+                  <input
+                    type="email"
+                    name="email"
+                    value={this.state.email}
+                    onChange={this.handleInputChange}
+                    placeholder="Enter your email address"
+                    className="adminpanel-input"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="adminpanel-input-group">
+                <div className="adminpanel-input-wrapper">
+                  <i className="fas fa-lock adminpanel-input-icon"></i>
+                  <input
+                    type="password"
+                    name="password"
+                    value={this.state.password}
+                    onChange={this.handleInputChange}
+                    placeholder="Enter your password"
+                    className="adminpanel-input"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="adminpanel-login-btn">
+                <span>Sign In</span>
+                <i className="fas fa-arrow-right"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  renderDashboardStats() {
+    const stats = this.getStats();
+
+    return (
+      <div className="adminpanel-stats-grid">
+        <div className="adminpanel-stat-card adminpanel-stat-total">
+          <div className="adminpanel-stat-content">
+            <div className="adminpanel-stat-number">{stats.total}</div>
+            <div className="adminpanel-stat-label">Total Submissions</div>
+          </div>
+          <div className="adminpanel-stat-icon">
+            <i className="fas fa-users"></i>
+          </div>
+        </div>
+
+        <div className="adminpanel-stat-card adminpanel-stat-pending">
+          <div className="adminpanel-stat-content">
+            <div className="adminpanel-stat-number">{stats.pending}</div>
+            <div className="adminpanel-stat-label">Pending Review</div>
+          </div>
+          <div className="adminpanel-stat-icon">
+            <i className="fas fa-clock"></i>
+          </div>
+        </div>
+
+        <div className="adminpanel-stat-card adminpanel-stat-approved">
+          <div className="adminpanel-stat-content">
+            <div className="adminpanel-stat-number">{stats.approved}</div>
+            <div className="adminpanel-stat-label">Approved</div>
+          </div>
+          <div className="adminpanel-stat-icon">
+            <i className="fas fa-check-circle"></i>
+          </div>
+        </div>
+
+        <div className="adminpanel-stat-card adminpanel-stat-rejected">
+          <div className="adminpanel-stat-content">
+            <div className="adminpanel-stat-number">{stats.rejected}</div>
+            <div className="adminpanel-stat-label">Rejected</div>
+          </div>
+          <div className="adminpanel-stat-icon">
+            <i className="fas fa-times-circle"></i>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  renderControlsSection() {
+    const { searchTerm, statusFilter, sortBy } = this.state;
+
+    return (
+      <div className="adminpanel-controls-panel">
+        <div className="adminpanel-search-section">
+          <div className="adminpanel-search-bar">
+            <i className="fas fa-search adminpanel-search-icon"></i>
+            <input
+              type="text"
+              placeholder="Search by name, email, or profession..."
+              value={searchTerm}
+              onChange={this.handleSearchChange}
+              className="adminpanel-search-input"
+            />
+          </div>
+        </div>
+
+        <div className="adminpanel-filter-section">
+          <div className="adminpanel-filter-group">
+            <span className="adminpanel-filter-label">Status:</span>
+            <div className="adminpanel-filter-tabs">
+              <button
+                className={`adminpanel-filter-tab ${
+                  statusFilter === "all" ? "adminpanel-active" : ""
+                }`}
+                onClick={() => this.handleStatusFilter("all")}
+              >
+                All
+              </button>
+              <button
+                className={`adminpanel-filter-tab ${
+                  statusFilter === "pending" ? "adminpanel-active" : ""
+                }`}
+                onClick={() => this.handleStatusFilter("pending")}
+              >
+                Pending
+              </button>
+              <button
+                className={`adminpanel-filter-tab ${
+                  statusFilter === "approved" ? "adminpanel-active" : ""
+                }`}
+                onClick={() => this.handleStatusFilter("approved")}
+              >
+                Approved
+              </button>
+              <button
+                className={`adminpanel-filter-tab ${
+                  statusFilter === "rejected" ? "adminpanel-active" : ""
+                }`}
+                onClick={() => this.handleStatusFilter("rejected")}
+              >
+                Rejected
+              </button>
             </div>
-            <button type="submit" className="login-button">
-              Login
-            </button>
-          </form>
+          </div>
+
+          <div className="adminpanel-sort-section">
+            <span className="adminpanel-sort-label">Sort by:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => this.handleSortChange(e.target.value)}
+              className="adminpanel-sort-select"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="name">Name A-Z</option>
+            </select>
+          </div>
         </div>
       </div>
     );
   }
 
   renderSubmissionsList() {
-    const { portfolioSubmissions, isLoading } = this.state;
+    const { isLoading } = this.state;
+    const filteredSubmissions = this.getFilteredSubmissions();
 
     if (isLoading) {
-      return <div className="loading">Loading submissions...</div>;
+      return (
+        <div className="adminpanel-loading-state">
+          <div className="adminpanel-spinner"></div>
+          <p>Loading submissions...</p>
+        </div>
+      );
     }
 
-    if (!portfolioSubmissions || portfolioSubmissions.length === 0) {
+    if (!filteredSubmissions || filteredSubmissions.length === 0) {
       return (
-        <div className="empty-state">
-          <div className="empty-icon">📋</div>
-          <h3>No Portfolio Submissions</h3>
-          <p>There are no portfolio submissions to review at this time.</p>
+        <div className="adminpanel-empty-state">
+          <div className="adminpanel-empty-icon">
+            <i className="fas fa-inbox"></i>
+          </div>
+          <h3>No Submissions Found</h3>
+          <p>
+            There are no portfolio submissions matching your current filters.
+          </p>
         </div>
       );
     }
 
     return (
-      <div className="submissions-list">
-        <table className="submissions-table">
-          <thead>
-            <tr>
-              <th>NAME</th>
-              <th>PROFESSION</th>
-              <th>EXPERIENCE</th>
-              <th>SUBMITTED</th>
-              <th>STATUS</th>
-              <th>ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {portfolioSubmissions.map((submission) => {
-              // Fix profile image path
-              let profileImageSrc = submission.profileImage;
-              if (
-                profileImageSrc &&
-                !profileImageSrc.startsWith("http") &&
-                !profileImageSrc.startsWith("/api/placeholder")
-              ) {
-                profileImageSrc = `${this.state.baseUrl}${profileImageSrc}`;
-              }
+      <div className="adminpanel-submissions-grid">
+        {filteredSubmissions.map((submission) => {
+          let profileImageSrc = submission.profileImage;
+          if (
+            profileImageSrc &&
+            !profileImageSrc.startsWith("http") &&
+            !profileImageSrc.startsWith("/api/placeholder")
+          ) {
+            profileImageSrc = `${this.state.baseUrl}${profileImageSrc}`;
+          }
 
-              return (
-                <tr key={submission._id || submission.id}>
-                  <td className="name-cell">
-                    <div className="profile-image-small">
-                      {profileImageSrc ? (
-                        <img
-                          src={profileImageSrc}
-                          alt={submission.name}
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = "/api/placeholder/32/32";
-                          }}
-                        />
-                      ) : (
-                        <div className="initials">
-                          {submission.name
-                            ? submission.name.charAt(0).toUpperCase()
-                            : "?"}
-                        </div>
-                      )}
+          return (
+            <div
+              key={submission._id || submission.id}
+              className="adminpanel-submission-card"
+            >
+              <div className="adminpanel-card-header">
+                <div className="adminpanel-profile-section">
+                  <div className="adminpanel-avatar">
+                    {profileImageSrc ? (
+                      <img
+                        src={profileImageSrc}
+                        alt={submission.name}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "/api/placeholder/60/60";
+                        }}
+                      />
+                    ) : (
+                      <div className="adminpanel-avatar-initials">
+                        {submission.name
+                          ? submission.name.charAt(0).toUpperCase()
+                          : "?"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="adminpanel-profile-info">
+                    <h3 className="adminpanel-profile-name">
+                      {submission.name}
+                    </h3>
+                    <p className="adminpanel-profile-profession">
+                      {submission.profession || "Not specified"}
+                    </p>
+                    <div className="adminpanel-profile-meta">
+                      <span className="adminpanel-experience">
+                        <i className="fas fa-briefcase"></i>
+                        {submission.workExperience
+                          ? `${submission.workExperience} years`
+                          : "N/A"}
+                      </span>
                     </div>
-                    <span>{submission.name}</span>
-                  </td>
-                  <td>{submission.profession || "Not specified"}</td>
-                  <td>
-                    {submission.workExperience
-                      ? `${submission.workExperience} years`
-                      : "N/A"}
-                  </td>
-                  <td>
-                    {submission.submittedDate
-                      ? new Date(submission.submittedDate).toLocaleDateString()
-                      : "Unknown"}
-                  </td>
-                  <td>
-                    <span
-                      className={`status-badge ${
-                        submission.status || "pending"
-                      }`}
-                    >
-                      {submission.status
-                        ? submission.status.charAt(0).toUpperCase() +
-                          submission.status.slice(1)
-                        : "Pending"}
+                  </div>
+                </div>
+                <div
+                  className={`adminpanel-status-badge adminpanel-status-${
+                    submission.status || "pending"
+                  }`}
+                >
+                  {submission.status
+                    ? submission.status.charAt(0).toUpperCase() +
+                      submission.status.slice(1)
+                    : "Pending"}
+                </div>
+              </div>
+
+              <div className="adminpanel-card-body">
+                <div className="adminpanel-submission-info">
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-envelope"></i>
+                    <span>{submission.email}</span>
+                  </div>
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-calendar"></i>
+                    <span>
+                      {submission.submittedDate
+                        ? new Date(
+                            submission.submittedDate
+                          ).toLocaleDateString()
+                        : "Unknown"}
                     </span>
-                  </td>
-                  <td>
-                    <button
-                      className="view-button"
-                      onClick={() => this.handleViewSubmission(submission)}
-                    >
-                      View Details
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="adminpanel-card-footer">
+                <button
+                  className="adminpanel-view-btn"
+                  onClick={() => this.handleViewSubmission(submission)}
+                >
+                  <i className="fas fa-eye"></i>
+                  View Details
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -351,9 +672,6 @@ class AdminPanel extends Component {
     const { viewingSubmission } = this.state;
     if (!viewingSubmission) return null;
 
-    console.log("Viewing submission details:", viewingSubmission);
-
-    // Ensure correct path for profile image
     let profileImageSrc = viewingSubmission.profileImage;
     if (
       profileImageSrc &&
@@ -363,205 +681,234 @@ class AdminPanel extends Component {
       profileImageSrc = `${this.state.baseUrl}${profileImageSrc}`;
     }
 
-    // Extract services data - handle different possible formats
     let services = [];
     if (viewingSubmission.services) {
       try {
         if (typeof viewingSubmission.services === "string") {
-          // If services is a JSON string, parse it
           services = JSON.parse(viewingSubmission.services);
         } else if (Array.isArray(viewingSubmission.services)) {
-          // If services is already an array, use it directly
           services = viewingSubmission.services;
+
+          const uniqueServices = new Map();
+          services.forEach((service) => {
+            if (service.name && !uniqueServices.has(service.name)) {
+              uniqueServices.set(service.name, service);
+            }
+          });
+
+          services = Array.from(uniqueServices.values());
         }
       } catch (err) {
         console.error("Error parsing services:", err);
       }
     }
 
-    // Log extracted services for debugging
-    console.log("Extracted services:", services);
-
     return (
-      <div className="submission-details-overlay">
-        <div className="submission-details-container">
-          <button
-            className="close-button"
-            onClick={this.handleCloseSubmissionView}
-          >
-            &times;
-          </button>
+      <div className="adminpanel-modal-overlay">
+        <div className="adminpanel-modal-container">
+          <div className="adminpanel-modal-header">
+            <h2>Portfolio Submission Details</h2>
+            <button
+              className="adminpanel-modal-close"
+              onClick={this.handleCloseSubmissionView}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
 
-          <h2>Portfolio Submission Details</h2>
+          <div className="adminpanel-modal-content">
+            <div className="adminpanel-profile-header">
+              <div className="adminpanel-large-avatar">
+                {profileImageSrc ? (
+                  <img
+                    src={profileImageSrc}
+                    alt={viewingSubmission.name}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "/api/placeholder/120/120";
+                    }}
+                  />
+                ) : (
+                  <div className="adminpanel-large-avatar-initials">
+                    {viewingSubmission.name
+                      ? viewingSubmission.name.charAt(0).toUpperCase()
+                      : "?"}
+                  </div>
+                )}
+              </div>
 
-          <div className="submission-header">
-            <div className="submission-profile-image">
-              {profileImageSrc ? (
-                <img
-                  src={profileImageSrc}
-                  alt={viewingSubmission.name}
-                  onError={(e) => {
-                    console.error(
-                      "Profile image failed to load:",
-                      profileImageSrc
-                    );
-                    e.target.onerror = null;
-                    e.target.src = "/api/placeholder/100/100";
-                  }}
-                />
-              ) : (
-                <div className="profile-placeholder">
-                  {viewingSubmission.name
-                    ? viewingSubmission.name.charAt(0).toUpperCase()
-                    : "?"}
-                </div>
-              )}
-            </div>
-            <div className="submission-title">
-              <h3>{viewingSubmission.name || "Unnamed"}</h3>
-              <p className="profession">
-                {viewingSubmission.profession || "No profession specified"}
-              </p>
-              <p className="status">
-                Status:{" "}
-                <span
-                  className={`status-badge ${
+              <div className="adminpanel-profile-details">
+                <h1>{viewingSubmission.name || "Unnamed"}</h1>
+                <p className="adminpanel-profession">
+                  {viewingSubmission.profession || "No profession specified"}
+                </p>
+                <p className="adminpanel-headline">
+                  {viewingSubmission.headline || "No headline specified"}
+                </p>
+                <div
+                  className={`adminpanel-status-indicator adminpanel-status-${
                     viewingSubmission.status || "pending"
                   }`}
                 >
+                  <i className="fas fa-circle"></i>
+                  Status:{" "}
                   {viewingSubmission.status
                     ? viewingSubmission.status.charAt(0).toUpperCase() +
                       viewingSubmission.status.slice(1)
                     : "Pending"}
-                </span>
-              </p>
-            </div>
-          </div>
-
-          <div className="submission-body">
-            <div className="info-row">
-              <span className="label">Email:</span>
-              <span className="value">
-                {viewingSubmission.email || "No email provided"}
-              </span>
-            </div>
-
-            <div className="info-row">
-              <span className="label">Experience:</span>
-              <span className="value">
-                {viewingSubmission.workExperience
-                  ? `${viewingSubmission.workExperience} years`
-                  : "Not specified"}
-              </span>
-            </div>
-
-            {viewingSubmission.portfolioLink && (
-              <div className="info-row">
-                <span className="label">Portfolio Link:</span>
-                <a
-                  href={viewingSubmission.portfolioLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="value link"
-                >
-                  {viewingSubmission.portfolioLink}
-                </a>
+                </div>
               </div>
-            )}
-
-            <div className="info-row">
-              <span className="label">Submitted:</span>
-              <span className="value">
-                {viewingSubmission.submittedDate
-                  ? new Date(
-                      viewingSubmission.submittedDate
-                    ).toLocaleDateString()
-                  : "Unknown date"}
-              </span>
             </div>
 
-            {/* About Section */}
-            {viewingSubmission.about && (
-              <div className="info-section">
-                <h4>About</h4>
-                <p className="about-text">{viewingSubmission.about}</p>
+            <div className="adminpanel-details-grid">
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-envelope"></i>
+                  Email Address
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingSubmission.email || "No email provided"}
+                </div>
               </div>
-            )}
 
-            {/* Services Section - Improved to handle all possible formats */}
-            <div className="info-section">
-              <h4>Services</h4>
-              {services && services.length > 0 ? (
-                services.map((service, index) => (
-                  <div key={index} className="service-card">
-                    <h5>{service.name || "Unnamed Service"}</h5>
-                    <p>{service.description || "No description provided"}</p>
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-briefcase"></i>
+                  Work Experience
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingSubmission.workExperience
+                    ? `${viewingSubmission.workExperience} years`
+                    : "Not specified"}
+                </div>
+              </div>
 
-                    {service.pricing && service.pricing.length > 0 && (
-                      <div className="pricing-table">
-                        <h6>Pricing Options</h6>
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Package</th>
-                              <th>Price</th>
-                              <th>Time Frame</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {service.pricing.map((price, idx) => (
-                              <tr key={idx}>
-                                <td>{price.level || "Package " + (idx + 1)}</td>
-                                <td>${price.price || "N/A"}</td>
-                                <td>{price.timeFrame || "N/A"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+              {viewingSubmission.portfolioLink && (
+                <div className="adminpanel-detail-card">
+                  <div className="adminpanel-detail-label">
+                    <i className="fas fa-link"></i>
+                    Portfolio Link
                   </div>
-                ))
+                  <div className="adminpanel-detail-value">
+                    <a
+                      href={viewingSubmission.portfolioLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="adminpanel-portfolio-link"
+                    >
+                      {viewingSubmission.portfolioLink}
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-calendar"></i>
+                  Submission Date
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingSubmission.submittedDate
+                    ? new Date(
+                        viewingSubmission.submittedDate
+                      ).toLocaleDateString()
+                    : "Unknown date"}
+                </div>
+              </div>
+            </div>
+
+            {viewingSubmission.about && (
+              <div className="adminpanel-about-section">
+                <h3>
+                  <i className="fas fa-user"></i>
+                  About
+                </h3>
+                <p>{viewingSubmission.about}</p>
+              </div>
+            )}
+
+            <div className="adminpanel-services-section">
+              <h3>
+                <i className="fas fa-cogs"></i>
+                Services Offered
+              </h3>
+              {services && services.length > 0 ? (
+                <div className="adminpanel-services-grid">
+                  {services.map((service, index) => (
+                    <div key={index} className="adminpanel-service-card">
+                      <h4>{service.name || "Unnamed Service"}</h4>
+                      <p>{service.description || "No description provided"}</p>
+
+                      {service.pricing && service.pricing.length > 0 && (
+                        <div className="adminpanel-pricing-section">
+                          <h5>Pricing Options</h5>
+                          <div className="adminpanel-pricing-grid">
+                            {service.pricing.map((price, idx) => (
+                              <div
+                                key={idx}
+                                className="adminpanel-pricing-card"
+                              >
+                                <div className="adminpanel-package-name">
+                                  {price.level || `Package ${idx + 1}`}
+                                </div>
+                                <div className="adminpanel-package-price">
+                                  ${price.price || "N/A"}
+                                </div>
+                                <div className="adminpanel-package-time">
+                                  {price.timeFrame || "N/A"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <p className="no-services">
-                  No services have been added by this freelancer.
-                </p>
+                <div className="adminpanel-no-services">
+                  <i className="fas fa-info-circle"></i>
+                  <p>No services have been added by this freelancer.</p>
+                </div>
               )}
             </div>
-          </div>
 
-          <div className="submission-actions">
-            {viewingSubmission.status === "pending" && (
-              <>
-                <button
-                  className="approve-button"
-                  onClick={() =>
-                    this.handleStatusChange(
-                      viewingSubmission._id || viewingSubmission.id,
-                      "approved"
-                    )
-                  }
-                >
-                  Approve Submission
-                </button>
-                <button
-                  className="reject-button"
-                  onClick={() =>
-                    this.handleStatusChange(
-                      viewingSubmission._id || viewingSubmission.id,
-                      "rejected"
-                    )
-                  }
-                >
-                  Reject Submission
-                </button>
-              </>
-            )}
-            {viewingSubmission.status !== "pending" && (
-              <p className="status-message">
-                This submission has been {viewingSubmission.status}.
-              </p>
-            )}
+            <div className="adminpanel-modal-actions">
+              {viewingSubmission.status === "pending" && (
+                <>
+                  <button
+                    className="adminpanel-approve-btn"
+                    onClick={() =>
+                      this.handleStatusChange(
+                        viewingSubmission._id || viewingSubmission.id,
+                        "approved"
+                      )
+                    }
+                  >
+                    <i className="fas fa-check"></i>
+                    Approve
+                  </button>
+                  <button
+                    className="adminpanel-reject-btn"
+                    onClick={() =>
+                      this.handleStatusChange(
+                        viewingSubmission._id || viewingSubmission.id,
+                        "rejected"
+                      )
+                    }
+                  >
+                    <i className="fas fa-times"></i>
+                    Reject
+                  </button>
+                </>
+              )}
+              {viewingSubmission.status !== "pending" && (
+                <div className="adminpanel-status-message">
+                  <i className="fas fa-info-circle"></i>
+                  This submission has been {viewingSubmission.status}.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -571,7 +918,6 @@ class AdminPanel extends Component {
   removeDuplicateSubmissions = (submissions) => {
     const uniqueSubmissions = new Map();
 
-    // Sort by submission date first (newest first)
     const sortedSubmissions = [...submissions].sort((a, b) => {
       if (a.submittedDate && b.submittedDate) {
         return new Date(b.submittedDate) - new Date(a.submittedDate);
@@ -579,7 +925,6 @@ class AdminPanel extends Component {
       return (b.id || 0) - (a.id || 0);
     });
 
-    // Use email as the unique identifier (most reliable)
     return sortedSubmissions.filter((submission) => {
       const uniqueKey = submission.email;
 
@@ -598,23 +943,56 @@ class AdminPanel extends Component {
     const { viewingSubmission } = this.state;
 
     return (
-      <div className="admin-dashboard">
-        <header className="admin-header">
-          <h1>Admin Dashboard</h1>
-          <button className="logout-button" onClick={this.handleLogout}>
-            Logout
-          </button>
-        </header>
+      <div className="adminpanel-dashboard">
+        <div className="adminpanel-header">
+          <div className="adminpanel-header-content">
+            <div className="adminpanel-brand-section">
+              <div className="adminpanel-logo">
+                <i className="fas fa-shield-alt"></i>
+              </div>
+              <div className="adminpanel-title-section">
+                <h1>VOAT Admin Dashboard</h1>
+                <p>Manage portfolio submissions and freelancer applications</p>
+              </div>
+            </div>
 
-        <div className="admin-content">
-          <div className="section-header">
-            <h2>Portfolio Submissions</h2>
-            <p className="section-description">
-              Review and approve freelancer portfolio submissions
-            </p>
+            <div className="adminpanel-header-actions">
+              <div className="adminpanel-admin-info">
+                <div className="adminpanel-admin-avatar">
+                  <i className="fas fa-user-shield"></i>
+                </div>
+                <div className="adminpanel-admin-details">
+                  <span className="adminpanel-admin-name">Administrator</span>
+                  <span className="adminpanel-admin-role">Super Admin</span>
+                </div>
+              </div>
+
+              <button
+                className="adminpanel-logout-btn"
+                onClick={this.handleLogout}
+              >
+                <i className="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+              </button>
+            </div>
           </div>
-          {this.renderSubmissionsList()}
-          {viewingSubmission && this.renderSubmissionDetails()}
+        </div>
+
+        <div className="adminpanel-content">
+          <div className="adminpanel-content-wrapper">
+            {this.renderDashboardStats()}
+            {this.renderControlsSection()}
+
+            <div className="adminpanel-submissions-section">
+              <div className="adminpanel-section-header">
+                <h2>Portfolio Submissions</h2>
+                <p>Review and manage freelancer applications</p>
+              </div>
+              {this.renderSubmissionsList()}
+            </div>
+
+            {viewingSubmission && this.renderSubmissionDetails()}
+          </div>
         </div>
       </div>
     );
@@ -624,13 +1002,21 @@ class AdminPanel extends Component {
     const { isAuthenticated, isLoading } = this.state;
 
     if (isLoading) {
-      return <div className="loading">Loading...</div>;
+      return (
+        <div className="adminpanel-loading-screen">
+          <div className="adminpanel-loading-content">
+            <div className="adminpanel-spinner"></div>
+            <h2>Loading VOAT Admin Panel</h2>
+            <p>Please wait while we prepare your dashboard...</p>
+          </div>
+        </div>
+      );
     }
 
     return (
       <>
         <NavBar />
-        <div className="admin-panel">
+        <div className="adminpanel-wrapper">
           {isAuthenticated
             ? this.renderAdminDashboard()
             : this.renderLoginForm()}

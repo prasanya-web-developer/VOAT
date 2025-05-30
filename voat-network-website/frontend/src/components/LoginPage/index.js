@@ -4,7 +4,6 @@ import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
 import "./index.css";
 
-// Add CSS for welcome card if not already present
 const welcomeCardStyles = `
 .welcome-card {
   position: fixed;
@@ -82,9 +81,8 @@ class LoginPage extends React.Component {
     showWelcomeCard: false,
   };
 
-  // Backend URLs - try both environments
   backendUrls = [
-    "https://voat.onrender.com", // Production/Render
+    "http://localhost:8000", // Production/Render
     "http://localhost:5000", // Local development
   ];
 
@@ -169,8 +167,6 @@ class LoginPage extends React.Component {
     this.setState({ errors });
     return Object.keys(errors).length === 0;
   };
-
-  // In LoginPage.js handleSubmit method:
 
   handleSubmit = async (e) => {
     e.preventDefault();
@@ -263,7 +259,6 @@ class LoginPage extends React.Component {
     }
   };
 
-  // Helper method to notify NavBar about login using all available methods
   notifyNavBarOfLogin = (userData) => {
     console.log("Attempting to notify NavBar using all methods");
 

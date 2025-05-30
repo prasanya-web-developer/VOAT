@@ -1,5 +1,5 @@
 import { Component } from "react";
-// import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import NavBar from "../Navbar";
 import Footer from "../Footer";
 import {
@@ -25,6 +25,7 @@ class ServicesPage extends Component {
           "Custom websites and web applications tailored to your business needs with responsive design and modern technologies.",
         icon: <Code size={28} />,
         color: "#6b5ce7",
+        filterValue: "Web Developer", // This should match the profession values in your portfolio data
       },
       {
         id: 2,
@@ -33,6 +34,7 @@ class ServicesPage extends Component {
           "Strategic campaigns designed to boost your online presence and drive qualified traffic to your business.",
         icon: <Megaphone size={28} />,
         color: "#7b6cff",
+        filterValue: "Digital Marketer",
       },
       {
         id: 3,
@@ -41,6 +43,7 @@ class ServicesPage extends Component {
           "Enhance your visibility online through search engine optimization and strategic social media management.",
         icon: <Search size={28} />,
         color: "#604ee0",
+        filterValue: "SEO Specialist",
       },
       {
         id: 4,
@@ -49,6 +52,7 @@ class ServicesPage extends Component {
           "Create a memorable identity with logos, color schemes, and messaging that resonates with your target audience.",
         icon: <Lightbulb size={28} />,
         color: "#8974ff",
+        filterValue: "Brand Designer",
       },
       {
         id: 5,
@@ -57,6 +61,7 @@ class ServicesPage extends Component {
           "Professional tax planning and compliance services to optimize your financial position and minimize liabilities.",
         icon: <Calculator size={28} />,
         color: "#6b5ce7",
+        filterValue: "Tax Consultant",
       },
       {
         id: 6,
@@ -65,6 +70,7 @@ class ServicesPage extends Component {
           "Professional editing services to transform your raw footage into polished, engaging visual content.",
         icon: <Camera size={28} />,
         color: "#7b6cff",
+        filterValue: "Video Editor",
       },
       {
         id: 7,
@@ -73,6 +79,7 @@ class ServicesPage extends Component {
           "Streamline your business processes with custom automation solutions that save time and reduce errors.",
         icon: <Bot size={28} />,
         color: "#604ee0",
+        filterValue: "Automation Specialist",
       },
       {
         id: 8,
@@ -81,6 +88,7 @@ class ServicesPage extends Component {
           "Transform spaces with creative design solutions that balance aesthetics, functionality, and your personal style.",
         icon: <Home size={28} />,
         color: "#8974ff",
+        filterValue: "Interior Designer",
       },
     ];
 
@@ -98,21 +106,28 @@ class ServicesPage extends Component {
           <section className="service-page-services">
             <div className="service-page-services-grid">
               {services.map((service) => (
-                <div
+                <Link
                   key={service.id}
-                  className="service-page-service-card"
-                  data-aos="fade-up"
-                  data-aos-delay={service.id * 100}
-                  style={{ "--card-color": service.color }}
+                  to={`/portfolio-list?profession=${encodeURIComponent(
+                    service.filterValue
+                  )}`}
+                  className="service-page-service-card-link"
                 >
-                  <div className="service-page-service-circle">
-                    {service.icon}
+                  <div
+                    className="service-page-service-card"
+                    data-aos="fade-up"
+                    data-aos-delay={service.id * 100}
+                    style={{ "--card-color": service.color }}
+                  >
+                    <div className="service-page-service-circle">
+                      {service.icon}
+                    </div>
+                    <div className="service-page-service-content">
+                      <h3>{service.title}</h3>
+                      <p>{service.description}</p>
+                    </div>
                   </div>
-                  <div className="service-page-service-content">
-                    <h3>{service.title}</h3>
-                    <p>{service.description}</p>
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>

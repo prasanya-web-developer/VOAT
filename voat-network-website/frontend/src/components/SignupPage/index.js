@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+import { Component } from "react";
 import { Link } from "react-router-dom";
 import { Navigate } from "react-router-dom";
 import { Eye, EyeOff, ChevronDown } from "lucide-react";
@@ -73,7 +73,7 @@ const welcomeCardStyles = `
   }
 })();
 
-class SignupPage extends React.Component {
+class SignupPage extends Component {
   state = {
     name: "",
     email: "",
@@ -91,7 +91,7 @@ class SignupPage extends React.Component {
 
   // Backend URLs - try both environments
   backendUrls = [
-    "https://voat.onrender.com", // Production/Render
+    "http://localhost:8000", // Production/Render
     "http://localhost:5000", // Local development
   ];
 

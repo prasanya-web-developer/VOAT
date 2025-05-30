@@ -53,7 +53,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const fileFilter = (req, file, cb) => {
+const workFileFilter = (req, file, cb) => {
   const allowedTypes = [
     "image/jpeg",
     "image/png",
@@ -62,21 +62,35 @@ const fileFilter = (req, file, cb) => {
     "image/webp",
     "image/bmp",
     "image/tiff",
+    "video/mp4",
+    "video/avi",
+    "video/mov",
+    "video/wmv",
+    "video/flv",
+    "video/webm",
   ];
 
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(null, false);
-    return cb(new Error("Only image files are allowed!"));
+    return cb(new Error("Only image and video files are allowed!"));
   }
 };
 
+const workUpload = multer({
+  storage: storage,
+  fileFilter: workFileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max file size for videos
+  },
+});
+
+// Add this line after your resumeUpload definition
 const upload = multer({
   storage: storage,
-  fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max file size
+    fileSize: 10 * 1024 * 1024, // 10MB max file size
   },
 });
 
@@ -145,7 +159,6 @@ const ServiceSchema = new Schema(
   { timestamps: true }
 );
 
-// Updated Portfolio Schema to include headline field separately
 const PortfolioSubmissionSchema = new mongoose.Schema(
   {
     userId: {
@@ -154,8 +167,8 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
       required: true,
     },
     name: { type: String },
-    profession: { type: String }, // Keep for backward compatibility
-    headline: { type: String }, // Add headline field explicitly
+    profession: { type: String },
+    headline: { type: String },
     workExperience: { type: String },
     about: { type: String },
     email: { type: String },
@@ -164,6 +177,17 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
     portfolioLink: { type: String },
     resumePath: { type: String },
     services: [ServiceSchema],
+    // Add this works array for portfolio work samples
+    works: [
+      {
+        url: { type: String },
+        thumbnail: { type: String },
+        title: { type: String },
+        type: { type: String, enum: ["image", "video"], default: "image" },
+        serviceName: { type: String },
+        uploadedDate: { type: Date, default: Date.now },
+      },
+    ],
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
@@ -190,6 +214,32 @@ const PortfolioSubmission = mongoose.model(
   "PortfolioSubmission",
   PortfolioSubmissionSchema
 );
+
+// Add this new schema after your existing schemas
+const WishlistSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    items: [
+      {
+        id: { type: String, required: true },
+        serviceId: String,
+        service: String,
+        price: Number,
+        provider: String,
+        profileImage: String,
+        rating: { type: Number, default: 4.5 },
+        addedDate: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+const Wishlist = mongoose.model("Wishlist", WishlistSchema);
 
 // Signup Route
 app.post("/api/signup", async (req, res) => {
@@ -523,7 +573,7 @@ app.post(
         userId,
         name,
         profession,
-        headline, // Accept headline explicitly
+        headline,
         workExperience,
         about,
         email,
@@ -533,10 +583,10 @@ app.post(
       } = req.body;
 
       // Validate essential fields
-      if (!name || !(profession || headline) || !email) {
+      if (!name || !profession || !email) {
         return res.status(400).json({
           success: false,
-          message: "Name, profession/headline and email are required",
+          message: "Name, profession, and email are required",
         });
       }
 
@@ -547,8 +597,8 @@ app.post(
       // Prepare update data
       const portfolioData = {
         name,
-        profession: profession || headline, // Use either value for backward compatibility
-        headline: headline || profession, // Store headline explicitly
+        profession,
+        headline, // Store headline explicitly
         workExperience,
         about,
         email,
@@ -609,12 +659,24 @@ app.post(
             });
 
             if (existingPortfolio) {
-              // If portfolio exists, add the service to it
+              // If portfolio exists, check for duplicate services
               if (!existingPortfolio.services) {
                 existingPortfolio.services = [];
               }
 
-              existingPortfolio.services.push(newService);
+              // Check if a service with this name already exists
+              const existingServiceIndex = existingPortfolio.services.findIndex(
+                (service) => service.name === newService.name
+              );
+
+              if (existingServiceIndex >= 0) {
+                // Update existing service instead of adding a duplicate
+                existingPortfolio.services[existingServiceIndex] = newService;
+              } else {
+                // Add new service only if it doesn't exist
+                existingPortfolio.services.push(newService);
+              }
+
               existingPortfolio.status = "pending";
               existingPortfolio.submittedDate = new Date();
 
@@ -773,6 +835,44 @@ app.get("/api/admin/portfolio-submissions", async (req, res) => {
   }
 });
 
+app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the portfolio submission by ID
+    const submission = await PortfolioSubmission.findById(id);
+
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    // Clean up any potential service duplicates before sending
+    if (submission.services && Array.isArray(submission.services)) {
+      // Create a Map to store unique services by name
+      const uniqueServicesMap = new Map();
+
+      submission.services.forEach((service) => {
+        // Use service name as unique key and only keep the latest version
+        if (service.name) {
+          uniqueServicesMap.set(service.name, service);
+        }
+      });
+
+      // Replace the services array with de-duplicated services
+      submission.services = Array.from(uniqueServicesMap.values());
+
+      // Save the de-duplicated services back to the database
+      await submission.save();
+    }
+
+    // Return the cleaned submission
+    res.status(200).json(submission);
+  } catch (error) {
+    console.error("Error fetching portfolio submission:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // Consolidated status update route
 app.put("/api/admin/portfolio-submissions/:id/status", async (req, res) => {
   try {
@@ -835,33 +935,39 @@ app.get("/api/portfolio/user/:userId", async (req, res) => {
 });
 
 // Update the /api/portfolios endpoint
+
 app.get("/api/portfolios", async (req, res) => {
   try {
     const approvedPortfolios = await PortfolioSubmission.find({
       status: "approved",
     }).sort({ submittedDate: -1 });
+    console.log("in /api/portfolios");
+    const portfolios = await Promise.all(
+      approvedPortfolios.map(async (portfolio) => {
+        const user = await User.findById(portfolio.userId);
+        const voatId = user?.voatId || null;
 
-    // Create a new array with only the necessary fields, explicitly excluding headline
-    const portfolios = approvedPortfolios.map((portfolio) => {
-      const portfolioData = {
-        _id: portfolio._id,
-        id: portfolio.id,
-        userId: portfolio.userId,
-        name: portfolio.name,
-        email: portfolio.email,
-        workExperience: portfolio.workExperience,
-        profession: portfolio.profession || portfolio.headline, // Use headline as fallback
-        profileImage: portfolio.profileImage,
-        portfolioLink: portfolio.portfolioLink,
-        about: portfolio.about,
-        coverImage: portfolio.coverImage,
-        status: portfolio.status,
-        submittedDate: portfolio.submittedDate,
-        updatedDate: portfolio.updatedDate,
-        services: portfolio.services,
-      };
-      return portfolioData;
-    });
+        return {
+          _id: portfolio._id,
+          id: portfolio.id,
+          userId: portfolio.userId,
+          uservoatId: voatId,
+          name: portfolio.name,
+          email: portfolio.email,
+          workExperience: portfolio.workExperience,
+          profession: portfolio.profession,
+          headline: portfolio.headline,
+          profileImage: portfolio.profileImage,
+          portfolioLink: portfolio.portfolioLink,
+          about: portfolio.about,
+          coverImage: portfolio.coverImage,
+          status: portfolio.status,
+          submittedDate: portfolio.submittedDate,
+          updatedDate: portfolio.updatedDate,
+          services: portfolio.services,
+        };
+      })
+    );
 
     res.status(200).json(portfolios);
   } catch (error) {
@@ -961,17 +1067,30 @@ app.post("/api/add-service", async (req, res) => {
         status: "pending",
       });
     } else {
-      // Add service to existing portfolio
+      // Check if service with this name already exists
       if (!portfolio.services) {
         portfolio.services = [];
       }
-      portfolio.services.push(newService);
+
+      const existingServiceIndex = portfolio.services.findIndex(
+        (service) => service.name === name
+      );
+
+      if (existingServiceIndex >= 0) {
+        // Update existing service instead of adding duplicate
+        portfolio.services[existingServiceIndex] = newService;
+      } else {
+        // Add new service if it doesn't exist
+        portfolio.services.push(newService);
+      }
     }
 
     await portfolio.save();
 
-    // Return the ID of the newly created service
-    const serviceId = portfolio.services[portfolio.services.length - 1]._id;
+    // Return the ID of the service
+    const serviceId = portfolio.services.find(
+      (service) => service.name === name
+    )._id;
 
     res.status(201).json({
       success: true,
@@ -983,6 +1102,177 @@ app.post("/api/add-service", async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || "Failed to add service",
+    });
+  }
+});
+
+app.put("/api/update-service", async (req, res) => {
+  try {
+    console.log("UPDATE SERVICE - Request received:", req.body);
+
+    const { userId, serviceName, description, pricing } = req.body;
+
+    // Validate required fields
+    if (!userId || !serviceName) {
+      console.log("Validation failed - missing fields");
+      return res.status(400).json({
+        success: false,
+        message: "User ID and service name are required",
+      });
+    }
+
+    // Find the portfolio submission using MongoDB ObjectId
+    const portfolio = await PortfolioSubmission.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+    });
+
+    console.log("Portfolio found:", !!portfolio);
+
+    if (!portfolio) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio not found",
+      });
+    }
+
+    // Ensure services array exists
+    if (!portfolio.services) {
+      portfolio.services = [];
+    }
+
+    console.log(
+      "Current services:",
+      portfolio.services.map((s) => s.name)
+    );
+    console.log("Looking for service:", serviceName);
+
+    // Find the service by name (exact match)
+    const serviceIndex = portfolio.services.findIndex(
+      (service) =>
+        service.name.trim().toLowerCase() === serviceName.trim().toLowerCase()
+    );
+
+    console.log("Service index found:", serviceIndex);
+
+    if (serviceIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: `Service "${serviceName}" not found in portfolio`,
+        availableServices: portfolio.services.map((s) => s.name),
+      });
+    }
+
+    // Update the service
+    if (description !== undefined && description !== null) {
+      portfolio.services[serviceIndex].description = description;
+    }
+
+    if (pricing !== undefined && pricing !== null) {
+      portfolio.services[serviceIndex].pricing = pricing;
+    }
+
+    // Mark the services array as modified (important for MongoDB)
+    portfolio.markModified("services");
+
+    // Save the updated portfolio
+    const updatedPortfolio = await portfolio.save();
+    console.log("Portfolio updated successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Service updated successfully",
+      service: portfolio.services[serviceIndex],
+    });
+  } catch (error) {
+    console.error("Error updating service:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to update service",
+      error: error.toString(),
+    });
+  }
+});
+
+app.delete("/api/delete-service", async (req, res) => {
+  try {
+    console.log("DELETE SERVICE - Request received:", req.body);
+
+    const { userId, serviceName } = req.body;
+
+    // Validate required fields
+    if (!userId || !serviceName) {
+      console.log("Validation failed - missing fields");
+      return res.status(400).json({
+        success: false,
+        message: "User ID and service name are required",
+      });
+    }
+
+    // Find the portfolio submission
+    const portfolio = await PortfolioSubmission.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+    });
+
+    console.log("Portfolio found:", !!portfolio);
+
+    if (!portfolio) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio not found",
+      });
+    }
+
+    // Ensure services array exists
+    if (!portfolio.services || portfolio.services.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No services found in portfolio",
+      });
+    }
+
+    console.log(
+      "Current services:",
+      portfolio.services.map((s) => s.name)
+    );
+    console.log("Deleting service:", serviceName);
+
+    // Find the service by name (exact match)
+    const serviceIndex = portfolio.services.findIndex(
+      (service) =>
+        service.name.trim().toLowerCase() === serviceName.trim().toLowerCase()
+    );
+
+    console.log("Service index found:", serviceIndex);
+
+    if (serviceIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: `Service "${serviceName}" not found in portfolio`,
+        availableServices: portfolio.services.map((s) => s.name),
+      });
+    }
+
+    // Remove the service
+    portfolio.services.splice(serviceIndex, 1);
+
+    // Mark the services array as modified
+    portfolio.markModified("services");
+
+    // Save the updated portfolio
+    const updatedPortfolio = await portfolio.save();
+    console.log("Service deleted successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Service deleted successfully",
+      remainingServices: portfolio.services.length,
+    });
+  } catch (error) {
+    console.error("Error deleting service:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to delete service",
+      error: error.toString(),
     });
   }
 });
@@ -1165,6 +1455,69 @@ app.post("/api/remove-video", async (req, res) => {
   }
 });
 
+app.post("/api/add-work", workUpload.single("workFile"), async (req, res) => {
+  try {
+    const { userId, title, serviceName } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    const workFile = req.file;
+    if (!workFile) {
+      return res.status(400).json({
+        success: false,
+        message: "No work file provided",
+      });
+    }
+
+    // Create work data
+    const workPath = `/uploads/${workFile.filename}`;
+    const workData = {
+      url: workPath,
+      thumbnail: workFile.mimetype.startsWith("image/") ? workPath : "",
+      title: title || "",
+      type: workFile.mimetype.startsWith("video/") ? "video" : "image",
+      serviceName: serviceName || "",
+      uploadedDate: new Date(),
+    };
+
+    // Find the user's portfolio submission
+    const portfolio = await PortfolioSubmission.findOne({ userId });
+
+    if (!portfolio) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio not found",
+      });
+    }
+
+    // Add work to portfolio works array
+    if (!portfolio.works) {
+      portfolio.works = [];
+    }
+
+    portfolio.works.push(workData);
+    await portfolio.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Work added successfully",
+      workId: portfolio.works[portfolio.works.length - 1]._id,
+      workUrl: workPath,
+    });
+  } catch (error) {
+    console.error("Error adding work:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to add work",
+    });
+  }
+});
+
 app.get("/api/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1213,13 +1566,13 @@ app.get("/api/user/:userId", async (req, res) => {
         role: user.role,
         profession: user.profession,
         profileImage: user.profileImage,
-        voatId: user.voatId,
+        voatId: user.voatId, // Make sure this is included
         voatPoints: user.voatPoints,
         badge: user.badge,
       },
       portfolio: portfolio || null,
       services: services,
-      videos: videos, // Include videos in the response
+      videos: videos,
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
@@ -1227,72 +1580,192 @@ app.get("/api/user/:userId", async (req, res) => {
   }
 });
 
-// 1. GET - Retrieve user wishlist
-app.get("/api/wishlist/:userId", async (req, res) => {
+// Add this temporary endpoint to debug VOAT IDs
+app.get("/api/debug/users-voat", async (req, res) => {
   try {
-    const { userId } = req.params;
-
-    // Find user's wishlist in database
-    const user = await User.findById(userId);
-    if (user && user.wishlist) {
-      return res.status(200).json(user.wishlist);
-    }
-
-    // Return empty array if no wishlist found
-    return res.status(200).json([]);
+    const users = await User.find({}, { name: 1, email: 1, voatId: 1 });
+    res.status(200).json(users);
   } catch (error) {
-    console.error("Error fetching wishlist:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// 2. POST - Update wishlist (add or replace entire wishlist)
 app.post("/api/wishlist/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const wishlistItems = req.body;
 
-    // Update user's wishlist in database
-    const user = await User.findById(userId);
-    if (user) {
-      user.wishlist = wishlistItems;
-      await user.save();
+    console.log("=== BACKEND WISHLIST UPDATE ===");
+    console.log("User ID received:", userId);
+    console.log("Wishlist items received:", wishlistItems);
+    console.log("Request URL:", req.originalUrl);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      console.error("Invalid user ID format:", userId);
+      return res.status(400).json({
+        success: false,
+        error: "Invalid user ID format",
+      });
     }
 
-    res.status(200).json({ success: true, message: "Wishlist updated" });
+    if (!Array.isArray(wishlistItems)) {
+      console.error("Invalid wishlist data:", typeof wishlistItems);
+      return res.status(400).json({
+        success: false,
+        error: "Wishlist data must be an array",
+      });
+    }
+
+    // Update or create wishlist
+    const updatedWishlist = await Wishlist.findOneAndUpdate(
+      { userId: userId },
+      { $set: { items: wishlistItems } },
+      { new: true, upsert: true }
+    );
+
+    console.log("Wishlist updated successfully:", updatedWishlist._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Wishlist updated successfully",
+      count: updatedWishlist.items.length,
+    });
   } catch (error) {
-    console.error("Error updating wishlist:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Backend wishlist error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      details: error.message,
+    });
   }
 });
 
-// 3. DELETE - Remove item from wishlist
+// Also make sure GET endpoint is properly defined
+app.get("/api/wishlist/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log("=== BACKEND WISHLIST GET ===");
+    console.log("Fetching wishlist for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid user ID format",
+      });
+    }
+
+    let wishlist = await Wishlist.findOne({ userId: userId });
+
+    if (!wishlist) {
+      wishlist = new Wishlist({ userId, items: [] });
+      await wishlist.save();
+    }
+
+    console.log("Returning wishlist items:", wishlist.items.length);
+    return res.status(200).json(wishlist.items || []);
+  } catch (error) {
+    console.error("Error fetching wishlist:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
+  }
+});
+
+// Add this test endpoint to verify routing works
+app.get("/api/test-wishlist", (req, res) => {
+  res.json({
+    message: "Wishlist route is working",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// DELETE - Remove item from wishlist
 app.delete("/api/wishlist/remove/:itemId", async (req, res) => {
   try {
     const { itemId } = req.params;
     const { userId } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ error: "User ID is required" });
+    console.log(`Removing item ${itemId} from wishlist for user ${userId}`);
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid User ID is required",
+      });
     }
 
-    // Update user's wishlist in database
-    const user = await User.findById(userId);
-    if (user && user.wishlist) {
-      user.wishlist = user.wishlist.filter((item) => item.id !== itemId);
-      await user.save();
+    // Remove item from wishlist
+    const updatedWishlist = await Wishlist.findOneAndUpdate(
+      { userId },
+      { $pull: { items: { id: itemId } } },
+      { new: true }
+    );
+
+    if (!updatedWishlist) {
+      return res.status(404).json({
+        success: false,
+        error: "Wishlist not found",
+      });
     }
 
-    res
-      .status(200)
-      .json({ success: true, message: "Item removed from wishlist" });
+    console.log(
+      `Item ${itemId} successfully removed from wishlist for user ${userId}`
+    );
+    res.status(200).json({
+      success: true,
+      message: "Item removed from wishlist",
+      remainingItems: updatedWishlist.items.length,
+    });
   } catch (error) {
     console.error("Error removing from wishlist:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
   }
 });
 
+// app.post("/api/admin/migrate-wishlist", async (req, res) => {
+//   try {
+//     const usersWithWishlist = await User.find({
+//       wishlist: { $exists: true, $ne: [] },
+//     });
+
+//     let migratedCount = 0;
+
+//     for (const user of usersWithWishlist) {
+//       if (user.wishlist && user.wishlist.length > 0) {
+
+//         const existingWishlist = await Wishlist.findOne({ userId: user._id });
+
+//         if (!existingWishlist) {
+//           const newWishlist = new Wishlist({
+//             userId: user._id,
+//             items: user.wishlist,
+//           });
+
+//           await newWishlist.save();
+//           migratedCount++;
+
+//           user.wishlist = undefined;
+//           await user.save();
+//         }
+//       }
+//     }
+
+//     res.status(200).json({
+//       message: "Wishlist migration completed",
+//       migratedUsers: migratedCount,
+//     });
+//   } catch (error) {
+//     console.error("Error migrating wishlist:", error);
+//     res.status(500).json({ error: "Migration failed" });
+//   }
+// });
+
 // Set VOAT ID endpoint
+
 app.post("/api/set-voat-id", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -1444,11 +1917,22 @@ app.get("/api/admin/migrate-headlines", async (req, res) => {
   }
 });
 
-// Serve React frontend
-// app.use(express.static(path.resolve(__dirname, "../frontend/build")));
-
-// app.get("*", (req, res) => {
-//   res.sendFile(path.resolve(__dirname, "../frontend/build", "index.html"));
-// });
+app.get("/api/debug/routes", (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        method: Object.keys(middleware.route.methods)[0].toUpperCase(),
+        path: middleware.route.path,
+      });
+    }
+  });
+  res.json(routes);
+});
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});

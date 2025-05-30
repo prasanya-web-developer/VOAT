@@ -28,6 +28,10 @@ import {
   Youtube,
   CheckCircle,
   Loader,
+  Briefcase,
+  UserCheck,
+  Search,
+  Plus,
 } from "lucide-react";
 import { FaWhatsapp, FaXTwitter } from "react-icons/fa6";
 
@@ -39,6 +43,19 @@ class LandingPage extends Component {
       "https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
       "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
     ],
+    publicImages: [
+      "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
+      "https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
+      "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
+    ],
+    // Add these new properties
+    freelancerImage:
+      "https://www.shutterstock.com/shutterstock/photos/1447806011/display_1500/stock-vector-flat-banner-advertising-freelance-remote-work-at-home-outsourced-employee-developer-or-webpage-1447806011.jpg",
+    clientImage:
+      "https://synques-cdn.s3.ap-south-1.amazonaws.com/writeonwalls.in/images/client_banner2.png",
+    isLoggedIn: false,
+    user: null,
+    userRole: null,
     servicesInView: false,
     visionInView: false,
     chooseUsInView: false,
@@ -63,6 +80,15 @@ class LandingPage extends Component {
   contactRef = React.createRef();
 
   componentDidMount() {
+    // Add these lines at the beginning
+    this.loadUserData();
+    window.addEventListener("storage", this.handleStorageEvent);
+    this.loginCheckInterval = setInterval(
+      this.checkLoginStatusPeriodically,
+      2000
+    );
+
+    // Update this line to use publicImages instead of images
     this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
     window.addEventListener("scroll", this.handleScroll);
     this.handleScroll();
@@ -70,9 +96,14 @@ class LandingPage extends Component {
 
   componentWillUnmount() {
     clearInterval(this.slideInterval);
+    // Add these lines
+    if (this.loginCheckInterval) {
+      clearInterval(this.loginCheckInterval);
+    }
+    window.removeEventListener("storage", this.handleStorageEvent);
+
     window.removeEventListener("scroll", this.handleScroll);
 
-    // Clear any existing success message timer
     if (this.state.successTimer) {
       clearTimeout(this.state.successTimer);
     }
@@ -80,7 +111,8 @@ class LandingPage extends Component {
 
   nextSlide() {
     this.setState({
-      currentSlide: (this.state.currentSlide + 1) % this.state.images.length,
+      currentSlide:
+        (this.state.currentSlide + 1) % this.state.publicImages.length,
     });
   }
 
@@ -188,6 +220,306 @@ class LandingPage extends Component {
     this.setState({
       [e.target.name]: e.target.value,
     });
+  };
+
+  // Add these methods before your render() method
+
+  // Load user data using same method as NavBar
+  loadUserData = () => {
+    try {
+      const userDataString = localStorage.getItem("user");
+      if (userDataString) {
+        try {
+          const userData = JSON.parse(userDataString);
+          if (userData && userData.name) {
+            this.setState({
+              user: userData,
+              isLoggedIn: true,
+              userRole: userData.role || null,
+            });
+            // Stop carousel if user is logged in
+            if (this.slideInterval) {
+              clearInterval(this.slideInterval);
+              this.slideInterval = null;
+            }
+          } else {
+            this.setState({
+              isLoggedIn: false,
+              user: null,
+              userRole: null,
+            });
+          }
+        } catch (error) {
+          this.setState({
+            isLoggedIn: false,
+            user: null,
+            userRole: null,
+          });
+        }
+      } else {
+        this.setState({
+          isLoggedIn: false,
+          user: null,
+          userRole: null,
+        });
+        // Start carousel for public users
+        if (!this.slideInterval && this.state.publicImages.length > 0) {
+          this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
+        }
+      }
+    } catch (error) {
+      this.setState({
+        isLoggedIn: false,
+        user: null,
+        userRole: null,
+      });
+    }
+  };
+
+  // Handle storage events exactly like NavBar
+  handleStorageEvent = (event) => {
+    if (event.key === "user") {
+      if (event.newValue) {
+        try {
+          const userData = JSON.parse(event.newValue);
+          if (!this.state.isLoggedIn) {
+            this.setState({
+              isLoggedIn: true,
+              user: userData,
+              userRole: userData.role || null,
+            });
+            if (this.slideInterval) {
+              clearInterval(this.slideInterval);
+              this.slideInterval = null;
+            }
+          } else {
+            this.setState({
+              user: userData,
+              userRole: userData.role || null,
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing user data from storage event:", e);
+        }
+      } else {
+        if (this.state.isLoggedIn) {
+          this.setState({
+            isLoggedIn: false,
+            user: null,
+            userRole: null,
+          });
+          if (!this.slideInterval && this.state.publicImages.length > 0) {
+            this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
+          }
+        }
+      }
+    }
+  };
+
+  // Check login status periodically like NavBar
+  checkLoginStatusPeriodically = () => {
+    try {
+      let userData = null;
+      try {
+        const userDataStr = localStorage.getItem("user");
+        userData = userDataStr ? JSON.parse(userDataStr) : null;
+      } catch (e) {
+        userData = null;
+      }
+
+      const wasLoggedIn = this.state.isLoggedIn;
+      const isLoggedIn = !!userData;
+
+      if (!wasLoggedIn && isLoggedIn) {
+        this.loadUserData();
+      } else if (wasLoggedIn && !isLoggedIn) {
+        this.setState({
+          isLoggedIn: false,
+          user: null,
+          userRole: null,
+        });
+        if (!this.slideInterval && this.state.publicImages.length > 0) {
+          this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
+        }
+      } else if (isLoggedIn && userData && this.state.user) {
+        const currentUser = this.state.user;
+        if (
+          userData.name !== currentUser.name ||
+          userData.email !== currentUser.email ||
+          userData.role !== currentUser.role
+        ) {
+          this.setState({
+            user: userData,
+            userRole: userData.role || null,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error in periodic login check:", error);
+    }
+  };
+
+  // Determine user type using same logic as NavBar
+  getUserType = () => {
+    const { user, userRole } = this.state;
+    if (!user || !userRole) return null;
+
+    const role = userRole || "";
+
+    if (
+      role === "freelancer" ||
+      role === "Freelancer" ||
+      role === "service provider" ||
+      role === "Service Provider" ||
+      role === "Freelancer/Service Provider" ||
+      role.toLowerCase().includes("freelancer") ||
+      role.toLowerCase().includes("service provider")
+    ) {
+      return "freelancer";
+    } else if (
+      role === "client" ||
+      role === "Client" ||
+      role.toLowerCase().includes("client")
+    ) {
+      return "client";
+    }
+
+    return null;
+  };
+
+  // Method to render different hero content based on user type
+  renderHeroContent = () => {
+    const { isLoggedIn } = this.state;
+    const userType = this.getUserType();
+
+    if (!isLoggedIn) {
+      return {
+        title: (
+          <>
+            Empowering
+            <br />
+            Innovation <span className="landing-page-text-gradient">&</span>
+            <br />
+            <span className="landing-page-text-gradient">Growth</span>
+          </>
+        ),
+        description:
+          "We help startups and businesses transform their ideas into successful realities with our comprehensive digital solutions.",
+        buttons: (
+          <div className="landing-page-hero-buttons">
+            <a
+              href="#services"
+              className="landing-page-button landing-page-button-primary"
+            >
+              Our Services
+              <ArrowRight className="landing-page-button-icon" />
+            </a>
+            <a
+              href="#contact"
+              className="landing-page-button landing-page-button-outline"
+            >
+              Get In Touch
+            </a>
+          </div>
+        ),
+      };
+    } else if (userType === "freelancer") {
+      return {
+        title: (
+          <>
+            Welcome Back,
+            <br />
+            <span className="landing-page-text-gradient">Freelancer!</span>
+            <br />
+            Ready to <span className="landing-page-text-gradient">Work</span>?
+          </>
+        ),
+        description:
+          "Discover new projects, manage your portfolio, and connect with clients who need your expertise.",
+        buttons: (
+          <div className="landing-page-hero-buttons">
+            <Link
+              to="/projects"
+              className="landing-page-button landing-page-button-primary"
+            >
+              <Search className="landing-page-button-icon" />
+              Browse Projects
+            </Link>
+            <Link
+              to="/user-dashboard"
+              className="landing-page-button landing-page-button-outline"
+            >
+              <Briefcase className="landing-page-button-icon" />
+              My Dashboard
+            </Link>
+          </div>
+        ),
+      };
+    } else if (userType === "client") {
+      return {
+        title: (
+          <>
+            Welcome Back,
+            <br />
+            <span className="landing-page-text-gradient">Client!</span>
+            <br />
+            Find Your <span className="landing-page-text-gradient">Expert</span>
+          </>
+        ),
+        description:
+          "Connect with talented freelancers, post your projects, and get your work done by skilled professionals.",
+        buttons: (
+          <div className="landing-page-hero-buttons">
+            <Link
+              to="/post-project"
+              className="landing-page-button landing-page-button-primary"
+            >
+              <Plus className="landing-page-button-icon" />
+              Post a Project
+            </Link>
+            <Link
+              to="/freelancers"
+              className="landing-page-button landing-page-button-outline"
+            >
+              <UserCheck className="landing-page-button-icon" />
+              Find Freelancers
+            </Link>
+          </div>
+        ),
+      };
+    } else {
+      return {
+        title: (
+          <>
+            Welcome Back,
+            <br />
+            <span className="landing-page-text-gradient">User!</span>
+            <br />
+            Explore <span className="landing-page-text-gradient">VOAT</span>
+          </>
+        ),
+        description:
+          "Discover opportunities and connect with our community of professionals.",
+        buttons: (
+          <div className="landing-page-hero-buttons">
+            <Link
+              to="/services"
+              className="landing-page-button landing-page-button-primary"
+            >
+              Explore Services
+              <ArrowRight className="landing-page-button-icon" />
+            </Link>
+            <Link
+              to="/user-dashboard"
+              className="landing-page-button landing-page-button-outline"
+            >
+              <Briefcase className="landing-page-button-icon" />
+              My Dashboard
+            </Link>
+          </div>
+        ),
+      };
+    }
   };
 
   render() {
@@ -302,70 +634,81 @@ class LandingPage extends Component {
         </ErrorBoundary>
         <div className="landing-page">
           {/* Hero Section - Updated Modern Design */}
+          {/* Hero Section with Conditional Banners */}
           <section className="landing-page-hero">
-            <div className="landing-page-carousel-slides-container">
-              {this.state.images.map((image, index) => (
-                <div
-                  key={index}
-                  className={`landing-page-carousel-slide ${
-                    index === this.state.currentSlide ? "active" : ""
-                  }`}
-                >
-                  <div className="landing-page-carousel-overlay"></div>
-                  <img src={image} alt={`Slide ${index + 1}`} />
+            {/* Conditional Banner Rendering */}
+            {!this.state.isLoggedIn ? (
+              // Public users - carousel slides
+              <>
+                <div className="landing-page-carousel-slides-container">
+                  {this.state.publicImages.map((image, index) => (
+                    <div
+                      key={index}
+                      className={`landing-page-carousel-slide ${
+                        index === this.state.currentSlide ? "active" : ""
+                      }`}
+                    >
+                      <div className="landing-page-carousel-overlay"></div>
+                      <img src={image} alt={`Slide ${index + 1}`} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                <div className="landing-page-carousel-indicators">
+                  {this.state.publicImages.map((_, index) => (
+                    <button
+                      key={index}
+                      className={`landing-page-indicator ${
+                        index === this.state.currentSlide ? "active" : ""
+                      }`}
+                      onClick={() => this.setSlide(index)}
+                      aria-label={`Go to slide ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : this.getUserType() === "freelancer" ? (
+              // Freelancer banner
+              <div className="landing-page-single-banner">
+                <div className="landing-page-carousel-overlay"></div>
+                <img
+                  src={this.state.freelancerImage}
+                  alt="Freelancer Dashboard"
+                />
+              </div>
+            ) : this.getUserType() === "client" ? (
+              // Client banner
+              <div className="landing-page-single-banner">
+                <div className="landing-page-carousel-overlay"></div>
+                <img src={this.state.clientImage} alt="Client Dashboard" />
+              </div>
+            ) : (
+              // Default logged-in user banner
+              <div className="landing-page-single-banner">
+                <div className="landing-page-carousel-overlay"></div>
+                <img src={this.state.publicImages[0]} alt="Welcome Dashboard" />
+              </div>
+            )}
 
+            {/* Hero Content */}
             <div className="landing-page-hero-content-wrapper">
               <div className="landing-page-hero-content">
                 <h1 className="landing-page-hero-title">
-                  Empowering
-                  <br />
-                  Innovation{" "}
-                  <span className="landing-page-text-gradient">&</span>
-                  <br />
-                  <span className="landing-page-text-gradient">Growth</span>
+                  {this.renderHeroContent().title}
                 </h1>
                 <p className="landing-page-hero-description">
-                  We help startups and businesses transform their ideas into
-                  successful realities with our comprehensive digital solutions.
+                  {this.renderHeroContent().description}
                 </p>
-                <div className="landing-page-hero-buttons">
-                  <a
-                    href="#services"
-                    className="landing-page-button landing-page-button-primary"
-                  >
-                    Our Services
-                    <ArrowRight className="landing-page-button-icon" />
-                  </a>
-                  <a
-                    href="#contact"
-                    className="landing-page-button landing-page-button-outline"
-                  >
-                    Get In Touch
-                  </a>
-                </div>
+                {this.renderHeroContent().buttons}
               </div>
             </div>
 
-            <div className="landing-page-service-content-card">
-              <h2>{carouselServices[this.state.currentSlide].title}</h2>
-              <p>{carouselServices[this.state.currentSlide].description}</p>
-            </div>
-
-            <div className="landing-page-carousel-indicators">
-              {this.state.images.map((_, index) => (
-                <button
-                  key={index}
-                  className={`landing-page-indicator ${
-                    index === this.state.currentSlide ? "active" : ""
-                  }`}
-                  onClick={() => this.setSlide(index)}
-                  aria-label={`Go to slide ${index + 1}`}
-                />
-              ))}
-            </div>
+            {/* Service content card - only show for public users */}
+            {!this.state.isLoggedIn && (
+              <div className="landing-page-service-content-card">
+                <h2>{carouselServices[this.state.currentSlide].title}</h2>
+                <p>{carouselServices[this.state.currentSlide].description}</p>
+              </div>
+            )}
           </section>
 
           {/* Services Section - Updated with Modern Design */}
