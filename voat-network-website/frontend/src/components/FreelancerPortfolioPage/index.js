@@ -18,6 +18,14 @@ class MyPortfolio extends Component {
     editingServiceName: "",
     editingServiceDescription: "",
     editingServicePricing: [],
+    // Add new service form fields
+    newServiceName: "",
+    newServiceDescription: "",
+    newServicePricing: [
+      { level: "Basic", price: "", timeFrame: "" },
+      { level: "Standard", price: "", timeFrame: "" },
+      { level: "Premium", price: "", timeFrame: "" },
+    ],
     portfolioData: null,
     editFormData: {
       name: "",
@@ -28,13 +36,6 @@ class MyPortfolio extends Component {
       email: "",
     },
     services: [],
-    newServiceName: "",
-    newServiceDescription: "",
-    newServicePricing: [
-      { level: "Basic", price: "", timeFrame: "" },
-      { level: "Standard", price: "", timeFrame: "" },
-      { level: "Premium", price: "", timeFrame: "" },
-    ],
     selectedPricing: null,
     profileImage: null,
     profileImagePreview: null,
@@ -179,6 +180,117 @@ class MyPortfolio extends Component {
     }
   };
 
+  // Add service form handlers
+  handleAddServiceFormChange = (e, field, index) => {
+    if (field === "name") {
+      this.setState({ newServiceName: e.target.value });
+    } else if (field === "description") {
+      this.setState({ newServiceDescription: e.target.value });
+    } else if (field === "pricing") {
+      const { newServicePricing } = this.state;
+      const updatedPricing = [...newServicePricing];
+      updatedPricing[index] = {
+        ...updatedPricing[index],
+        [e.target.name]: e.target.value,
+      };
+      this.setState({ newServicePricing: updatedPricing });
+    }
+  };
+
+  handleSaveNewService = async (e) => {
+    e.preventDefault();
+
+    const { newServiceName, newServiceDescription, newServicePricing } =
+      this.state;
+
+    try {
+      const userData = localStorage.getItem("user");
+      const userId = userData ? JSON.parse(userData).id : null;
+
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      const serviceData = {
+        userId: userId,
+        name: newServiceName,
+        description: newServiceDescription,
+        pricing: newServicePricing,
+      };
+
+      console.log("Adding new service:", serviceData);
+
+      const response = await fetch(`${this.state.baseUrl}/api/add-service`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(serviceData),
+      });
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Server returned HTML:", text);
+        throw new Error("Server error - check backend console");
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("API Error:", result);
+        throw new Error(
+          result.message || `HTTP error! status: ${response.status}`
+        );
+      }
+
+      console.log("Service added successfully:", result);
+
+      // Update local state
+      const newServices = [...this.state.services, newServiceName];
+      const newServiceKey = newServiceName.toLowerCase().replace(/\s+/g, "-");
+      const updatedServiceData = { ...this.state.serviceData };
+      updatedServiceData[newServiceKey] = {
+        id: result.serviceId,
+        description: newServiceDescription,
+        pricing: newServicePricing,
+        videos: [],
+      };
+
+      this.setState({
+        services: newServices,
+        serviceData: updatedServiceData,
+        activeServiceTab: newServiceKey,
+        showAddServiceForm: false,
+        newServiceName: "",
+        newServiceDescription: "",
+        newServicePricing: [
+          { level: "Basic", price: "", timeFrame: "" },
+          { level: "Standard", price: "", timeFrame: "" },
+          { level: "Premium", price: "", timeFrame: "" },
+        ],
+      });
+
+      alert("Service added successfully!");
+    } catch (error) {
+      console.error("Error adding service:", error);
+      alert("Error adding service: " + error.message);
+    }
+  };
+
+  toggleAddServiceForm = () => {
+    this.setState({
+      showAddServiceForm: !this.state.showAddServiceForm,
+      newServiceName: "",
+      newServiceDescription: "",
+      newServicePricing: [
+        { level: "Basic", price: "", timeFrame: "" },
+        { level: "Standard", price: "", timeFrame: "" },
+        { level: "Premium", price: "", timeFrame: "" },
+      ],
+    });
+  };
+
   handleEditService = () => {
     const { activeServiceTab, serviceData, services } = this.state;
 
@@ -252,7 +364,6 @@ class MyPortfolio extends Component {
         body: JSON.stringify(updateData),
       });
 
-      // First check if we got HTML instead of JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
@@ -271,7 +382,6 @@ class MyPortfolio extends Component {
 
       console.log("Service updated successfully:", result);
 
-      // Update local state
       const updatedServiceData = { ...serviceData };
       updatedServiceData[activeServiceTab] = {
         ...updatedServiceData[activeServiceTab],
@@ -320,9 +430,8 @@ class MyPortfolio extends Component {
         console.log("Deleting service:", {
           userId,
           serviceName: removedService,
-        }); // Debug log
+        });
 
-        // API call to delete service
         const response = await fetch(
           `${this.state.baseUrl}/api/delete-service`,
           {
@@ -337,7 +446,6 @@ class MyPortfolio extends Component {
           }
         );
 
-        // Check if response is ok
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Server response:", errorText);
@@ -347,7 +455,6 @@ class MyPortfolio extends Component {
         const result = await response.json();
         console.log("Service deleted successfully:", result);
 
-        // Update local state
         updatedServices.splice(index, 1);
         const updatedServiceData = { ...this.state.serviceData };
         delete updatedServiceData[serviceKey];
@@ -358,6 +465,8 @@ class MyPortfolio extends Component {
           updatedServices.length > 0
         ) {
           newActiveTab = updatedServices[0].toLowerCase().replace(/\s+/g, "-");
+        } else if (updatedServices.length === 0) {
+          newActiveTab = "";
         }
 
         this.setState({
@@ -406,7 +515,6 @@ class MyPortfolio extends Component {
         const result = await response.json();
         console.log("Work uploaded successfully:", result);
 
-        // Add to local state
         const newWork = {
           id: result.workId,
           url: result.workUrl,
@@ -787,11 +895,19 @@ class MyPortfolio extends Component {
                   ? "You haven't added any services yet."
                   : "This professional hasn't added any services yet."}
               </p>
+              {isOwnProfile && (
+                <button
+                  className="myportfoliopage-add-service-btn"
+                  onClick={this.toggleAddServiceForm}
+                >
+                  ➕ Add Service
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Work Section - Added Back */}
+        {/* Work Section */}
         <div className="myportfoliopage-work-card">
           <div className="myportfoliopage-work-header">
             <h2 className="myportfoliopage-section-title">My Work</h2>
@@ -955,6 +1071,117 @@ class MyPortfolio extends Component {
               <p>No pricing options available for this service yet.</p>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  renderAddServiceForm() {
+    const { newServiceName, newServiceDescription, newServicePricing } =
+      this.state;
+
+    return (
+      <div className="myportfoliopage-modal-overlay">
+        <div className="myportfoliopage-modal-content">
+          <div className="myportfoliopage-modal-header">
+            <h2>Add New Service</h2>
+            <button
+              className="myportfoliopage-close-modal-btn"
+              onClick={this.toggleAddServiceForm}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="myportfoliopage-modal-body">
+            <form onSubmit={this.handleSaveNewService}>
+              <div className="myportfoliopage-form-section">
+                <label htmlFor="service-name">Service Name</label>
+                <input
+                  type="text"
+                  id="service-name"
+                  value={newServiceName}
+                  onChange={(e) => this.handleAddServiceFormChange(e, "name")}
+                  placeholder="e.g. Web Development, Logo Design"
+                  className="myportfoliopage-form-input"
+                  required
+                />
+              </div>
+
+              <div className="myportfoliopage-form-section">
+                <label htmlFor="service-description">Service Description</label>
+                <textarea
+                  id="service-description"
+                  rows="4"
+                  value={newServiceDescription}
+                  onChange={(e) =>
+                    this.handleAddServiceFormChange(e, "description")
+                  }
+                  placeholder="Describe your service in detail"
+                  className="myportfoliopage-form-textarea"
+                  required
+                />
+              </div>
+
+              <div className="myportfoliopage-pricing-section-form">
+                <h4>Set Pricing Options (in Rupees)</h4>
+
+                {newServicePricing.map((pricing, index) => (
+                  <div key={index} className="myportfoliopage-pricing-level">
+                    <h5>{pricing.level} Package</h5>
+
+                    <div className="myportfoliopage-form-row">
+                      <div className="myportfoliopage-form-group myportfoliopage-half">
+                        <label htmlFor={`new-price-${index}`}>Price (₹)</label>
+                        <input
+                          type="number"
+                          id={`new-price-${index}`}
+                          name="price"
+                          value={pricing.price}
+                          onChange={(e) =>
+                            this.handleAddServiceFormChange(e, "pricing", index)
+                          }
+                          placeholder="e.g. 25000"
+                          required
+                        />
+                      </div>
+
+                      <div className="myportfoliopage-form-group myportfoliopage-half">
+                        <label htmlFor={`new-timeFrame-${index}`}>
+                          Time Frame
+                        </label>
+                        <input
+                          type="text"
+                          id={`new-timeFrame-${index}`}
+                          name="timeFrame"
+                          value={pricing.timeFrame}
+                          onChange={(e) =>
+                            this.handleAddServiceFormChange(e, "pricing", index)
+                          }
+                          placeholder="e.g. 2 weeks"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="myportfoliopage-form-actions">
+                <button type="submit" className="myportfoliopage-btn-primary">
+                  Add Service
+                </button>
+                <button
+                  type="button"
+                  className="myportfoliopage-btn-secondary"
+                  onClick={this.toggleAddServiceForm}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -1286,7 +1513,12 @@ class MyPortfolio extends Component {
   }
 
   render() {
-    const { isLoading, portfolioData, showEditServiceForm } = this.state;
+    const {
+      isLoading,
+      portfolioData,
+      showEditServiceForm,
+      showAddServiceForm,
+    } = this.state;
 
     if (isLoading) {
       return (
@@ -1360,6 +1592,7 @@ class MyPortfolio extends Component {
             {this.renderRightColumn()}
           </div>
           {showEditServiceForm && this.renderEditServiceForm()}
+          {showAddServiceForm && this.renderAddServiceForm()}
         </div>
         <Footer />
       </>

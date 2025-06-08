@@ -15,13 +15,16 @@ class UserDashboard extends Component {
     portfolioStatus: null,
     orders: [],
     wishlist: [],
+    bookings: [],
     notifications: [],
     stats: {},
+    bookingFilter: "all", // for filtering bookings
     formData: {
       name: "",
       email: "",
       role: "",
       profession: "",
+      phone: "",
     },
     portfolioFormData: {
       name: "",
@@ -42,7 +45,10 @@ class UserDashboard extends Component {
     profileImage: null,
     previewImage: null,
     resumeFileName: "",
-    baseUrl: "https://voat.onrender.com",
+    baseUrl:
+      window.location.hostname === "localhost"
+        ? "http://localhost:5000"
+        : "https://voat.onrender.com",
     showMobileSidebar: false,
   };
 
@@ -137,6 +143,7 @@ class UserDashboard extends Component {
         // Fetch other data after ensuring status is fetched
         this.fetchOrders();
         this.fetchWishlist();
+        this.fetchBookings();
       });
     });
 
@@ -187,6 +194,7 @@ class UserDashboard extends Component {
             email: userData.email || "",
             role: userData.role || "",
             profession: userData.profession || "",
+            phone: userData.phone || "",
           },
           previewImage: userData.profileImage
             ? this.getFullImageUrl(userData.profileImage)
@@ -291,6 +299,7 @@ class UserDashboard extends Component {
             email: updatedUserData.email || "",
             role: updatedUserData.role || "",
             profession: updatedUserData.profession || "",
+            phone: updatedUserData.phone || "",
           },
         });
 
@@ -305,6 +314,11 @@ class UserDashboard extends Component {
   isAdmin = () => {
     const { userData } = this.state;
     return userData && userData.email === "prasanya.webdev@gmail.com";
+  };
+
+  isFreelancer = () => {
+    const { userData } = this.state;
+    return userData && userData.role === "Freelancer/Service Provider";
   };
 
   generateVoatId = () => {
@@ -409,6 +423,27 @@ class UserDashboard extends Component {
           },
         ],
       });
+    }
+  };
+
+  fetchBookings = async () => {
+    try {
+      if (!this.state.userData || !this.state.userData.id) {
+        return;
+      }
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/bookings/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const bookings = await response.json();
+        this.setState({ bookings });
+      } else {
+        console.error("Failed to fetch bookings");
+      }
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
     }
   };
 
@@ -619,6 +654,7 @@ class UserDashboard extends Component {
             email: this.state.userData.email || "",
             role: this.state.userData.role || "",
             profession: this.state.userData.profession || "",
+            phone: this.state.userData.phone || "",
           }
         : prevState.formData,
       previewImage: !prevState.isEditing
@@ -718,6 +754,44 @@ class UserDashboard extends Component {
     });
   };
 
+  handleBookingAction = async (bookingId, action) => {
+    try {
+      const response = await fetch(
+        `${this.state.baseUrl}/api/booking/${bookingId}/action`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action }),
+        }
+      );
+
+      if (response.ok) {
+        // Refresh bookings after action
+        this.fetchBookings();
+        this.addNotification({
+          type: "system",
+          message: `Booking request ${action}ed successfully!`,
+          time: "Just now",
+        });
+      } else {
+        throw new Error(`Failed to ${action} booking`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing booking:`, error);
+      this.addNotification({
+        type: "system",
+        message: `Failed to ${action} booking request`,
+        time: "Just now",
+      });
+    }
+  };
+
+  handleBookingFilterChange = (filter) => {
+    this.setState({ bookingFilter: filter });
+  };
+
   handleSubmit = async (e) => {
     e.preventDefault();
     this.setState({ isLoading: true });
@@ -740,6 +814,7 @@ class UserDashboard extends Component {
       submitData.append("email", formData.email);
       submitData.append("role", formData.role);
       submitData.append("profession", formData.profession);
+      submitData.append("phone", formData.phone);
       submitData.append("userId", userData.id);
       submitData.append("voatId", userData.voatId); // Preserve VOAT ID
       submitData.append("voatPoints", userData.voatPoints); // Preserve VOAT points
@@ -1150,6 +1225,17 @@ class UserDashboard extends Component {
                     <span className="info-value">{userData.email}</span>
                   </div>
                 </div>
+                {userData.phone && (
+                  <div className="info-item">
+                    <div className="info-icon">
+                      <i className="fas fa-phone"></i>
+                    </div>
+                    <div className="info-content">
+                      <span className="info-label">Phone: </span>
+                      <span className="info-value">{userData.phone}</span>
+                    </div>
+                  </div>
+                )}
                 {userData.role && (
                   <div className="info-item">
                     <div className="info-icon">
@@ -1417,6 +1503,21 @@ class UserDashboard extends Component {
               </div>
 
               <div className="user-form-group">
+                <label htmlFor="phone">Phone Number</label>
+                <div className="input-container">
+                  <i className="fas fa-phone input-icon"></i>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={this.handleInputChange}
+                    placeholder="Enter your phone number"
+                  />
+                </div>
+              </div>
+
+              <div className="user-form-group">
                 <label htmlFor="role">Role</label>
                 <div className="select-container">
                   <i className="fas fa-user-tag input-icon"></i>
@@ -1431,7 +1532,7 @@ class UserDashboard extends Component {
                     <option value="Freelancer/Service Provider">
                       Freelancer/Service Provider
                     </option>
-                    <option value="Service Getter">Service Getter</option>
+                    <option value="Client/Individual">Client/Individual</option>
                   </select>
                 </div>
               </div>
@@ -1566,6 +1667,221 @@ class UserDashboard extends Component {
     );
   }
 
+  renderBookings() {
+    const { bookings, bookingFilter } = this.state;
+
+    // Filter bookings based on selected filter
+    const filteredBookings = bookings.filter((booking) => {
+      if (bookingFilter === "all") return true;
+      return booking.status === bookingFilter;
+    });
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>Service Bookings</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search bookings..."
+                className="search-input"
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={bookingFilter}
+              onChange={(e) => this.handleBookingFilterChange(e.target.value)}
+            >
+              <option value="all">All Bookings</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="booking-stats">
+          <div className="stat-card">
+            <div className="stat-icon pending">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-info">
+              <div className="stat-number">
+                {bookings.filter((b) => b.status === "pending").length}
+              </div>
+              <div className="stat-label">Pending</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon accepted">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-info">
+              <div className="stat-number">
+                {bookings.filter((b) => b.status === "accepted").length}
+              </div>
+              <div className="stat-label">Accepted</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon rejected">
+              <i className="fas fa-times-circle"></i>
+            </div>
+            <div className="stat-info">
+              <div className="stat-number">
+                {bookings.filter((b) => b.status === "rejected").length}
+              </div>
+              <div className="stat-label">Rejected</div>
+            </div>
+          </div>
+        </div>
+
+        {filteredBookings.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-illustration">
+              <i className="fas fa-calendar-check"></i>
+            </div>
+            <h3>No Booking Requests Yet</h3>
+            <p>
+              You haven't received any booking requests yet. Complete your
+              portfolio to start receiving bookings!
+            </p>
+            {!this.state.portfolioStatus && (
+              <button
+                className="btn btn-primary"
+                onClick={this.togglePortfolioForm}
+              >
+                Create Portfolio
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="bookings-grid">
+            {filteredBookings.map((booking, index) => (
+              <div className="booking-card" key={index}>
+                <div className="booking-header">
+                  <div className="booking-id">
+                    #{booking.id || `BK-${index + 1}`}
+                  </div>
+                  <div className={`booking-status ${booking.status}`}>
+                    <i
+                      className={`fas fa-${
+                        booking.status === "accepted"
+                          ? "check-circle"
+                          : booking.status === "rejected"
+                          ? "times-circle"
+                          : "clock"
+                      }`}
+                    ></i>
+                    {booking.status.charAt(0).toUpperCase() +
+                      booking.status.slice(1)}
+                  </div>
+                </div>
+
+                <div className="booking-body">
+                  <div className="client-info">
+                    <div className="client-avatar">
+                      {booking.clientProfileImage ? (
+                        <img
+                          src={
+                            booking.clientProfileImage.startsWith("http")
+                              ? booking.clientProfileImage
+                              : `${this.state.baseUrl}${booking.clientProfileImage}`
+                          }
+                          alt={booking.clientName}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder"
+                        style={{
+                          display: booking.clientProfileImage ? "none" : "flex",
+                        }}
+                      >
+                        {booking.clientName?.charAt(0).toUpperCase() || "C"}
+                      </div>
+                    </div>
+                    <div className="client-details">
+                      <h3 className="client-name">{booking.clientName}</h3>
+                      <p className="client-email">{booking.clientEmail}</p>
+                    </div>
+                  </div>
+
+                  <div className="service-info">
+                    <h4 className="service-name">{booking.serviceName}</h4>
+                    <div className="service-price">
+                      ₹{booking.servicePrice?.toLocaleString()}
+                    </div>
+                  </div>
+
+                  <div className="booking-meta">
+                    <div className="meta-item">
+                      <i className="fas fa-calendar"></i>
+                      <span>
+                        {new Date(booking.requestDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="meta-item">
+                      <i className="fas fa-clock"></i>
+                      <span>
+                        {new Date(booking.requestDate).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {booking.status === "pending" && (
+                  <div className="booking-actions">
+                    <button
+                      className="btn btn-accept"
+                      onClick={() =>
+                        this.handleBookingAction(booking._id, "accept")
+                      }
+                    >
+                      <i className="fas fa-check"></i> Accept
+                    </button>
+                    <button
+                      className="btn btn-reject"
+                      onClick={() =>
+                        this.handleBookingAction(booking._id, "reject")
+                      }
+                    >
+                      <i className="fas fa-times"></i> Reject
+                    </button>
+                  </div>
+                )}
+
+                {booking.status === "accepted" && (
+                  <div className="booking-actions">
+                    <button className="btn btn-message">
+                      <i className="fas fa-comment"></i> Message Client
+                    </button>
+                    <button className="btn btn-details">
+                      <i className="fas fa-eye"></i> View Details
+                    </button>
+                  </div>
+                )}
+
+                {booking.status === "rejected" && (
+                  <div className="booking-actions">
+                    <button className="btn btn-details">
+                      <i className="fas fa-eye"></i> View Details
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   renderWishlist() {
     const { wishlist } = this.state;
 
@@ -1642,7 +1958,7 @@ class UserDashboard extends Component {
                 </div>
                 <div className="wishlist-actions">
                   <button className="btn btn-primary">
-                    <i className="fas fa-shopping-cart"></i> Add to Cart
+                    <i className="fas fa-calendar-check"></i> Book Now
                   </button>
                   <button
                     className="btn btn-icon"
@@ -1682,7 +1998,6 @@ class UserDashboard extends Component {
                 <div className="form-group">
                   <label htmlFor="portfolio-name">Full Name</label>
                   <div className="input-container">
-                    {/* <i className="fas fa-user input-icon"></i> */}
                     <input
                       type="text"
                       id="portfolio-name"
@@ -1698,7 +2013,6 @@ class UserDashboard extends Component {
                 <div className="form-group">
                   <label htmlFor="portfolio-email">Email Address</label>
                   <div className="input-container">
-                    {/* <i className="fas fa-envelope input-icon"></i> */}
                     <input
                       type="email"
                       id="portfolio-email"
@@ -1784,7 +2098,6 @@ class UserDashboard extends Component {
               <div className="form-group">
                 <label htmlFor="portfolio-link">Portfolio Website</label>
                 <div className="input-container">
-                  {/* <i className="fas fa-link input-icon"></i> */}
                   <input
                     type="url"
                     id="portfolio-link"
@@ -1802,7 +2115,6 @@ class UserDashboard extends Component {
               <div className="form-group">
                 <label htmlFor="service-name">Service Name</label>
                 <div className="input-container">
-                  {/* <i className="fas fa-cog input-icon"></i> */}
                   <input
                     type="text"
                     id="service-name"
@@ -1844,7 +2156,6 @@ class UserDashboard extends Component {
                       <div className="form-group">
                         <label htmlFor={`price-${index}`}>Price ($)</label>
                         <div className="input-container">
-                          {/* <i className="fas fa-dollar-sign input-icon"></i> */}
                           <input
                             type="number"
                             id={`price-${index}`}
@@ -1861,7 +2172,6 @@ class UserDashboard extends Component {
                           Delivery Time
                         </label>
                         <div className="input-container">
-                          {/* <i className="fas fa-clock input-icon"></i> */}
                           <input
                             type="text"
                             id={`timeFrame-${index}`}
@@ -1992,6 +2302,8 @@ class UserDashboard extends Component {
           : this.renderUserProfile();
       case "orders":
         return this.renderOrders();
+      case "bookings":
+        return this.renderBookings();
       case "wishlist":
         return this.renderWishlist();
       default:
@@ -2081,6 +2393,18 @@ class UserDashboard extends Component {
                 <i className="fas fa-clipboard-list nav-icon"></i>
                 <span className="nav-text">My Orders</span>
               </button>
+
+              {this.isFreelancer() && (
+                <button
+                  className={`nav-item ${
+                    activeTab === "bookings" ? "active" : ""
+                  }`}
+                  onClick={() => this.handleTabChange("bookings")}
+                >
+                  <i className="fas fa-calendar-check nav-icon"></i>
+                  <span className="nav-text">Bookings</span>
+                </button>
+              )}
 
               <button
                 className={`nav-item ${

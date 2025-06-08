@@ -130,6 +130,7 @@ const UserSchema = new mongoose.Schema({
   password: String,
   role: String,
   profession: String,
+  phone: String, // Add this line
   profileImage: String,
   voatId: { type: String, unique: true, sparse: true },
   voatPoints: { type: Number, default: 0 },
@@ -241,16 +242,61 @@ const WishlistSchema = new mongoose.Schema(
 
 const Wishlist = mongoose.model("Wishlist", WishlistSchema);
 
+const BookingSchema = new mongoose.Schema(
+  {
+    clientId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    clientName: { type: String, required: true },
+    clientEmail: { type: String, required: true },
+    clientProfileImage: { type: String },
+    freelancerId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    freelancerName: { type: String, required: true },
+    freelancerEmail: { type: String, required: true },
+    serviceName: { type: String, required: true },
+    servicePrice: { type: Number, required: true },
+    status: {
+      type: String,
+      enum: ["pending", "accepted", "rejected"],
+      default: "pending",
+    },
+    requestDate: {
+      type: Date,
+      default: Date.now,
+    },
+    responseDate: {
+      type: Date,
+    },
+    notes: { type: String },
+  },
+  { timestamps: true }
+);
+
+const Booking = mongoose.model("Booking", BookingSchema);
+
 // Signup Route
 app.post("/api/signup", async (req, res) => {
   try {
-    const { name, email, password, role, profession } = req.body;
+    const { name, email, password, role, profession, phone } = req.body; // Add phone here
 
     // Log the request data (without password) for debugging
-    console.log("Signup request received:", { name, email, role, profession });
+    console.log("Signup request received:", {
+      name,
+      email,
+      role,
+      profession,
+      phone,
+    }); // Add phone here
 
     // Validate required fields
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !phone) {
+      // Add phone validation
       console.log("Missing required fields in signup");
       return res.status(400).json({
         success: false,
@@ -284,6 +330,7 @@ app.post("/api/signup", async (req, res) => {
       password: hashedPassword,
       role,
       profession,
+      phone, // Add this line
       voatId,
       voatPoints: 0,
       badge: "bronze",
@@ -303,6 +350,7 @@ app.post("/api/signup", async (req, res) => {
         email: savedUser.email,
         role: savedUser.role,
         profession: savedUser.profession,
+        phone: savedUser.phone, // Add this line
         voatId: savedUser.voatId,
         voatPoints: savedUser.voatPoints,
         badge: savedUser.badge,
@@ -370,6 +418,7 @@ app.post("/api/login", async (req, res) => {
         email: user.email,
         role: user.role,
         profession: user.profession,
+        phone: user.phone, // Add this line
         profileImage: user.profileImage,
         voatId: user.voatId,
         voatPoints: user.voatPoints,
@@ -393,6 +442,7 @@ app.post(
         email,
         role,
         profession,
+        phone,
         headline,
         userId,
         voatId,
@@ -409,6 +459,7 @@ app.post(
       user.email = email || user.email;
       user.role = role || user.role;
       user.profession = profession || headline || user.profession;
+      user.phone = phone || user.phone;
 
       // Update VOAT information if provided
       if (voatId) user.voatId = voatId;
@@ -467,6 +518,7 @@ app.post(
           email: user.email,
           role: user.role,
           profession: user.profession,
+          phone: user.phone, // Add this line
           profileImage: user.profileImage,
           voatId: user.voatId,
           voatPoints: user.voatPoints,
@@ -538,6 +590,36 @@ app.post("/api/update-user-data", async (req, res) => {
     res
       .status(500)
       .json({ error: "Internal Server Error", details: error.message });
+  }
+});
+
+app.get("/api/debug/user/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Return all user fields to see what's actually stored
+    res.status(200).json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profession: user.profession,
+      phone: user.phone, // Check if this is null/undefined
+      profileImage: user.profileImage,
+      voatId: user.voatId,
+      voatPoints: user.voatPoints,
+      badge: user.badge,
+      // Show the raw document
+      rawUser: user.toObject(),
+    });
+  } catch (error) {
+    console.error("Debug user fetch error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -1565,8 +1647,9 @@ app.get("/api/user/:userId", async (req, res) => {
         email: user.email,
         role: user.role,
         profession: user.profession,
+        phone: user.phone, // Add this line
         profileImage: user.profileImage,
-        voatId: user.voatId, // Make sure this is included
+        voatId: user.voatId,
         voatPoints: user.voatPoints,
         badge: user.badge,
       },
@@ -1726,43 +1809,751 @@ app.delete("/api/wishlist/remove/:itemId", async (req, res) => {
   }
 });
 
-// app.post("/api/admin/migrate-wishlist", async (req, res) => {
-//   try {
-//     const usersWithWishlist = await User.find({
-//       wishlist: { $exists: true, $ne: [] },
-//     });
+app.post("/api/create-booking", async (req, res) => {
+  try {
+    const {
+      clientId,
+      clientName,
+      clientEmail,
+      clientProfileImage,
+      freelancerId,
+      freelancerName,
+      freelancerEmail,
+      serviceName,
+      servicePrice,
+    } = req.body;
 
-//     let migratedCount = 0;
+    console.log("Creating booking with data:", req.body);
 
-//     for (const user of usersWithWishlist) {
-//       if (user.wishlist && user.wishlist.length > 0) {
+    // Validate required fields
+    if (
+      !clientId ||
+      !clientName ||
+      !clientEmail ||
+      !freelancerId ||
+      !freelancerName ||
+      !freelancerEmail ||
+      !serviceName ||
+      !servicePrice
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All required fields must be provided",
+      });
+    }
 
-//         const existingWishlist = await Wishlist.findOne({ userId: user._id });
+    // Check if client and freelancer exist
+    const client = await User.findById(clientId);
+    const freelancer = await User.findById(freelancerId);
 
-//         if (!existingWishlist) {
-//           const newWishlist = new Wishlist({
-//             userId: user._id,
-//             items: user.wishlist,
-//           });
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: "Client not found",
+      });
+    }
 
-//           await newWishlist.save();
-//           migratedCount++;
+    if (!freelancer) {
+      return res.status(404).json({
+        success: false,
+        message: "Freelancer not found",
+      });
+    }
 
-//           user.wishlist = undefined;
-//           await user.save();
-//         }
-//       }
-//     }
+    // Check if there's already a pending booking between these users for this service
+    const existingBooking = await Booking.findOne({
+      clientId,
+      freelancerId,
+      serviceName,
+      status: "pending",
+    });
 
-//     res.status(200).json({
-//       message: "Wishlist migration completed",
-//       migratedUsers: migratedCount,
-//     });
-//   } catch (error) {
-//     console.error("Error migrating wishlist:", error);
-//     res.status(500).json({ error: "Migration failed" });
-//   }
-// });
+    if (existingBooking) {
+      return res.status(409).json({
+        success: false,
+        message: "You already have a pending booking for this service",
+      });
+    }
+
+    // Create new booking
+    const newBooking = new Booking({
+      clientId,
+      clientName,
+      clientEmail,
+      clientProfileImage,
+      freelancerId,
+      freelancerName,
+      freelancerEmail,
+      serviceName,
+      servicePrice,
+      status: "pending",
+      requestDate: new Date(),
+    });
+
+    const savedBooking = await newBooking.save();
+
+    console.log("Booking created successfully:", savedBooking._id);
+
+    res.status(201).json({
+      success: true,
+      message: "Booking request created successfully",
+      booking: savedBooking,
+    });
+  } catch (error) {
+    console.error("Error creating booking:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create booking request",
+      error: error.message,
+    });
+  }
+});
+
+// Get Bookings for Freelancer
+app.get("/api/bookings/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching bookings for freelancer:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find all bookings where the user is the freelancer
+    const bookings = await Booking.find({ freelancerId: userId })
+      .sort({ requestDate: -1 })
+      .populate("clientId", "name email profileImage")
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(`Found ${bookings.length} bookings for freelancer ${userId}`);
+
+    // Format the bookings data
+    const formattedBookings = bookings.map((booking) => ({
+      _id: booking._id,
+      id: booking._id,
+      clientId: booking.clientId,
+      clientName: booking.clientName,
+      clientEmail: booking.clientEmail,
+      clientProfileImage: booking.clientProfileImage,
+      freelancerId: booking.freelancerId,
+      freelancerName: booking.freelancerName,
+      freelancerEmail: booking.freelancerEmail,
+      serviceName: booking.serviceName,
+      servicePrice: booking.servicePrice,
+      status: booking.status,
+      requestDate: booking.requestDate,
+      responseDate: booking.responseDate,
+      notes: booking.notes,
+      createdAt: booking.createdAt,
+      updatedAt: booking.updatedAt,
+    }));
+
+    res.status(200).json(formattedBookings);
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch bookings",
+      error: error.message,
+    });
+  }
+});
+
+// Get Bookings for Client (orders)
+app.get("/api/orders/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching orders for client:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find all bookings where the user is the client
+    const orders = await Booking.find({ clientId: userId })
+      .sort({ requestDate: -1 })
+      .populate("clientId", "name email profileImage")
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(`Found ${orders.length} orders for client ${userId}`);
+
+    // Format the orders data to match existing structure
+    const formattedOrders = orders.map((order, index) => ({
+      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      service: order.serviceName,
+      status:
+        order.status === "accepted"
+          ? "In Progress"
+          : order.status === "rejected"
+          ? "Cancelled"
+          : "Pending",
+      date: order.requestDate.toISOString().split("T")[0],
+      amount: order.servicePrice,
+      provider: order.freelancerName,
+      providerImage: order.freelancerId?.profileImage || null,
+      bookingId: order._id,
+      requestDate: order.requestDate,
+      responseDate: order.responseDate,
+    }));
+
+    res.status(200).json(formattedOrders);
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
+  }
+});
+
+// Update Booking Status (Accept/Reject)
+app.put("/api/booking/:bookingId/action", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { action } = req.body;
+
+    console.log(`${action}ing booking:`, bookingId);
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format",
+      });
+    }
+
+    if (!["accept", "reject"].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action. Must be 'accept' or 'reject'",
+      });
+    }
+
+    // Find the booking
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Check if booking is already processed
+    if (booking.status !== "pending") {
+      return res.status(409).json({
+        success: false,
+        message: `Booking has already been ${booking.status}`,
+      });
+    }
+
+    // Update booking status
+    const newStatus = action === "accept" ? "accepted" : "rejected";
+    booking.status = newStatus;
+    booking.responseDate = new Date();
+
+    const updatedBooking = await booking.save();
+
+    console.log(`Booking ${bookingId} successfully ${action}ed`);
+
+    // Here you could also send email notifications to the client
+    // or create notifications in the system
+
+    res.status(200).json({
+      success: true,
+      message: `Booking request ${action}ed successfully`,
+      booking: updatedBooking,
+    });
+  } catch (error) {
+    console.error(`Error ${req.body.action}ing booking:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Failed to ${req.body.action} booking request`,
+      error: error.message,
+    });
+  }
+});
+
+// Get Booking Details
+app.get("/api/booking/:bookingId", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+
+    console.log("Fetching booking details:", bookingId);
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format",
+      });
+    }
+
+    const booking = await Booking.findById(bookingId)
+      .populate("clientId", "name email profileImage voatId")
+      .populate("freelancerId", "name email profileImage voatId");
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      booking: booking,
+    });
+  } catch (error) {
+    console.error("Error fetching booking details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch booking details",
+      error: error.message,
+    });
+  }
+});
+
+// Delete/Cancel Booking
+app.delete("/api/booking/:bookingId", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { userId } = req.body; // Either client or freelancer can cancel
+
+    console.log("Cancelling booking:", bookingId, "by user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format",
+      });
+    }
+
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Check if user is authorized to cancel this booking
+    if (
+      booking.clientId.toString() !== userId &&
+      booking.freelancerId.toString() !== userId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to cancel this booking",
+      });
+    }
+
+    // Only allow cancellation if booking is pending
+    if (booking.status !== "pending") {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot cancel a booking that has been ${booking.status}`,
+      });
+    }
+
+    await Booking.findByIdAndDelete(bookingId);
+
+    console.log(`Booking ${bookingId} successfully cancelled`);
+
+    res.status(200).json({
+      success: true,
+      message: "Booking cancelled successfully",
+    });
+  } catch (error) {
+    console.error("Error cancelling booking:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel booking",
+      error: error.message,
+    });
+  }
+});
+
+// Get Booking Statistics for Dashboard
+app.get("/api/booking-stats/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching booking statistics for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Get stats for freelancer
+    const pendingCount = await Booking.countDocuments({
+      freelancerId: userId,
+      status: "pending",
+    });
+
+    const acceptedCount = await Booking.countDocuments({
+      freelancerId: userId,
+      status: "accepted",
+    });
+
+    const rejectedCount = await Booking.countDocuments({
+      freelancerId: userId,
+      status: "rejected",
+    });
+
+    const totalBookings = await Booking.countDocuments({
+      freelancerId: userId,
+    });
+
+    // Calculate total earnings from accepted bookings
+    const acceptedBookings = await Booking.find({
+      freelancerId: userId,
+      status: "accepted",
+    });
+
+    const totalEarnings = acceptedBookings.reduce(
+      (sum, booking) => sum + booking.servicePrice,
+      0
+    );
+
+    const stats = {
+      totalBookings,
+      pendingCount,
+      acceptedCount,
+      rejectedCount,
+      totalEarnings,
+      acceptanceRate:
+        totalBookings > 0
+          ? Math.round((acceptedCount / totalBookings) * 100)
+          : 0,
+    };
+
+    console.log("Booking stats:", stats);
+
+    res.status(200).json({
+      success: true,
+      stats: stats,
+    });
+  } catch (error) {
+    console.error("Error fetching booking statistics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch booking statistics",
+      error: error.message,
+    });
+  }
+});
+
+// Update Booking Notes
+app.put("/api/booking/:bookingId/notes", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { notes, userId } = req.body;
+
+    console.log("Updating booking notes:", bookingId);
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format",
+      });
+    }
+
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Check if user is authorized to update notes
+    if (
+      booking.clientId.toString() !== userId &&
+      booking.freelancerId.toString() !== userId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this booking",
+      });
+    }
+
+    booking.notes = notes;
+    const updatedBooking = await booking.save();
+
+    console.log(`Booking ${bookingId} notes updated successfully`);
+
+    res.status(200).json({
+      success: true,
+      message: "Booking notes updated successfully",
+      booking: updatedBooking,
+    });
+  } catch (error) {
+    console.error("Error updating booking notes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update booking notes",
+      error: error.message,
+    });
+  }
+});
+
+// Get Recent Bookings for Dashboard
+app.get("/api/recent-bookings/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 5 } = req.query;
+
+    console.log("Fetching recent bookings for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const recentBookings = await Booking.find({
+      freelancerId: userId,
+    })
+      .sort({ requestDate: -1 })
+      .limit(parseInt(limit))
+      .populate("clientId", "name email profileImage");
+
+    console.log(`Found ${recentBookings.length} recent bookings`);
+
+    res.status(200).json({
+      success: true,
+      bookings: recentBookings,
+    });
+  } catch (error) {
+    console.error("Error fetching recent bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch recent bookings",
+      error: error.message,
+    });
+  }
+});
+
+// Search Bookings
+app.get("/api/bookings/:userId/search", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { query, status, dateFrom, dateTo } = req.query;
+
+    console.log("Searching bookings for user:", userId, "with query:", query);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Build search criteria
+    let searchCriteria = {
+      freelancerId: userId,
+    };
+
+    // Add text search
+    if (query) {
+      searchCriteria.$or = [
+        { clientName: { $regex: query, $options: "i" } },
+        { clientEmail: { $regex: query, $options: "i" } },
+        { serviceName: { $regex: query, $options: "i" } },
+      ];
+    }
+
+    // Add status filter
+    if (status && status !== "all") {
+      searchCriteria.status = status;
+    }
+
+    // Add date range filter
+    if (dateFrom || dateTo) {
+      searchCriteria.requestDate = {};
+      if (dateFrom) {
+        searchCriteria.requestDate.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        searchCriteria.requestDate.$lte = new Date(dateTo);
+      }
+    }
+
+    const bookings = await Booking.find(searchCriteria)
+      .sort({ requestDate: -1 })
+      .populate("clientId", "name email profileImage");
+
+    console.log(`Found ${bookings.length} bookings matching search criteria`);
+
+    res.status(200).json({
+      success: true,
+      bookings: bookings,
+      count: bookings.length,
+    });
+  } catch (error) {
+    console.error("Error searching bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to search bookings",
+      error: error.message,
+    });
+  }
+});
+
+// Admin endpoint to get all bookings (for admin dashboard)
+app.get("/api/admin/all-bookings", async (req, res) => {
+  try {
+    console.log("Fetching all bookings for admin");
+
+    const bookings = await Booking.find({})
+      .sort({ requestDate: -1 })
+      .populate("clientId", "name email profileImage voatId")
+      .populate("freelancerId", "name email profileImage voatId");
+
+    console.log(`Found ${bookings.length} total bookings`);
+
+    // Calculate some stats
+    const stats = {
+      total: bookings.length,
+      pending: bookings.filter((b) => b.status === "pending").length,
+      accepted: bookings.filter((b) => b.status === "accepted").length,
+      rejected: bookings.filter((b) => b.status === "rejected").length,
+    };
+
+    res.status(200).json({
+      success: true,
+      bookings: bookings,
+      stats: stats,
+    });
+  } catch (error) {
+    console.error("Error fetching all bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch all bookings",
+      error: error.message,
+    });
+  }
+});
+
+// Endpoint to check if user can book a service (prevent duplicate bookings)
+app.post("/api/check-booking-eligibility", async (req, res) => {
+  try {
+    const { clientId, freelancerId, serviceName } = req.body;
+
+    console.log("Checking booking eligibility:", {
+      clientId,
+      freelancerId,
+      serviceName,
+    });
+
+    if (!clientId || !freelancerId || !serviceName) {
+      return res.status(400).json({
+        success: false,
+        message: "Client ID, freelancer ID, and service name are required",
+      });
+    }
+
+    // Check for existing pending booking
+    const existingBooking = await Booking.findOne({
+      clientId,
+      freelancerId,
+      serviceName,
+      status: "pending",
+    });
+
+    const canBook = !existingBooking;
+
+    res.status(200).json({
+      success: true,
+      canBook: canBook,
+      message: canBook
+        ? "Eligible to book"
+        : "You already have a pending booking for this service",
+      existingBooking: existingBooking || null,
+    });
+  } catch (error) {
+    console.error("Error checking booking eligibility:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check booking eligibility",
+      error: error.message,
+    });
+  }
+});
+
+console.log("✅ Booking API endpoints loaded successfully");
+
+// Add these debugging routes for development
+if (process.env.NODE_ENV === "development") {
+  // Debug endpoint to clear all bookings
+  app.delete("/api/debug/clear-bookings", async (req, res) => {
+    try {
+      await Booking.deleteMany({});
+      res.json({ message: "All bookings cleared" });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Debug endpoint to create sample bookings
+  app.post("/api/debug/create-sample-bookings", async (req, res) => {
+    try {
+      const users = await User.find({}).limit(4);
+      if (users.length < 2) {
+        return res.status(400).json({ message: "Need at least 2 users" });
+      }
+
+      const sampleBookings = [
+        {
+          clientId: users[0]._id,
+          clientName: users[0].name,
+          clientEmail: users[0].email,
+          clientProfileImage: users[0].profileImage,
+          freelancerId: users[1]._id,
+          freelancerName: users[1].name,
+          freelancerEmail: users[1].email,
+          serviceName: "Web Development",
+          servicePrice: 2500,
+          status: "pending",
+        },
+        {
+          clientId: users[0]._id,
+          clientName: users[0].name,
+          clientEmail: users[0].email,
+          clientProfileImage: users[0].profileImage,
+          freelancerId: users[1]._id,
+          freelancerName: users[1].name,
+          freelancerEmail: users[1].email,
+          serviceName: "Logo Design",
+          servicePrice: 500,
+          status: "accepted",
+        },
+      ];
+
+      const createdBookings = await Booking.insertMany(sampleBookings);
+      res.json({
+        message: "Sample bookings created",
+        bookings: createdBookings,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+}
 
 // Set VOAT ID endpoint
 

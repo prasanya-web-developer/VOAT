@@ -14,11 +14,15 @@ class PortfolioList extends Component {
       experience: "",
       amount: [],
     },
-    baseUrl: "https://voat.onrender.com",
+    baseUrl:
+      window.location.hostname === "localhost"
+        ? "http://localhost:5000"
+        : "https://voat.onrender.com",
     userImages: {},
     wishlist: [],
     isMobileFilterOpen: false,
     notification: null,
+    currentUser: null,
   };
 
   getColorForName = (name) => {
@@ -49,7 +53,17 @@ class PortfolioList extends Component {
     this.loadUserImages();
     this.loadWishlist();
     this.handleUrlParams();
+    this.loadCurrentUser();
   }
+
+  loadCurrentUser = () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      this.setState({ currentUser: userData });
+    } catch (error) {
+      console.error("Error loading current user:", error);
+    }
+  };
 
   // Handle URL parameters for filtering
   handleUrlParams = () => {
@@ -464,6 +478,60 @@ class PortfolioList extends Component {
 
       this.showNotification(
         `Failed to update wishlist: ${error.message}`,
+        "error"
+      );
+    }
+  };
+
+  handleBookNow = async (portfolio) => {
+    const { currentUser } = this.state;
+
+    if (!currentUser || !currentUser.id) {
+      alert("Please login to book services");
+      window.location.href = "/login";
+      return;
+    }
+
+    // Prevent booking own service
+    const freelancerId = portfolio.userId || portfolio._id || portfolio.id;
+    if (currentUser.id === freelancerId) {
+      this.showNotification("You cannot book your own service", "error");
+      return;
+    }
+
+    try {
+      const bookingData = {
+        clientId: currentUser.id,
+        clientName: currentUser.name,
+        clientEmail: currentUser.email,
+        clientProfileImage: currentUser.profileImage,
+        freelancerId: freelancerId,
+        freelancerName: portfolio.name,
+        freelancerEmail: portfolio.email,
+        serviceName: portfolio.profession || "Service",
+        servicePrice: this.getFirstServicePrice(portfolio),
+        status: "pending",
+        requestDate: new Date().toISOString(),
+      };
+
+      const response = await fetch(`${this.state.baseUrl}/api/create-booking`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      if (response.ok) {
+        this.showNotification("Booking request sent successfully!");
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create booking");
+      }
+    } catch (error) {
+      console.error("Booking error:", error);
+      this.showNotification(
+        `Failed to send booking request: ${error.message}`,
         "error"
       );
     }
@@ -958,7 +1026,7 @@ class PortfolioList extends Component {
                         <div className="price">
                           <span className="price-label">Starting at:</span>
                           <span className="price-value">
-                            ${firstServicePrice.toLocaleString()}
+                            ₹{firstServicePrice.toLocaleString()}
                           </span>
                         </div>
                       </div>
@@ -972,43 +1040,33 @@ class PortfolioList extends Component {
                           View Portfolio
                         </Link>
                         <button
-                          className={`add-to-cart-btn ${
-                            this.isWishlisted(userId) ? "in-cart" : ""
-                          }`}
+                          className="book-now-btn"
                           onClick={(e) => {
                             e.preventDefault();
-                            this.handleWishlistToggle(portfolio);
+                            this.handleBookNow(portfolio);
                           }}
                         >
-                          {this.isWishlisted(userId) ? (
-                            <>
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
-                              >
-                                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" />
-                              </svg>
-                              In Cart
-                            </>
-                          ) : (
-                            <>
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                              >
-                                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                                <line x1="3" y1="6" x2="21" y2="6" />
-                                <path d="M16 10a4 4 0 0 1-8 0" />
-                              </svg>
-                              Add to Cart
-                            </>
-                          )}
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <rect
+                              x="3"
+                              y="4"
+                              width="18"
+                              height="18"
+                              rx="2"
+                              ry="2"
+                            />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                          </svg>
+                          Book Now
                         </button>
                       </div>
                     </div>

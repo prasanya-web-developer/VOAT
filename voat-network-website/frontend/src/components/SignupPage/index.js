@@ -78,6 +78,7 @@ class SignupPage extends Component {
     name: "",
     email: "",
     role: "",
+    phone: "",
     profession: "",
     password: "",
     confirmPassword: "",
@@ -162,7 +163,7 @@ class SignupPage extends Component {
   };
 
   validateForm = () => {
-    const { name, email, role, profession, password, confirmPassword } =
+    const { name, email, role, profession, phone, password, confirmPassword } =
       this.state;
     const errors = {};
 
@@ -182,6 +183,13 @@ class SignupPage extends Component {
       errors.profession = "Please enter your profession";
     }
 
+    // Updated phone validation - more flexible
+    if (!phone) {
+      errors.phone = "Phone number is required";
+    } else if (phone.length < 10) {
+      errors.phone = "Phone number must be at least 10 digits";
+    }
+
     if (password.length < 6) {
       errors.password = "Password must be at least 6 characters";
     }
@@ -193,8 +201,6 @@ class SignupPage extends Component {
     this.setState({ errors });
     return Object.keys(errors).length === 0;
   };
-
-  // In SignupPage.js handleSubmit method:
 
   handleSubmit = async (e) => {
     e.preventDefault();
@@ -218,6 +224,7 @@ class SignupPage extends Component {
             password: this.state.password,
             role: this.state.role,
             profession: this.state.profession,
+            phone: this.state.phone, // Add this line
           },
           {
             withCredentials: true,
@@ -225,7 +232,7 @@ class SignupPage extends Component {
               Accept: "application/json",
               "Content-Type": "application/json",
             },
-            timeout: 10000, // Increased timeout
+            timeout: 10000,
           }
         );
 
@@ -414,6 +421,23 @@ class SignupPage extends Component {
                     <p className="register-input-error">{errors.profession}</p>
                   )}
                 </div>
+              </div>
+
+              <div className="register-input-group">
+                <label htmlFor="phone" className="register-label">
+                  Phone Number
+                </label>
+                <input
+                  name="phone"
+                  type="tel"
+                  value={this.state.phone}
+                  onChange={this.handleInputChange}
+                  className="register-input"
+                  placeholder="Enter your phone number"
+                />
+                {errors.phone && (
+                  <p className="register-input-error">{errors.phone}</p>
+                )}
               </div>
 
               {/* Two column layout for Password fields */}
