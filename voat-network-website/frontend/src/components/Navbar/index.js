@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import { Link } from "react-router-dom";
 import { HashLink } from "react-router-hash-link";
+import CartPage from "../CartPage";
 import {
   User,
   Menu,
@@ -28,6 +29,7 @@ class NavBar extends Component {
     showWelcomeMessage: false,
     searchQuery: "",
     activeMenu: "",
+    cartSidebarOpen: false,
   };
 
   // Backend URLs - will try both environments
@@ -517,6 +519,16 @@ class NavBar extends Component {
     });
   };
 
+  toggleCartSidebar = () => {
+    this.setState((prevState) => ({
+      cartSidebarOpen: !prevState.cartSidebarOpen,
+    }));
+  };
+
+  closeCartSidebar = () => {
+    this.setState({ cartSidebarOpen: false });
+  };
+
   toggleMenu = () => {
     this.setState((prevState) => ({
       menuOpen: !prevState.menuOpen,
@@ -614,6 +626,7 @@ class NavBar extends Component {
       showWelcomeMessage,
       searchQuery,
       activeMenu,
+      cartSidebarOpen,
     } = this.state;
 
     // Debug log
@@ -720,10 +733,13 @@ class NavBar extends Component {
                     className="navbar-user-profile"
                     ref={this.profileDropdownRef}
                   >
-                    {/* Cart Icon */}
-                    <Link to="/cart" className="navbar-cart">
+                    <button
+                      className="navbar-cart"
+                      onClick={this.toggleCartSidebar}
+                      aria-label="Open shopping cart"
+                    >
                       <ShoppingCart size={20} />
-                    </Link>
+                    </button>
 
                     {/* User profile with VOAT ID - REDESIGNED */}
                     <div
@@ -958,15 +974,16 @@ class NavBar extends Component {
                   {isLoggedIn && user && (
                     <>
                       <li>
-                        <Link
-                          to="/cart"
+                        <button
+                          className="mobile-cart-btn"
                           onClick={() => {
+                            this.toggleCartSidebar();
                             this.toggleMenu();
                           }}
                         >
                           <ShoppingCart size={16} className="menu-icon" />
                           <span>Cart</span>
-                        </Link>
+                        </button>
                       </li>
                       <li>
                         <Link
@@ -1058,6 +1075,8 @@ class NavBar extends Component {
             </button>
           </div>
         </div>
+
+        <CartPage isOpen={cartSidebarOpen} onClose={this.closeCartSidebar} />
       </>
     );
   }

@@ -1,480 +1,626 @@
 import React, { Component } from "react";
+import { X, Plus, Minus, ShoppingBag, Trash2 } from "lucide-react";
 import "./index.css";
 
-class CartSlider extends Component {
+class CartSidebar extends Component {
   state = {
+    cartItems: [],
     isLoading: false,
     error: null,
     baseUrl: "https://voat.onrender.com",
+    currentUserId: null,
   };
 
   componentDidMount() {
-    if (this.props.isOpen) {
-      document.body.style.overflow = "hidden";
-    }
+    this.initializeCart();
   }
 
   componentDidUpdate(prevProps) {
-    if (prevProps.isOpen !== this.props.isOpen) {
-      if (this.props.isOpen) {
-        document.body.style.overflow = "hidden";
-      } else {
-        document.body.style.overflow = "unset";
-      }
+    // Reload cart when sidebar opens
+    if (this.props.isOpen && !prevProps.isOpen) {
+      this.fetchCartItems();
     }
   }
 
-  componentWillUnmount() {
-    document.body.style.overflow = "unset";
-  }
-
-  handleQuantityUpdate = async (itemId, newQuantity) => {
-    const { currentUser, onCartUpdate } = this.props;
-
-    if (!currentUser || !currentUser.id) return;
-
-    this.setState({ isLoading: true });
-
-    try {
-      const response = await fetch(`${this.state.baseUrl}/api/cart/update`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          itemId: itemId,
-          quantity: newQuantity,
-        }),
+  initializeCart = () => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      const parsedUserData = JSON.parse(userData);
+      this.setState({ currentUserId: parsedUserData.id }, () => {
+        this.fetchCartItems();
       });
-
-      const data = await response.json();
-
-      if (data.success) {
-        onCartUpdate(data.cart);
-        this.showNotification("Cart updated successfully");
-      } else {
-        throw new Error(data.error || "Failed to update cart");
-      }
-    } catch (error) {
-      console.error("Error updating cart:", error);
-      this.setState({ error: error.message });
-    } finally {
-      this.setState({ isLoading: false });
     }
   };
 
-  handleRemoveItem = async (itemId) => {
-    const { currentUser, onCartUpdate } = this.props;
+  fetchCartItems = async () => {
+    const { currentUserId } = this.state;
 
-    if (!currentUser || !currentUser.id) return;
-
-    this.setState({ isLoading: true });
-
-    try {
-      const response = await fetch(
-        `${this.state.baseUrl}/api/cart/remove/${currentUser.id}/${itemId}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
-        onCartUpdate(data.cart);
-        this.showNotification("Item removed from cart");
-      } else {
-        throw new Error(data.error || "Failed to remove item");
-      }
-    } catch (error) {
-      console.error("Error removing item:", error);
-      this.setState({ error: error.message });
-    } finally {
-      this.setState({ isLoading: false });
-    }
-  };
-
-  handleClearCart = async () => {
-    const { currentUser, onCartUpdate } = this.props;
-
-    if (!currentUser || !currentUser.id) return;
-
-    if (!window.confirm("Are you sure you want to clear your cart?")) {
+    if (!currentUserId) {
+      console.log("No user ID found, skipping cart fetch");
       return;
     }
 
-    this.setState({ isLoading: true });
+    console.log("=== FETCHING CART ITEMS ===");
+    console.log("User ID:", currentUserId);
+
+    this.setState({ isLoading: true, error: null });
 
     try {
+      const url = `${this.state.baseUrl}/api/cart/${currentUserId}`;
+      console.log("=== CART FETCH URL ===", url);
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("=== CART RESPONSE STATUS ===", response.status);
+      console.log("=== RESPONSE HEADERS ===", [...response.headers.entries()]);
+
+      // Check content type first
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const responseText = await response.text();
+        console.error(
+          "=== NON-JSON RESPONSE ===",
+          responseText.substring(0, 500)
+        );
+
+        if (
+          responseText.includes("<html") ||
+          responseText.includes("<!DOCTYPE")
+        ) {
+          throw new Error(
+            "Cart API endpoint not found. Server returned HTML error page."
+          );
+        } else {
+          throw new Error(`Server error: Expected JSON but got ${contentType}`);
+        }
+      }
+
+      // Parse JSON response
+      const cartResponse = await response.json();
+      console.log("=== FETCHED CART RESPONSE ===", cartResponse);
+
+      if (!response.ok) {
+        throw new Error(
+          cartResponse.message || `Failed to fetch cart: ${response.status}`
+        );
+      }
+
+      // Handle the response - backend should return array directly
+      let cartItems = [];
+      if (Array.isArray(cartResponse)) {
+        cartItems = cartResponse;
+      } else if (cartResponse.success && cartResponse.data) {
+        cartItems = cartResponse.data;
+      } else if (cartResponse.items) {
+        cartItems = cartResponse.items;
+      }
+
+      console.log("=== CART ITEMS TO PROCESS ===", cartItems);
+
+      // Transform the data to match the expected format
+      const transformedItems = cartItems.map((item) => ({
+        id: item._id,
+        name: `${item.serviceName} - ${item.serviceLevel}`,
+        price: item.selectedPaymentAmount,
+        quantity: 1,
+        image: this.getProfileImageUrl(item.freelancerProfileImage),
+        seller: item.freelancerName,
+        category: item.serviceName,
+        freelancerId: item.freelancerId,
+        serviceLevel: item.serviceLevel,
+        basePrice: item.basePrice,
+        paymentStructure: item.paymentStructure,
+        addedDate: item.addedDate,
+      }));
+
+      console.log("=== TRANSFORMED ITEMS ===", transformedItems);
+
+      this.setState({
+        cartItems: transformedItems,
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error("=== CART FETCH ERROR ===");
+      console.error("Error type:", error.constructor.name);
+      console.error("Error message:", error.message);
+      console.error("Full error:", error);
+
+      this.setState({
+        error: error.message,
+        isLoading: false,
+        cartItems: [],
+      });
+    }
+  };
+
+  getProfileImageUrl = (imagePath) => {
+    if (!imagePath || imagePath === "/api/placeholder/150/150") {
+      return "/api/placeholder/150/150";
+    }
+
+    if (imagePath.startsWith("http")) {
+      return imagePath;
+    }
+
+    return `${this.state.baseUrl}${
+      imagePath.startsWith("/") ? "" : "/"
+    }${imagePath}`;
+  };
+
+  // Calculate total price
+  calculateTotal = () => {
+    return this.state.cartItems
+      .reduce((total, item) => {
+        return total + item.price * item.quantity;
+      }, 0)
+      .toFixed(2);
+  };
+
+  // Calculate total items count
+  getTotalItemsCount = () => {
+    return this.state.cartItems.reduce((total, item) => {
+      return total + item.quantity;
+    }, 0);
+  };
+
+  // Update item quantity (not really applicable for services, but keeping for consistency)
+  updateQuantity = async (itemId, newQuantity) => {
+    if (newQuantity < 1) return;
+
+    // For services, quantity should always be 1, but we'll keep this for UI consistency
+    this.setState((prevState) => ({
+      cartItems: prevState.cartItems.map((item) =>
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      ),
+    }));
+  };
+
+  // Remove item from cart
+  removeItem = async (itemId) => {
+    const { currentUserId } = this.state;
+
+    if (!currentUserId) {
+      alert("User not logged in");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Are you sure you want to remove this item from your cart?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      console.log("=== REMOVING CART ITEM ===");
+      console.log("Item ID:", itemId);
+      console.log("User ID:", currentUserId);
+
+      const response = await fetch(`${this.state.baseUrl}/api/cart/remove`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          userId: currentUserId,
+          itemId: itemId,
+        }),
+      });
+
+      console.log("=== REMOVE RESPONSE STATUS ===", response.status);
+
+      // Get response text first
+      const responseText = await response.text();
+      console.log("=== REMOVE RAW RESPONSE ===", responseText);
+
+      // Parse JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("=== REMOVE JSON PARSE ERROR ===", parseError);
+
+        if (
+          responseText.includes("<html") ||
+          responseText.includes("<!DOCTYPE")
+        ) {
+          throw new Error("Server returned HTML error page.");
+        } else {
+          throw new Error(
+            `Invalid response: ${responseText.substring(0, 100)}...`
+          );
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to remove item");
+      }
+
+      // Remove item from local state
+      this.setState((prevState) => ({
+        cartItems: prevState.cartItems.filter((item) => item.id !== itemId),
+      }));
+
+      console.log("Item removed from cart successfully");
+    } catch (error) {
+      console.error("Error removing item from cart:", error);
+      alert("Error removing item from cart: " + error.message);
+    }
+  };
+
+  // Clear entire cart
+  clearCart = async () => {
+    const { currentUserId } = this.state;
+
+    if (!currentUserId) {
+      alert("User not logged in");
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to clear your entire cart?")) {
+      return;
+    }
+
+    try {
+      console.log("=== CLEARING CART ===");
+      console.log("User ID:", currentUserId);
+
       const response = await fetch(
-        `${this.state.baseUrl}/api/cart/clear/${currentUser.id}`,
+        `${this.state.baseUrl}/api/cart/clear/${currentUserId}`,
         {
           method: "DELETE",
+          headers: {
+            Accept: "application/json",
+          },
         }
       );
 
-      const data = await response.json();
+      console.log("=== CLEAR RESPONSE STATUS ===", response.status);
 
-      if (data.success) {
-        onCartUpdate(data.cart);
-        this.showNotification("Cart cleared successfully");
-      } else {
-        throw new Error(data.error || "Failed to clear cart");
+      // Get response text first
+      const responseText = await response.text();
+      console.log("=== CLEAR RAW RESPONSE ===", responseText);
+
+      // Parse JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("=== CLEAR JSON PARSE ERROR ===", parseError);
+
+        if (
+          responseText.includes("<html") ||
+          responseText.includes("<!DOCTYPE")
+        ) {
+          throw new Error("Server returned HTML error page.");
+        } else {
+          throw new Error(
+            `Invalid response: ${responseText.substring(0, 100)}...`
+          );
+        }
       }
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to clear cart");
+      }
+
+      // Clear local state
+      this.setState({ cartItems: [] });
+
+      console.log("Cart cleared successfully");
     } catch (error) {
       console.error("Error clearing cart:", error);
-      this.setState({ error: error.message });
-    } finally {
-      this.setState({ isLoading: false });
+      alert("Error clearing cart: " + error.message);
     }
   };
 
-  showNotification = (message) => {
-    if (this.props.onShowNotification) {
-      this.props.onShowNotification(message, "success");
+  // Handle checkout
+  handleCheckout = () => {
+    const { cartItems, currentUserId } = this.state;
+
+    if (!currentUserId) {
+      alert("Please log in to proceed with checkout");
+      return;
     }
+
+    if (cartItems.length === 0) {
+      alert("Your cart is empty");
+      return;
+    }
+
+    // Here you can implement the checkout logic
+    console.log("Proceeding to checkout with items:", cartItems);
+
+    // For now, just show a message
+    alert(
+      `Proceeding to checkout with ${
+        cartItems.length
+      } items. Total: ₹${this.calculateTotal()}`
+    );
+
+    // You could redirect to a checkout page or open a checkout modal
+    // window.location.href = '/checkout';
   };
 
-  getProfileImageUrl = (providerImage) => {
-    if (!providerImage) return null;
+  // Handle individual item booking
+  handleBookItem = async (item) => {
+    const { currentUserId } = this.state;
 
-    if (
-      providerImage.startsWith("http") ||
-      providerImage.startsWith("data:image")
-    ) {
-      return providerImage;
+    if (!currentUserId) {
+      alert("Please log in to book services");
+      return;
     }
 
-    if (providerImage.startsWith("/uploads")) {
-      return `${this.state.baseUrl}${providerImage}`;
+    try {
+      // Get current user data
+      const userData = localStorage.getItem("user");
+      const currentUser = JSON.parse(userData);
+
+      const bookingData = {
+        clientId: currentUserId,
+        clientName: currentUser.name,
+        clientEmail: currentUser.email,
+        clientProfileImage: currentUser.profileImage,
+        freelancerId: item.freelancerId,
+        freelancerName: item.seller,
+        freelancerEmail: "", // We don't have this in cart data
+        serviceName: item.name,
+        servicePrice: item.price,
+      };
+
+      console.log("Creating booking for item:", bookingData);
+
+      const response = await fetch(`${this.state.baseUrl}/api/create-booking`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.log("=== BOOKING NON-JSON RESPONSE ===", text);
+        throw new Error(
+          `Server returned non-JSON response: ${response.status}`
+        );
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to create booking");
+      }
+
+      console.log("Booking created successfully:", result);
+      alert("Booking request sent successfully!");
+
+      // Optionally remove the item from cart after booking
+      // await this.removeItem(item.id);
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      alert("Error creating booking: " + error.message);
     }
-
-    return providerImage;
-  };
-
-  formatPrice = (price) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
   };
 
   render() {
-    const { isOpen, onClose, cart } = this.props;
-    const { isLoading, error } = this.state;
-
-    if (!isOpen) return null;
-
-    const cartItems = cart?.items || [];
-    const totalAmount = cart?.totalAmount || 0;
-    const totalItems = cart?.totalItems || 0;
+    const { isOpen, onClose } = this.props;
+    const { cartItems, isLoading, error } = this.state;
+    const totalPrice = this.calculateTotal();
+    const totalItems = this.getTotalItemsCount();
 
     return (
       <>
-        {/* Backdrop */}
+        {/* Overlay */}
         <div
-          className={`cartpage-backdrop ${
-            isOpen ? "cartpage-backdrop-open" : ""
+          className={`cartpage-overlay ${
+            isOpen ? "cartpage-overlay-active" : ""
           }`}
           onClick={onClose}
         />
 
-        {/* Cart Slider */}
+        {/* Cart Sidebar */}
         <div
-          className={`cartpage-slider ${isOpen ? "cartpage-slider-open" : ""}`}
+          className={`cartpage-sidebar ${
+            isOpen ? "cartpage-sidebar-open" : ""
+          }`}
         >
           {/* Header */}
           <div className="cartpage-header">
-            <div className="cartpage-header-content">
-              <h2 className="cartpage-title">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <path d="M16 10a4 4 0 0 1-8 0" />
-                </svg>
-                Shopping Cart
-                {totalItems > 0 && (
-                  <span className="cartpage-item-count">{totalItems}</span>
-                )}
-              </h2>
-              <button className="cartpage-close-btn" onClick={onClose}>
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
+            <div className="cartpage-title-section">
+              <ShoppingBag size={24} className="cartpage-icon" />
+              <h2 className="cartpage-title">Shopping Cart</h2>
+              <span className="cartpage-item-count">({totalItems} items)</span>
             </div>
-
-            {cartItems.length > 0 && (
-              <div className="cartpage-header-actions">
-                <button
-                  className="cartpage-clear-btn"
-                  onClick={this.handleClearCart}
-                  disabled={isLoading}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <polyline points="3,6 5,6 21,6" />
-                    <path d="M19,6v14a2,2 0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6" />
-                    <line x1="10" y1="11" x2="10" y2="17" />
-                    <line x1="14" y1="11" x2="14" y2="17" />
-                  </svg>
-                  Clear All
-                </button>
-              </div>
-            )}
+            <button
+              className="cartpage-close-btn"
+              onClick={onClose}
+              aria-label="Close cart"
+            >
+              <X size={24} />
+            </button>
           </div>
 
-          {/* Content */}
+          {/* Cart Content */}
           <div className="cartpage-content">
-            {error && (
-              <div className="cartpage-error">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="15" y1="9" x2="9" y2="15" />
-                  <line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
-                {error}
+            {isLoading ? (
+              // Loading State
+              <div className="cartpage-loading-state">
+                <div className="loading-spinner"></div>
+                <p className="loading-text">Loading cart items...</p>
               </div>
-            )}
-
-            {cartItems.length === 0 ? (
-              <div className="cartpage-empty">
-                <div className="cartpage-empty-icon">
-                  <svg
-                    width="80"
-                    height="80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                  >
-                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                    <line x1="3" y1="6" x2="21" y2="6" />
-                    <path d="M16 10a4 4 0 0 1-8 0" />
-                  </svg>
-                </div>
+            ) : error ? (
+              // Error State
+              <div className="cartpage-error-state">
+                <div className="error-icon">❌</div>
+                <h3 className="error-title">Error Loading Cart</h3>
+                <p className="error-text">{error}</p>
+                <button
+                  className="cartpage-retry-btn"
+                  onClick={this.fetchCartItems}
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : cartItems.length === 0 ? (
+              // Empty Cart State
+              <div className="cartpage-empty-state">
+                <ShoppingBag size={64} className="cartpage-empty-icon" />
                 <h3 className="cartpage-empty-title">Your cart is empty</h3>
-                <p className="cartpage-empty-text">
-                  Browse our amazing freelancers and add services to your cart
+                <p className="cartpage-empty-description">
+                  Browse our services and add items to your cart
                 </p>
-                <button className="cartpage-continue-btn" onClick={onClose}>
+                <button className="cartpage-browse-btn" onClick={onClose}>
                   Continue Shopping
                 </button>
               </div>
             ) : (
-              <>
-                {/* Cart Items */}
-                <div className="cartpage-items">
-                  {cartItems.map((item) => {
-                    const profileImageUrl = this.getProfileImageUrl(
-                      item.providerImage
-                    );
+              // Cart Items
+              <div className="cartpage-items-container">
+                {cartItems.map((item) => (
+                  <div key={item.id} className="cartpage-item">
+                    <div className="cartpage-item-image">
+                      <img
+                        src={item.image}
+                        alt={item.seller}
+                        onError={(e) => {
+                          e.target.src = "/api/placeholder/100x100";
+                        }}
+                      />
+                    </div>
 
-                    return (
-                      <div key={item.id} className="cartpage-item">
-                        <div className="cartpage-item-image">
-                          {profileImageUrl ? (
-                            <img
-                              src={profileImageUrl}
-                              alt={item.providerName}
-                              onError={(e) => {
-                                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                                  item.providerName
-                                )}&background=667eea&color=fff&size=60`;
-                              }}
-                            />
-                          ) : (
-                            <div className="cartpage-item-avatar">
-                              {item.providerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                    <div className="cartpage-item-details">
+                      <h4 className="cartpage-item-name">{item.name}</h4>
+                      <p className="cartpage-item-seller">by {item.seller}</p>
+                      <span className="cartpage-item-category">
+                        {item.category}
+                      </span>
+
+                      {/* Payment Structure Info */}
+                      {item.paymentStructure && (
+                        <div className="cartpage-payment-info">
+                          <span className="payment-type">
+                            {item.paymentStructure.description}
+                          </span>
                         </div>
+                      )}
 
-                        <div className="cartpage-item-details">
-                          <h4 className="cartpage-item-service">
-                            {item.serviceName}
-                          </h4>
-                          <p className="cartpage-item-provider">
-                            by {item.providerName}
-                          </p>
-                          {item.serviceLevel && (
-                            <span className="cartpage-item-level">
-                              {item.serviceLevel.charAt(0).toUpperCase() +
-                                item.serviceLevel.slice(1)}{" "}
-                              Package
-                            </span>
-                          )}
-                          <div className="cartpage-item-price">
-                            {this.formatPrice(item.price)}
-                          </div>
-                        </div>
-
-                        <div className="cartpage-item-actions">
-                          <div className="cartpage-quantity-controls">
-                            <button
-                              className="cartpage-quantity-btn"
-                              onClick={() =>
-                                this.handleQuantityUpdate(
-                                  item.id,
-                                  item.quantity - 1
-                                )
-                              }
-                              disabled={isLoading || item.quantity <= 1}
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                              >
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                              </svg>
-                            </button>
-                            <span className="cartpage-quantity">
-                              {item.quantity}
-                            </span>
-                            <button
-                              className="cartpage-quantity-btn"
-                              onClick={() =>
-                                this.handleQuantityUpdate(
-                                  item.id,
-                                  item.quantity + 1
-                                )
-                              }
-                              disabled={isLoading}
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                              >
-                                <line x1="12" y1="5" x2="12" y2="19" />
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                              </svg>
-                            </button>
-                          </div>
-
+                      <div className="cartpage-item-actions">
+                        <div className="cartpage-quantity-controls">
                           <button
-                            className="cartpage-remove-btn"
-                            onClick={() => this.handleRemoveItem(item.id)}
-                            disabled={isLoading}
+                            className="cartpage-quantity-btn"
+                            onClick={() =>
+                              this.updateQuantity(item.id, item.quantity - 1)
+                            }
+                            disabled={item.quantity <= 1}
                           >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <polyline points="3,6 5,6 21,6" />
-                              <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6" />
-                              <line x1="10" y1="11" x2="10" y2="17" />
-                              <line x1="14" y1="11" x2="14" y2="17" />
-                            </svg>
+                            <Minus size={16} />
+                          </button>
+                          <span className="cartpage-quantity">
+                            {item.quantity}
+                          </span>
+                          <button
+                            className="cartpage-quantity-btn"
+                            onClick={() =>
+                              this.updateQuantity(item.id, item.quantity + 1)
+                            }
+                          >
+                            <Plus size={16} />
                           </button>
                         </div>
+
+                        <button
+                          className="cartpage-remove-btn"
+                          onClick={() => this.removeItem(item.id)}
+                          aria-label="Remove item"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
 
-                {/* Footer */}
-                <div className="cartpage-footer">
-                  <div className="cartpage-total">
-                    <div className="cartpage-total-row">
-                      <span>Subtotal ({totalItems} items)</span>
-                      <span>{this.formatPrice(totalAmount)}</span>
+                      {/* Book Individual Item Button */}
+                      <button
+                        className="cartpage-book-item-btn"
+                        onClick={() => this.handleBookItem(item)}
+                        title="Book this service now"
+                      >
+                        <span className="btn-icon">⚡</span>
+                        Book Now
+                      </button>
                     </div>
-                    <div className="cartpage-total-row cartpage-total-main">
-                      <span>Total</span>
-                      <span>{this.formatPrice(totalAmount)}</span>
-                    </div>
-                  </div>
 
-                  <div className="cartpage-checkout-actions">
-                    <button
-                      className="cartpage-checkout-btn"
-                      disabled={isLoading || cartItems.length === 0}
-                    >
-                      {isLoading ? (
-                        <div className="cartpage-loading-spinner" />
-                      ) : (
-                        <>
-                          <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <rect
-                              x="2"
-                              y="3"
-                              width="20"
-                              height="14"
-                              rx="2"
-                              ry="2"
-                            />
-                            <line x1="8" y1="21" x2="16" y2="21" />
-                            <line x1="12" y1="17" x2="12" y2="21" />
-                          </svg>
-                          Proceed to Checkout
-                        </>
+                    <div className="cartpage-item-price">
+                      <span className="cartpage-price">₹{item.price}</span>
+                      {item.quantity > 1 && (
+                        <span className="cartpage-total-price">
+                          Total: ₹{(item.price * item.quantity).toFixed(2)}
+                        </span>
                       )}
-                    </button>
-                    <button
-                      className="cartpage-continue-shopping"
-                      onClick={onClose}
-                    >
-                      Continue Shopping
-                    </button>
+                      {item.basePrice !== item.price && (
+                        <span className="cartpage-base-price">
+                          Base: ₹{item.basePrice}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </>
+                ))}
+              </div>
             )}
           </div>
+
+          {/* Footer with total and checkout */}
+          {cartItems.length > 0 && (
+            <div className="cartpage-footer">
+              <div className="cartpage-total-section">
+                <div className="cartpage-subtotal">
+                  <span className="cartpage-subtotal-label">Subtotal:</span>
+                  <span className="cartpage-subtotal-amount">
+                    ₹{totalPrice}
+                  </span>
+                </div>
+                <p className="cartpage-tax-note">
+                  Final pricing will be confirmed with service provider
+                </p>
+              </div>
+
+              <div className="cartpage-checkout-actions">
+                <button
+                  className="cartpage-checkout-btn"
+                  onClick={this.handleCheckout}
+                >
+                  Proceed to Checkout
+                </button>
+                <button
+                  className="cartpage-continue-shopping"
+                  onClick={onClose}
+                >
+                  Continue Shopping
+                </button>
+                {cartItems.length > 1 && (
+                  <button
+                    className="cartpage-clear-cart"
+                    onClick={this.clearCart}
+                  >
+                    Clear Cart
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </>
     );
   }
 }
 
-export default CartSlider;
+export default CartSidebar;

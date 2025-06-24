@@ -280,6 +280,50 @@ const BookingSchema = new mongoose.Schema(
 
 const Booking = mongoose.model("Booking", BookingSchema);
 
+const CartSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true,
+    },
+    items: [
+      {
+        freelancerId: {
+          type: Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        freelancerName: { type: String, required: true },
+        freelancerProfileImage: { type: String },
+        serviceName: { type: String, required: true },
+        serviceLevel: { type: String, required: true }, // Basic, Standard, Premium
+        basePrice: { type: Number, required: true },
+        selectedPaymentAmount: { type: Number, required: true },
+        paymentStructure: {
+          type: {
+            type: String,
+            enum: ["advance", "middle", "final", "custom"],
+            required: true,
+          },
+          amount: { type: Number, required: true },
+          description: { type: String, required: true },
+          breakdown: {
+            advance: { type: Number, default: 0 },
+            middle: { type: Number, default: 0 },
+            final: { type: Number, default: 0 },
+          },
+        },
+        addedDate: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+const Cart = mongoose.model("Cart", CartSchema);
+
 // Signup Route
 app.post("/api/signup", async (req, res) => {
   try {
@@ -1809,6 +1853,609 @@ app.delete("/api/wishlist/remove/:itemId", async (req, res) => {
   }
 });
 
+// ===== CART API ENDPOINTS =====
+
+console.log("Registering cart routes...");
+
+// Test endpoint to verify cart routes are working
+app.get("/api/cart/test", (req, res) => {
+  console.log("Cart test endpoint hit");
+  res.json({ message: "Cart routes are working", timestamp: new Date() });
+});
+
+// Debugging middleware for cart routes (only for specific cart routes)
+app.use("/api/cart*", (req, res, next) => {
+  console.log(`=== CART ROUTE HIT ===`);
+  console.log(`Method: ${req.method}`);
+  console.log(`URL: ${req.originalUrl}`);
+  console.log(`Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  if (req.method !== "GET") {
+    console.log(`Body: ${JSON.stringify(req.body, null, 2)}`);
+  }
+  next();
+});
+
+// GET - Get user's cart items (FIXED VERSION)
+app.get("/api/cart/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("=== CART FETCH REQUEST ===");
+    console.log("User ID:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find the user's cart
+    let cart = await Cart.findOne({ userId })
+      .populate("items.freelancerId", "name email profileImage voatId")
+      .populate("userId", "name email");
+
+    if (!cart) {
+      // Create empty cart if doesn't exist
+      cart = new Cart({ userId, items: [] });
+      await cart.save();
+    }
+
+    console.log(`Found ${cart.items.length} items in cart for user ${userId}`);
+
+    return res.status(200).json(cart.items || []);
+  } catch (error) {
+    console.error("=== CART FETCH ERROR ===", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch cart items",
+      error: error.message,
+    });
+  }
+});
+
+// POST - Add item to cart (FIXED VERSION)
+app.post("/api/cart/add", async (req, res) => {
+  try {
+    const {
+      userId,
+      freelancerId,
+      freelancerName,
+      freelancerProfileImage,
+      serviceName,
+      serviceLevel,
+      basePrice,
+      paymentType = "final", // default to full payment
+    } = req.body;
+
+    console.log("=== CART ADD REQUEST ===");
+    console.log("Request body:", req.body);
+    console.log("Headers:", req.headers);
+
+    // Validate required fields
+    if (
+      !userId ||
+      !freelancerId ||
+      !serviceName ||
+      !serviceLevel ||
+      !basePrice
+    ) {
+      console.log("Missing required fields");
+      return res.status(400).json({
+        success: false,
+        message: "All required fields must be provided",
+        received: {
+          userId,
+          freelancerId,
+          serviceName,
+          serviceLevel,
+          basePrice,
+        },
+      });
+    }
+
+    if (
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(freelancerId)
+    ) {
+      console.log("Invalid ObjectId format");
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID or freelancer ID format",
+      });
+    }
+
+    // Check if freelancer exists
+    const freelancer = await User.findById(freelancerId);
+    if (!freelancer) {
+      console.log("Freelancer not found:", freelancerId);
+      return res.status(404).json({
+        success: false,
+        message: "Freelancer not found",
+      });
+    }
+
+    // Calculate payment amount based on type
+    let paymentAmount = basePrice;
+    let paymentDescription = "Full Payment";
+
+    switch (paymentType) {
+      case "advance":
+        paymentAmount = basePrice * 0.3;
+        paymentDescription = "30% Advance Payment";
+        break;
+      case "middle":
+        paymentAmount = basePrice * 0.5;
+        paymentDescription = "50% Partial Payment";
+        break;
+      case "final":
+        paymentAmount = basePrice;
+        paymentDescription = "100% Full Payment";
+        break;
+      default:
+        paymentAmount = basePrice;
+        paymentDescription = "Full Payment";
+    }
+
+    // Find or create cart
+    let cart = await Cart.findOne({ userId });
+    if (!cart) {
+      cart = new Cart({ userId, items: [] });
+    }
+
+    // Check if service already exists in cart
+    const existingItemIndex = cart.items.findIndex(
+      (item) =>
+        item.freelancerId.toString() === freelancerId &&
+        item.serviceName === serviceName &&
+        item.serviceLevel === serviceLevel
+    );
+
+    if (existingItemIndex >= 0) {
+      console.log("Service already in cart");
+      return res.status(409).json({
+        success: false,
+        message: "This service is already in your cart",
+      });
+    }
+
+    // Create new cart item
+    const newItem = {
+      freelancerId,
+      freelancerName: freelancerName || freelancer.name,
+      freelancerProfileImage: freelancerProfileImage || freelancer.profileImage,
+      serviceName,
+      serviceLevel,
+      basePrice: parseFloat(basePrice),
+      selectedPaymentAmount: paymentAmount,
+      paymentStructure: {
+        type: paymentType,
+        amount: paymentAmount,
+        description: paymentDescription,
+      },
+      addedDate: new Date(),
+    };
+
+    // Add item to cart
+    cart.items.push(newItem);
+    await cart.save();
+
+    console.log(`Item added to cart successfully for user ${userId}`);
+
+    return res.status(201).json({
+      success: true,
+      message: "Service added to cart successfully",
+      cartItemCount: cart.items.length,
+    });
+  } catch (error) {
+    console.error("=== CART ADD ERROR ===", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add service to cart",
+      error: error.message,
+    });
+  }
+});
+
+// PUT - Update payment structure for cart item
+app.put("/api/cart/update-payment", async (req, res) => {
+  try {
+    const { userId, itemId, paymentStructure } = req.body;
+
+    console.log("Updating payment structure:", {
+      userId,
+      itemId,
+      paymentStructure,
+    });
+
+    if (!userId || !itemId || !paymentStructure) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID, item ID, and payment structure are required",
+      });
+    }
+
+    if (
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(itemId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID or item ID format",
+      });
+    }
+
+    // Find the cart
+    const cart = await Cart.findOne({ userId });
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: "Cart not found",
+      });
+    }
+
+    // Find the item in the cart
+    const itemIndex = cart.items.findIndex(
+      (item) => item._id.toString() === itemId
+    );
+    if (itemIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found in cart",
+      });
+    }
+
+    // Update the payment structure
+    cart.items[itemIndex].paymentStructure = paymentStructure;
+    cart.items[itemIndex].selectedPaymentAmount = paymentStructure.amount;
+
+    // Mark the items array as modified for MongoDB
+    cart.markModified("items");
+    await cart.save();
+
+    console.log(`Payment structure updated for item ${itemId}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Payment structure updated successfully",
+      updatedItem: cart.items[itemIndex],
+    });
+  } catch (error) {
+    console.error("Error updating payment structure:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update payment structure",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE - Remove item from cart (FIXED VERSION)
+app.delete("/api/cart/remove", async (req, res) => {
+  try {
+    const { userId, itemId } = req.body;
+
+    console.log("=== CART REMOVE REQUEST ===");
+    console.log("User ID:", userId, "Item ID:", itemId);
+
+    if (!userId || !itemId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID and item ID are required",
+      });
+    }
+
+    if (
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(itemId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID or item ID format",
+      });
+    }
+
+    // Find the cart
+    const cart = await Cart.findOne({ userId });
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: "Cart not found",
+      });
+    }
+
+    // Find and remove the item
+    const itemIndex = cart.items.findIndex(
+      (item) => item._id.toString() === itemId
+    );
+    if (itemIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found in cart",
+      });
+    }
+
+    // Remove the item
+    cart.items.splice(itemIndex, 1);
+    await cart.save();
+
+    console.log(`Item ${itemId} removed from cart for user ${userId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Item removed from cart successfully",
+      remainingItems: cart.items.length,
+    });
+  } catch (error) {
+    console.error("=== CART REMOVE ERROR ===", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to remove item from cart",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE - Clear entire cart (FIXED VERSION)
+app.delete("/api/cart/clear/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("=== CART CLEAR REQUEST ===");
+    console.log("User ID:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find and clear the cart
+    const cart = await Cart.findOne({ userId });
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: "Cart not found",
+      });
+    }
+
+    cart.items = [];
+    await cart.save();
+
+    console.log(`Cart cleared for user ${userId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Cart cleared successfully",
+    });
+  } catch (error) {
+    console.error("=== CART CLEAR ERROR ===", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to clear cart",
+      error: error.message,
+    });
+  }
+});
+
+// GET - Get cart statistics
+app.get("/api/cart/stats/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching cart stats for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const cart = await Cart.findOne({ userId });
+
+    if (!cart || !cart.items.length) {
+      return res.status(200).json({
+        success: true,
+        stats: {
+          totalItems: 0,
+          totalAmount: 0,
+          uniqueFreelancers: 0,
+          paymentBreakdown: {
+            advance: 0,
+            middle: 0,
+            final: 0,
+            custom: 0,
+          },
+        },
+      });
+    }
+
+    // Calculate statistics
+    const totalItems = cart.items.length;
+    const totalAmount = cart.items.reduce(
+      (sum, item) => sum + item.selectedPaymentAmount,
+      0
+    );
+    const uniqueFreelancers = new Set(
+      cart.items.map((item) => item.freelancerId.toString())
+    ).size;
+
+    const paymentBreakdown = {
+      advance: cart.items.filter(
+        (item) => item.paymentStructure.type === "advance"
+      ).length,
+      middle: cart.items.filter(
+        (item) => item.paymentStructure.type === "middle"
+      ).length,
+      final: cart.items.filter((item) => item.paymentStructure.type === "final")
+        .length,
+      custom: cart.items.filter(
+        (item) => item.paymentStructure.type === "custom"
+      ).length,
+    };
+
+    const stats = {
+      totalItems,
+      totalAmount: Math.round(totalAmount * 100) / 100, // Round to 2 decimal places
+      uniqueFreelancers,
+      paymentBreakdown,
+    };
+
+    console.log("Cart stats:", stats);
+
+    res.status(200).json({
+      success: true,
+      stats,
+    });
+  } catch (error) {
+    console.error("Error fetching cart stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch cart statistics",
+      error: error.message,
+    });
+  }
+});
+
+// GET - Check if specific service is in cart
+app.get("/api/cart/check/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { freelancerId, serviceName, serviceLevel } = req.query;
+
+    console.log("Checking if service in cart:", {
+      userId,
+      freelancerId,
+      serviceName,
+      serviceLevel,
+    });
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const cart = await Cart.findOne({ userId });
+
+    if (!cart || !cart.items.length) {
+      return res.status(200).json({
+        success: true,
+        inCart: false,
+      });
+    }
+
+    // Check if the specific service is in cart
+    const isInCart = cart.items.some(
+      (item) =>
+        item.freelancerId.toString() === freelancerId &&
+        item.serviceName === serviceName &&
+        item.serviceLevel === serviceLevel
+    );
+
+    res.status(200).json({
+      success: true,
+      inCart: isInCart,
+    });
+  } catch (error) {
+    console.error("Error checking cart:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check cart",
+      error: error.message,
+    });
+  }
+});
+
+// Admin endpoint to get all carts (for debugging/admin purposes)
+app.get("/api/admin/all-carts", async (req, res) => {
+  try {
+    console.log("Fetching all carts for admin");
+
+    const carts = await Cart.find({})
+      .populate("userId", "name email voatId")
+      .populate("items.freelancerId", "name email voatId")
+      .sort({ updatedAt: -1 });
+
+    const cartsWithStats = carts.map((cart) => ({
+      ...cart.toObject(),
+      totalItems: cart.items.length,
+      totalAmount: cart.items.reduce(
+        (sum, item) => sum + item.selectedPaymentAmount,
+        0
+      ),
+    }));
+
+    console.log(`Found ${carts.length} carts`);
+
+    res.status(200).json({
+      success: true,
+      carts: cartsWithStats,
+      totalCarts: carts.length,
+    });
+  } catch (error) {
+    console.error("Error fetching all carts:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch all carts",
+      error: error.message,
+    });
+  }
+});
+
+console.log("✅ Cart API endpoints loaded successfully");
+
+// Development debugging endpoints
+if (process.env.NODE_ENV === "development") {
+  // Debug endpoint to clear all carts
+  app.delete("/api/debug/clear-all-carts", async (req, res) => {
+    try {
+      await Cart.deleteMany({});
+      res.json({ message: "All carts cleared" });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Debug endpoint to create sample cart
+  app.post("/api/debug/create-sample-cart", async (req, res) => {
+    try {
+      const users = await User.find({}).limit(3);
+      if (users.length < 2) {
+        return res.status(400).json({ message: "Need at least 2 users" });
+      }
+
+      const sampleCart = new Cart({
+        userId: users[0]._id,
+        items: [
+          {
+            freelancerId: users[1]._id,
+            freelancerName: users[1].name,
+            freelancerProfileImage: users[1].profileImage,
+            serviceName: "Web Development",
+            serviceLevel: "Premium",
+            basePrice: 5000,
+            selectedPaymentAmount: 1500,
+            paymentStructure: {
+              type: "advance",
+              amount: 1500,
+              description: "30% Advance Payment",
+            },
+          },
+        ],
+      });
+
+      await sampleCart.save();
+      res.json({ message: "Sample cart created", cart: sampleCart });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+}
+
 app.post("/api/create-booking", async (req, res) => {
   try {
     const {
@@ -2721,9 +3368,57 @@ app.get("/api/debug/routes", (req, res) => {
   res.json(routes);
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Add global error handler middleware (ADD THIS AFTER ALL ROUTES)
+app.use((err, req, res, next) => {
+  console.error("Global error handler:", err);
+
+  // Always return JSON, never HTML
+  if (!res.headersSent) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? err.message
+          : "Something went wrong",
+    });
+  }
+});
+
+// Handle 404 errors with JSON response (ADD THIS BEFORE THE ERROR HANDLER)
+app.use("*", (req, res) => {
+  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
+  return res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+  });
+});
 
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url}`);
   next();
 });
+
+// Add this after all your routes are defined but before app.listen()
+console.log("=== REGISTERED ROUTES ===");
+app._router.stack.forEach((middleware) => {
+  if (middleware.route) {
+    console.log(
+      `${Object.keys(middleware.route.methods)[0].toUpperCase()} ${
+        middleware.route.path
+      }`
+    );
+  } else if (middleware.name === "router") {
+    middleware.handle.stack.forEach((handler) => {
+      if (handler.route) {
+        console.log(
+          `${Object.keys(handler.route.methods)[0].toUpperCase()} ${
+            handler.route.path
+          }`
+        );
+      }
+    });
+  }
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

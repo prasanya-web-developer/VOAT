@@ -39,17 +39,28 @@ class MyPortfolio extends Component {
     selectedPricing: null,
     profileImage: null,
     profileImagePreview: null,
-    coverImage: null,
-    coverImagePreview: null,
     videos: [],
     newVideo: null,
+    // Cart related states
+    isAddingToCart: false,
+    cartMessage: "",
+    currentUserId: null,
+    freelancerData: null,
   };
 
   componentDidMount() {
     this.setState({ isLoading: true });
 
+    // Test backend connection first
+    this.testBackendConnection();
+
     const pathSegments = window.location.pathname.split("/");
     const portfolioUserId = pathSegments[pathSegments.length - 1];
+
+    // Get current logged in user ID
+    const userData = localStorage.getItem("user");
+    const currentUserId = userData ? JSON.parse(userData).id : null;
+    this.setState({ currentUserId });
 
     if (portfolioUserId && portfolioUserId !== "my-portfolio") {
       this.fetchPortfolioData(portfolioUserId);
@@ -59,6 +70,28 @@ class MyPortfolio extends Component {
       }, 300);
     }
   }
+
+  // Test function to check if backend is reachable
+  testBackendConnection = async () => {
+    try {
+      console.log("=== TESTING BACKEND CONNECTION ===");
+      const response = await fetch(`${this.state.baseUrl}/api/status`);
+
+      console.log("Status check response:", response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Backend is reachable:", data);
+        return true;
+      } else {
+        console.log("Backend returned error status:", response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error("Backend connection test failed:", error);
+      return false;
+    }
+  };
 
   checkAuthentication = () => {
     const userData = localStorage.getItem("user");
@@ -94,6 +127,17 @@ class MyPortfolio extends Component {
       if (!user) {
         throw new Error("User data not found in server response");
       }
+
+      // Store freelancer data for cart functionality
+      this.setState({
+        freelancerData: {
+          id: userId,
+          name: user.name,
+          email: user.email,
+          profileImage: user.profileImage,
+          voatId: user.voatId,
+        },
+      });
 
       const serviceData = {};
       if (services && services.length > 0) {
@@ -133,16 +177,6 @@ class MyPortfolio extends Component {
               ? user.profileImage
               : `${this.state.baseUrl}/${user.profileImage.replace(/^\//, "")}`
             : "/api/placeholder/150/150",
-        coverImage:
-          portfolio?.coverImage &&
-          portfolio?.coverImage !== "/api/placeholder/800/200"
-            ? portfolio.coverImage.startsWith("http")
-              ? portfolio.coverImage
-              : `${this.state.baseUrl}/${portfolio.coverImage.replace(
-                  /^\//,
-                  ""
-                )}`
-            : "/api/placeholder/800/200",
         services: serviceNames,
         isApproved: portfolio?.status === "approved",
         isOwnProfile: isOwnProfile,
@@ -177,6 +211,219 @@ class MyPortfolio extends Component {
     } catch (error) {
       console.error("Error fetching portfolio data:", error);
       this.setState({ isLoading: false });
+    }
+  };
+
+  handleAddToCart = async () => {
+    const {
+      selectedPricing,
+      currentUserId,
+      freelancerData,
+      services,
+      activeServiceTab,
+    } = this.state;
+
+    console.log("=== ADD TO CART DEBUG ===");
+    console.log("Current User ID:", currentUserId);
+    console.log("Freelancer Data:", freelancerData);
+    console.log("Selected Pricing:", selectedPricing);
+    console.log("Active Service Tab:", activeServiceTab);
+
+    // Validation checks
+    if (!currentUserId) {
+      alert("Please login to add items to cart");
+      return;
+    }
+
+    if (currentUserId === freelancerData?.id) {
+      alert("You cannot add your own services to cart");
+      return;
+    }
+
+    if (!selectedPricing) {
+      alert("Please select a pricing option first");
+      return;
+    }
+
+    const serviceName = services.find(
+      (service) =>
+        service.toLowerCase().replace(/\s+/g, "-") === activeServiceTab
+    );
+
+    if (!serviceName) {
+      alert("Please select a service first");
+      return;
+    }
+
+    this.setState({ isAddingToCart: true, cartMessage: "" });
+
+    try {
+      const cartData = {
+        userId: currentUserId,
+        freelancerId: freelancerData.id,
+        freelancerName: freelancerData.name,
+        freelancerProfileImage: freelancerData.profileImage,
+        serviceName: serviceName,
+        serviceLevel: selectedPricing.level,
+        basePrice: parseFloat(selectedPricing.price),
+        paymentType: "final",
+      };
+
+      console.log("=== CART DATA TO SEND ===", cartData);
+
+      const response = await fetch(`${this.state.baseUrl}/api/cart/add`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(cartData),
+      });
+
+      console.log("=== RESPONSE STATUS ===", response.status);
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("=== NON-JSON RESPONSE ===", text);
+        throw new Error(
+          "Server returned non-JSON response. Cart API may not be working."
+        );
+      }
+
+      const result = await response.json();
+      console.log("=== PARSED RESPONSE ===", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || `Server error: ${response.status}`);
+      }
+
+      this.setState({
+        cartMessage: "✅ Service added to cart successfully!",
+        selectedPricing: null,
+      });
+
+      setTimeout(() => {
+        this.setState({ cartMessage: "" });
+      }, 3000);
+    } catch (error) {
+      console.error("=== ADD TO CART ERROR ===", error);
+
+      let errorMessage = "Failed to add to cart";
+      if (error.message.includes("Server returned non-JSON")) {
+        errorMessage = "Cart service is currently unavailable";
+      } else if (error.message.includes("Failed to fetch")) {
+        errorMessage = "Network error - please check your connection";
+      } else {
+        errorMessage = error.message;
+      }
+
+      this.setState({
+        cartMessage: `❌ Error: ${errorMessage}`,
+      });
+
+      setTimeout(() => {
+        this.setState({ cartMessage: "" });
+      }, 5000);
+    } finally {
+      this.setState({ isAddingToCart: false });
+    }
+  };
+
+  // Book Now functionality (can redirect to booking page or open a modal)
+  handleBookNow = async () => {
+    const {
+      selectedPricing,
+      currentUserId,
+      freelancerData,
+      services,
+      activeServiceTab,
+    } = this.state;
+
+    // Check if user is logged in
+    if (!currentUserId) {
+      alert("Please login to book services");
+      return;
+    }
+
+    // Check if user is trying to book their own service
+    if (currentUserId === freelancerData?.id) {
+      alert("You cannot book your own services");
+      return;
+    }
+
+    // Check if pricing is selected
+    if (!selectedPricing) {
+      alert("Please select a pricing option first");
+      return;
+    }
+
+    // Get current service name
+    const serviceName = services.find(
+      (service) =>
+        service.toLowerCase().replace(/\s+/g, "-") === activeServiceTab
+    );
+
+    if (!serviceName) {
+      alert("Please select a service first");
+      return;
+    }
+
+    try {
+      // Get current user data
+      const userData = localStorage.getItem("user");
+      const currentUser = JSON.parse(userData);
+
+      const bookingData = {
+        clientId: currentUserId,
+        clientName: currentUser.name,
+        clientEmail: currentUser.email,
+        clientProfileImage: currentUser.profileImage,
+        freelancerId: freelancerData.id,
+        freelancerName: freelancerData.name,
+        freelancerEmail: freelancerData.email,
+        serviceName: `${serviceName} - ${selectedPricing.level}`,
+        servicePrice: parseFloat(selectedPricing.price),
+      };
+
+      console.log("Creating booking:", bookingData);
+
+      const response = await fetch(`${this.state.baseUrl}/api/create-booking`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to create booking");
+      }
+
+      console.log("Booking created successfully:", result);
+
+      this.setState({
+        cartMessage: "✅ Booking request sent successfully!",
+        selectedPricing: null, // Reset selection
+      });
+
+      // Show success message for 3 seconds
+      setTimeout(() => {
+        this.setState({ cartMessage: "" });
+      }, 3000);
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      this.setState({
+        cartMessage: `❌ Error: ${error.message}`,
+      });
+
+      // Clear error message after 5 seconds
+      setTimeout(() => {
+        this.setState({ cartMessage: "" });
+      }, 5000);
     }
   };
 
@@ -550,17 +797,6 @@ class MyPortfolio extends Component {
     this.setState({ selectedPricing: pricingOption });
   };
 
-  handleAddToCart = () => {
-    const { selectedPricing } = this.state;
-    if (selectedPricing) {
-      alert(
-        `Added to cart: ${selectedPricing.level} Package - ₹${selectedPricing.price}`
-      );
-    } else {
-      alert("Please select a pricing option first");
-    }
-  };
-
   handleInputChange = (e) => {
     const { name, value } = e.target;
     this.setState((prevState) => ({
@@ -585,20 +821,6 @@ class MyPortfolio extends Component {
     }
   };
 
-  handleCoverImageChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        this.setState({
-          coverImage: file,
-          coverImagePreview: reader.result,
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   toggleEditProfile = () => {
     const { portfolioData } = this.state;
     this.setState((prevState) => ({
@@ -615,8 +837,6 @@ class MyPortfolio extends Component {
         : prevState.editFormData,
       profileImage: null,
       profileImagePreview: null,
-      coverImage: null,
-      coverImagePreview: null,
     }));
   };
 
@@ -625,7 +845,7 @@ class MyPortfolio extends Component {
     this.setState({ isLoading: true });
 
     try {
-      const { editFormData, profileImage, coverImage } = this.state;
+      const { editFormData, profileImage } = this.state;
       const userData = localStorage.getItem("user");
       const parsedUserData = userData ? JSON.parse(userData) : null;
       const userId = parsedUserData?.id;
@@ -646,10 +866,6 @@ class MyPortfolio extends Component {
 
       if (profileImage) {
         formData.append("profileImage", profileImage);
-      }
-
-      if (coverImage) {
-        formData.append("coverImage", coverImage);
       }
 
       const response = await fetch(`${this.state.baseUrl}/api/portfolio`, {
@@ -674,8 +890,6 @@ class MyPortfolio extends Component {
         profileImage:
           result.portfolio?.profileImage ||
           this.state.portfolioData.profileImage,
-        coverImage:
-          result.portfolio?.coverImage || this.state.portfolioData.coverImage,
       };
 
       this.setState({
@@ -699,7 +913,8 @@ class MyPortfolio extends Component {
     }
   };
 
-  renderProfile() {
+  // HERO SECTION (NOW WITH GRADIENT BACKGROUND INSTEAD OF COVER IMAGE)
+  renderHeroSection() {
     const { portfolioData, isEditingProfile } = this.state;
 
     if (isEditingProfile) {
@@ -707,14 +922,8 @@ class MyPortfolio extends Component {
     }
 
     if (!portfolioData) {
-      return <div className="loading">Loading portfolio data...</div>;
+      return <div className="modern-loading">Loading portfolio data...</div>;
     }
-
-    const coverImageUrl =
-      portfolioData.coverImage &&
-      portfolioData.coverImage !== "/api/placeholder/800/200"
-        ? portfolioData.coverImage
-        : "/api/placeholder/800/200";
 
     const profileImageUrl =
       portfolioData.profileImage &&
@@ -723,92 +932,61 @@ class MyPortfolio extends Component {
         : "/api/placeholder/150/150";
 
     return (
-      <div className="portfolio-profile">
-        <div className="cover-image">
-          <div className="cover-image-container">
-            <img
-              src={coverImageUrl}
-              alt="Cover"
-              className="portfolio-cover-image"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "/api/placeholder/800/200";
-              }}
-            />
-            {portfolioData.isOwnProfile && (
-              <button
-                className="edit-cover-btn"
-                onClick={this.toggleEditProfile}
-              >
-                <span className="pencil-icon">✏️</span>
-              </button>
-            )}
-          </div>
-
-          <div className="my-portfolio-profile-image-container">
-            {profileImageUrl ? (
-              <img
-                src={profileImageUrl}
-                alt={portfolioData.name}
-                className="my-portfolio-profile-image"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = "/api/placeholder/150/150";
-                }}
-              />
-            ) : (
-              <div className="profile-placeholder">
-                {portfolioData.name
-                  ? portfolioData.name.charAt(0).toUpperCase()
-                  : "P"}
-              </div>
-            )}
-          </div>
+      <div className="modern-hero-section">
+        <div className="hero-background">
+          <div className="hero-gradient-overlay"></div>
         </div>
-      </div>
-    );
-  }
 
-  renderLeftColumn() {
-    const { portfolioData, services, activeServiceTab, serviceData, videos } =
-      this.state;
+        <div className="hero-content">
+          <div className="hero-profile-container">
+            <div className="hero-avatar-wrapper">
+              {profileImageUrl ? (
+                <img
+                  src={profileImageUrl}
+                  alt={portfolioData.name}
+                  className="hero-avatar"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/api/placeholder/150/150";
+                  }}
+                />
+              ) : (
+                <div className="hero-avatar-placeholder">
+                  {portfolioData.name
+                    ? portfolioData.name.charAt(0).toUpperCase()
+                    : "P"}
+                </div>
+              )}
+            </div>
 
-    if (!portfolioData) {
-      return <div className="myportfoliopage-loading">Loading...</div>;
-    }
-
-    const isOwnProfile = portfolioData?.isOwnProfile;
-    const effectiveActiveTab =
-      activeServiceTab ||
-      (services.length > 0
-        ? services[0].toLowerCase().replace(/\s+/g, "-")
-        : "");
-
-    return (
-      <div className="myportfoliopage-left-column">
-        {/* LinkedIn Style Personal Info */}
-        <div className="myportfoliopage-linkedin-card">
-          <div className="myportfoliopage-linkedin-header">
-            <div className="myportfoliopage-linkedin-info">
-              <h1 className="myportfoliopage-linkedin-name">
-                {portfolioData.name || "Name"}
-              </h1>
-              <p className="myportfoliopage-linkedin-profession">
+            <div className="hero-info">
+              <h1 className="hero-name">{portfolioData.name || "Name"}</h1>
+              <p className="hero-profession">
                 {portfolioData.profession || "Professional"}
               </p>
-              <p className="myportfoliopage-linkedin-headline">
+              <p className="hero-headline">
                 {portfolioData.headline || "Specialist"}
               </p>
-              <p className="myportfoliopage-linkedin-email">
-                {portfolioData.email || "email@example.com"}
-              </p>
-              <span className="myportfoliopage-linkedin-experience">
-                {portfolioData.experience || "N/A"}
-              </span>
+
+              <div className="hero-meta">
+                <div className="meta-item">
+                  <span className="meta-icon">📧</span>
+                  <span className="meta-text">
+                    {portfolioData.email || "email@example.com"}
+                  </span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-icon">⭐</span>
+                  <span className="meta-text">
+                    {portfolioData.experience || "N/A"} years of experience
+                  </span>
+                </div>
+              </div>
             </div>
-            {isOwnProfile && (
+
+            {portfolioData.isOwnProfile && (
               <button
-                className="myportfoliopage-linkedin-edit-btn"
+                className="hero-edit-btn"
                 onClick={this.toggleEditProfile}
                 title="Edit Profile"
               >
@@ -817,366 +995,186 @@ class MyPortfolio extends Component {
             )}
           </div>
         </div>
-
-        {/* About Section */}
-        <div className="myportfoliopage-about-card">
-          <h2 className="myportfoliopage-section-title">About</h2>
-          <p className="myportfoliopage-about-text">
-            {portfolioData.about || "No information available"}
-          </p>
-        </div>
-
-        {/* Services Section */}
-        <div className="myportfoliopage-services-card">
-          <div className="myportfoliopage-services-header">
-            <h2 className="myportfoliopage-section-title">Services</h2>
-            {isOwnProfile && services.length > 0 && (
-              <button
-                className="myportfoliopage-edit-service-btn"
-                onClick={this.handleEditService}
-                disabled={!effectiveActiveTab}
-              >
-                ✏️ Edit Service
-              </button>
-            )}
-          </div>
-
-          {services.length > 0 ? (
-            <>
-              <div className="myportfoliopage-service-tabs">
-                {services.map((service, index) => {
-                  const serviceKey = service.toLowerCase().replace(/\s+/g, "-");
-                  return (
-                    <button
-                      key={index}
-                      className={`myportfoliopage-service-tab ${
-                        activeServiceTab === serviceKey
-                          ? "myportfoliopage-active"
-                          : ""
-                      }`}
-                      onClick={() => this.handleTabChange(serviceKey)}
-                    >
-                      {service}
-                      {isOwnProfile && (
-                        <span
-                          className="myportfoliopage-service-remove-icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            this.handleServiceHoverRemove(index);
-                          }}
-                          title="Remove service"
-                        >
-                          ×
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="myportfoliopage-service-content">
-                <h3 className="myportfoliopage-service-name">
-                  {services.find(
-                    (service) =>
-                      service.toLowerCase().replace(/\s+/g, "-") ===
-                      effectiveActiveTab
-                  ) || "Service"}
-                </h3>
-                <p className="myportfoliopage-service-description">
-                  {serviceData[effectiveActiveTab]?.description ||
-                    "No description available for this service."}
-                </p>
-              </div>
-            </>
-          ) : (
-            <div className="myportfoliopage-no-services">
-              <p>
-                {isOwnProfile
-                  ? "You haven't added any services yet."
-                  : "This professional hasn't added any services yet."}
-              </p>
-              {isOwnProfile && (
-                <button
-                  className="myportfoliopage-add-service-btn"
-                  onClick={this.toggleAddServiceForm}
-                >
-                  ➕ Add Service
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Work Section */}
-        <div className="myportfoliopage-work-card">
-          <div className="myportfoliopage-work-header">
-            <h2 className="myportfoliopage-section-title">My Work</h2>
-          </div>
-
-          <div className="myportfoliopage-video-gallery">
-            {videos.map((video) => (
-              <div key={video.id} className="myportfoliopage-video-item">
-                <div className="myportfoliopage-video-thumbnail">
-                  <img src={video.thumbnail} alt="Work thumbnail" />
-                  <div className="myportfoliopage-video-overlay">
-                    <button
-                      className="myportfoliopage-play-btn"
-                      onClick={() => window.open(video.url, "_blank")}
-                    >
-                      ▶
-                    </button>
-                    {isOwnProfile && (
-                      <button
-                        className="myportfoliopage-remove-video-btn"
-                        onClick={() => this.handleRemoveVideo(video.id)}
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {isOwnProfile && (
-              <div className="myportfoliopage-add-video">
-                <label
-                  htmlFor="add-video-input"
-                  className="myportfoliopage-add-video-btn"
-                >
-                  <span className="myportfoliopage-plus-icon">+</span>
-                  <span>Add Work</span>
-                </label>
-                <input
-                  type="file"
-                  id="add-video-input"
-                  accept="video/*,image/*"
-                  onChange={this.handleAddVideo}
-                  style={{ display: "none" }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* CTA Section */}
-        <div className="myportfoliopage-cta-card">
-          <h2 className="myportfoliopage-section-title">
-            Ready to Work Together?
-          </h2>
-          <p className="myportfoliopage-cta-text">
-            Let's discuss your project and bring your ideas to life.
-          </p>
-          <button className="myportfoliopage-cta-button">Get In Touch</button>
-        </div>
       </div>
     );
   }
 
-  renderRightColumn() {
-    const { serviceData, activeServiceTab, selectedPricing, services } =
-      this.state;
+  // MODAL FORMS (Edit Profile) - COVER IMAGE SECTION COMMENTED OUT
+  renderEditProfileForm() {
+    const { editFormData, profileImagePreview, portfolioData } = this.state;
 
-    const effectiveActiveTab =
-      activeServiceTab ||
-      (services.length > 0
-        ? services[0].toLowerCase().replace(/\s+/g, "-")
-        : "");
-
-    if (!effectiveActiveTab || !serviceData[effectiveActiveTab]) {
-      return (
-        <div className="myportfoliopage-right-column">
-          <div className="myportfoliopage-pricing-card">
-            <h2 className="myportfoliopage-section-title">Pricing Plans</h2>
-            <div className="myportfoliopage-no-pricing">
-              <div className="myportfoliopage-no-pricing-icon">💰</div>
-              <p>Select a service to view pricing options.</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    const currentServicePricing = serviceData[effectiveActiveTab].pricing || [];
+    const profileImageUrl =
+      profileImagePreview ||
+      (portfolioData.profileImage &&
+      portfolioData.profileImage !== "/api/placeholder/150/150"
+        ? portfolioData.profileImage
+        : "/api/placeholder/150/150");
 
     return (
-      <div className="myportfoliopage-right-column">
-        <div className="myportfoliopage-pricing-card">
-          <h2 className="myportfoliopage-section-title">Pricing Plans</h2>
-
-          {currentServicePricing.length > 0 ? (
-            <>
-              <div className="myportfoliopage-pricing-options">
-                {currentServicePricing.map((option, index) => (
-                  <div
-                    key={index}
-                    className={`myportfoliopage-pricing-option ${
-                      selectedPricing?.level === option?.level
-                        ? "myportfoliopage-selected"
-                        : ""
-                    }`}
-                    onClick={() => this.handlePricingSelect(option)}
-                  >
-                    <div className="myportfoliopage-pricing-row">
-                      <input
-                        type="radio"
-                        name="pricing"
-                        checked={selectedPricing?.level === option?.level}
-                        onChange={() => this.handlePricingSelect(option)}
-                      />
-                      <div className="myportfoliopage-pricing-content">
-                        <h3 className="myportfoliopage-pricing-title">
-                          {option.level}
-                        </h3>
-                        <div className="myportfoliopage-pricing-price">
-                          ₹{option.price}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="myportfoliopage-pricing-time">
-                      ⏱️ Delivery: {option.timeFrame}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="myportfoliopage-pricing-note">
-                <p>
-                  💡 Need something custom? Contact{" "}
-                  <strong>VOAT Network</strong> for personalized requirements
-                  and pricing.
-                </p>
-              </div>
-
-              <div className="myportfoliopage-pricing-actions">
-                <button
-                  className="myportfoliopage-add-to-cart-btn"
-                  onClick={this.handleAddToCart}
-                  disabled={!selectedPricing}
-                >
-                  🛒 Add to Cart
-                </button>
-                <button
-                  className="myportfoliopage-book-now-btn"
-                  onClick={this.handleAddToCart}
-                  disabled={!selectedPricing}
-                >
-                  ⚡ Book Now
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="myportfoliopage-no-pricing">
-              <div className="myportfoliopage-no-pricing-icon">💰</div>
-              <p>No pricing options available for this service yet.</p>
+      <div className="modern-modal-overlay">
+        <div className="modern-modal large">
+          <div className="modal-header">
+            <div className="header-content">
+              <span className="header-icon">👤</span>
+              <h2 className="modal-title">Edit Profile</h2>
             </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  renderAddServiceForm() {
-    const { newServiceName, newServiceDescription, newServicePricing } =
-      this.state;
-
-    return (
-      <div className="myportfoliopage-modal-overlay">
-        <div className="myportfoliopage-modal-content">
-          <div className="myportfoliopage-modal-header">
-            <h2>Add New Service</h2>
             <button
-              className="myportfoliopage-close-modal-btn"
-              onClick={this.toggleAddServiceForm}
+              className="modal-close-btn"
+              onClick={this.toggleEditProfile}
               aria-label="Close"
             >
               <X size={20} />
             </button>
           </div>
 
-          <div className="myportfoliopage-modal-body">
-            <form onSubmit={this.handleSaveNewService}>
-              <div className="myportfoliopage-form-section">
-                <label htmlFor="service-name">Service Name</label>
-                <input
-                  type="text"
-                  id="service-name"
-                  value={newServiceName}
-                  onChange={(e) => this.handleAddServiceFormChange(e, "name")}
-                  placeholder="e.g. Web Development, Logo Design"
-                  className="myportfoliopage-form-input"
-                  required
-                />
-              </div>
-
-              <div className="myportfoliopage-form-section">
-                <label htmlFor="service-description">Service Description</label>
-                <textarea
-                  id="service-description"
-                  rows="4"
-                  value={newServiceDescription}
-                  onChange={(e) =>
-                    this.handleAddServiceFormChange(e, "description")
-                  }
-                  placeholder="Describe your service in detail"
-                  className="myportfoliopage-form-textarea"
-                  required
-                />
-              </div>
-
-              <div className="myportfoliopage-pricing-section-form">
-                <h4>Set Pricing Options (in Rupees)</h4>
-
-                {newServicePricing.map((pricing, index) => (
-                  <div key={index} className="myportfoliopage-pricing-level">
-                    <h5>{pricing.level} Package</h5>
-
-                    <div className="myportfoliopage-form-row">
-                      <div className="myportfoliopage-form-group myportfoliopage-half">
-                        <label htmlFor={`new-price-${index}`}>Price (₹)</label>
-                        <input
-                          type="number"
-                          id={`new-price-${index}`}
-                          name="price"
-                          value={pricing.price}
-                          onChange={(e) =>
-                            this.handleAddServiceFormChange(e, "pricing", index)
-                          }
-                          placeholder="e.g. 25000"
-                          required
+          <div className="modal-body">
+            <form onSubmit={this.handleSaveProfile} className="modern-form">
+              <div className="image-uploads">
+                <div className="upload-group">
+                  <label className="form-label">Profile Image</label>
+                  <div className="profile-upload-area">
+                    <div className="profile-preview-container">
+                      {profileImageUrl !== "/api/placeholder/150/150" ? (
+                        <img
+                          src={profileImageUrl}
+                          alt="Profile Preview"
+                          className="profile-preview"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "/api/placeholder/150/150";
+                          }}
                         />
-                      </div>
-
-                      <div className="myportfoliopage-form-group myportfoliopage-half">
-                        <label htmlFor={`new-timeFrame-${index}`}>
-                          Time Frame
-                        </label>
-                        <input
-                          type="text"
-                          id={`new-timeFrame-${index}`}
-                          name="timeFrame"
-                          value={pricing.timeFrame}
-                          onChange={(e) =>
-                            this.handleAddServiceFormChange(e, "pricing", index)
-                          }
-                          placeholder="e.g. 2 weeks"
-                          required
-                        />
-                      </div>
+                      ) : (
+                        <div className="profile-placeholder">
+                          <span className="placeholder-text">No image</span>
+                        </div>
+                      )}
                     </div>
+                    <label htmlFor="profile-image" className="upload-btn small">
+                      <span className="btn-icon">📎</span>
+                      Choose Image
+                      <input
+                        type="file"
+                        id="profile-image"
+                        accept="image/*"
+                        onChange={this.handleProfileImageChange}
+                        style={{ display: "none" }}
+                      />
+                    </label>
                   </div>
-                ))}
+                </div>
               </div>
 
-              <div className="myportfoliopage-form-actions">
-                <button type="submit" className="myportfoliopage-btn-primary">
-                  Add Service
+              <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="name" className="form-label">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={editFormData.name}
+                    onChange={this.handleInputChange}
+                    required
+                    placeholder="Your full name"
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="profession" className="form-label">
+                    Profession
+                  </label>
+                  <input
+                    type="text"
+                    id="profession"
+                    name="profession"
+                    value={editFormData.profession}
+                    onChange={this.handleInputChange}
+                    required
+                    placeholder="e.g. Web Developer"
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="headline" className="form-label">
+                    Headline
+                  </label>
+                  <input
+                    type="text"
+                    id="headline"
+                    name="headline"
+                    value={editFormData.headline}
+                    onChange={this.handleInputChange}
+                    required
+                    placeholder="e.g. MERN Stack | Business Websites"
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="experience" className="form-label">
+                    Experience
+                  </label>
+                  <input
+                    type="text"
+                    id="experience"
+                    name="experience"
+                    value={editFormData.experience}
+                    onChange={this.handleInputChange}
+                    required
+                    placeholder="e.g. 5 years"
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="about" className="form-label">
+                  About Me
+                </label>
+                <textarea
+                  id="about"
+                  name="about"
+                  rows="4"
+                  value={editFormData.about}
+                  onChange={this.handleInputChange}
+                  required
+                  placeholder="Share details about your background, skills, and experience..."
+                  className="form-textarea"
+                ></textarea>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="email" className="form-label">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={editFormData.email}
+                  onChange={this.handleInputChange}
+                  required
+                  placeholder="youremail@example.com"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="action-btn primary">
+                  <span className="btn-icon">✅</span>
+                  Save Changes
                 </button>
                 <button
                   type="button"
-                  className="myportfoliopage-btn-secondary"
-                  onClick={this.toggleAddServiceForm}
+                  className="action-btn secondary"
+                  onClick={this.toggleEditProfile}
                 >
+                  <span className="btn-icon">❌</span>
                   Cancel
                 </button>
               </div>
@@ -1187,6 +1185,597 @@ class MyPortfolio extends Component {
     );
   }
 
+  // LEFT COLUMN WITH ALL CONTENT
+  renderLeftColumn() {
+    const { portfolioData, services, activeServiceTab, serviceData, videos } =
+      this.state;
+
+    if (!portfolioData) {
+      return <div className="modern-loading">Loading...</div>;
+    }
+
+    const isOwnProfile = portfolioData?.isOwnProfile;
+    const effectiveActiveTab =
+      activeServiceTab ||
+      (services.length > 0
+        ? services[0].toLowerCase().replace(/\s+/g, "-")
+        : "");
+
+    return (
+      <div className="modern-left-column">
+        {/* Hero Section */}
+        {this.renderHeroSection()}
+
+        {/* About Section */}
+        <div className="modern-card about-section">
+          <div className="card-header">
+            <div className="header-content">
+              <span className="header-icon">👤</span>
+              <h2 className="card-title">About Me</h2>
+            </div>
+          </div>
+          <div className="card-body">
+            <p className="about-description">
+              {portfolioData.about || "No information available"}
+            </p>
+          </div>
+        </div>
+
+        {/* Services Section */}
+        <div className="modern-card services-section">
+          <div className="card-header">
+            <div className="header-content">
+              <span className="header-icon">🛠️</span>
+              <h2 className="card-title">My Services</h2>
+            </div>
+            {isOwnProfile && services.length > 0 && (
+              <button
+                className="header-action-btn"
+                onClick={this.handleEditService}
+                disabled={!effectiveActiveTab}
+                title="Edit Service"
+              >
+                Edit Service
+              </button>
+            )}
+          </div>
+
+          <div className="card-body">
+            {services.length > 0 ? (
+              <>
+                <div className="service-tabs">
+                  {services.map((service, index) => {
+                    const serviceKey = service
+                      .toLowerCase()
+                      .replace(/\s+/g, "-");
+                    return (
+                      <button
+                        key={index}
+                        className={`service-tab ${
+                          activeServiceTab === serviceKey ? "active" : ""
+                        }`}
+                        onClick={() => this.handleTabChange(serviceKey)}
+                      >
+                        <span className="tab-text">{service}</span>
+                        {isOwnProfile && (
+                          <span
+                            className="tab-remove"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              this.handleServiceHoverRemove(index);
+                            }}
+                            title="Remove service"
+                          >
+                            ×
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="service-content">
+                  <h3 className="service-title">
+                    {services.find(
+                      (service) =>
+                        service.toLowerCase().replace(/\s+/g, "-") ===
+                        effectiveActiveTab
+                    ) || "Service"}
+                  </h3>
+                  <p className="service-description">
+                    {serviceData[effectiveActiveTab]?.description ||
+                      "No description available for this service."}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">🎯</div>
+                <h3 className="empty-title">No Services Yet</h3>
+                <p className="empty-text">
+                  {isOwnProfile
+                    ? "Start showcasing your expertise by adding your first service."
+                    : "This professional hasn't added any services yet."}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Portfolio Gallery Section */}
+        <div className="modern-card portfolio-section">
+          <div className="card-header">
+            <div className="header-content">
+              <span className="header-icon">🎨</span>
+              <h2 className="card-title">Portfolio Gallery</h2>
+            </div>
+            {isOwnProfile && (
+              <label className="header-action-btn" htmlFor="portfolio-upload">
+                <span className="btn-icon">📎</span>
+                Upload
+                <input
+                  type="file"
+                  id="portfolio-upload"
+                  accept="video/*,image/*"
+                  onChange={this.handleAddVideo}
+                  style={{ display: "none" }}
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="card-body">
+            {videos.length > 0 ? (
+              <div className="portfolio-grid">
+                {videos.map((video) => (
+                  <div key={video.id} className="portfolio-item">
+                    <div className="portfolio-thumbnail">
+                      <img src={video.thumbnail} alt="Portfolio work" />
+                      <div className="portfolio-overlay">
+                        <button
+                          className="portfolio-play-btn"
+                          onClick={() => window.open(video.url, "_blank")}
+                          title="View Work"
+                        >
+                          <span className="play-icon">▶</span>
+                        </button>
+                        {isOwnProfile && (
+                          <button
+                            className="portfolio-remove-btn"
+                            onClick={() => this.handleRemoveVideo(video.id)}
+                            title="Remove Work"
+                          >
+                            <span className="remove-icon">🗑️</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">📸</div>
+                <h3 className="empty-title">No Portfolio Items</h3>
+                <p className="empty-text">
+                  {isOwnProfile
+                    ? "Upload your best work to showcase your skills and attract clients."
+                    : "This professional hasn't uploaded any work samples yet."}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Call to Action Section */}
+        <div className="modern-card cta-section">
+          <div className="cta-content">
+            <div className="cta-icon">💼</div>
+            <h2 className="cta-title">Ready to Work Together?</h2>
+            <p className="cta-description">
+              Let's discuss your project and bring your ideas to life with
+              professional expertise.
+            </p>
+            <div className="cta-actions">
+              <button className="cta-btn primary">
+                <span className="btn-icon">💬</span>
+                Start Conversation
+              </button>
+              <button className="cta-btn secondary">
+                <span className="btn-icon">📞</span>
+                Schedule Call
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // RIGHT COLUMN - STICKY PRICING
+  renderRightColumn() {
+    const {
+      serviceData,
+      activeServiceTab,
+      selectedPricing,
+      services,
+      portfolioData,
+      isAddingToCart,
+      cartMessage,
+      currentUserId,
+      freelancerData,
+    } = this.state;
+
+    const effectiveActiveTab =
+      activeServiceTab ||
+      (services.length > 0
+        ? services[0].toLowerCase().replace(/\s+/g, "-")
+        : "");
+
+    if (!effectiveActiveTab || !serviceData[effectiveActiveTab]) {
+      return (
+        <div className="modern-right-column">
+          <div className="modern-pricing-card">
+            <div className="pricing-header">
+              <div className="header-content">
+                <span className="header-icon">💰</span>
+                <h2 className="pricing-title">Service Pricing</h2>
+              </div>
+            </div>
+            <div className="pricing-body">
+              <div className="pricing-empty-state">
+                <div className="empty-icon">🎯</div>
+                <h3 className="empty-title">Select a Service</h3>
+                <p className="empty-description">
+                  Choose a service from the left panel to view pricing options
+                  and make a booking.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const currentServicePricing = serviceData[effectiveActiveTab].pricing || [];
+    const serviceName = services.find(
+      (service) =>
+        service.toLowerCase().replace(/\s+/g, "-") === effectiveActiveTab
+    );
+
+    const isOwnProfile = portfolioData?.isOwnProfile;
+    const canInteract = currentUserId && !isOwnProfile;
+
+    return (
+      <div className="modern-right-column">
+        <div className="modern-pricing-card">
+          <div className="pricing-header">
+            <div className="header-content">
+              <span className="header-icon">💰</span>
+              <h2 className="pricing-title">Pricing Plans</h2>
+            </div>
+            <div className="service-badge">
+              <span className="badge-text">{serviceName}</span>
+            </div>
+          </div>
+
+          <div className="pricing-body">
+            {currentServicePricing.length > 0 ? (
+              <>
+                <div className="pricing-options">
+                  {currentServicePricing.map((option, index) => (
+                    <div
+                      key={index}
+                      className={`pricing-option ${
+                        selectedPricing?.level === option?.level
+                          ? "selected"
+                          : ""
+                      } ${!canInteract ? "disabled" : ""}`}
+                      onClick={() =>
+                        canInteract && this.handlePricingSelect(option)
+                      }
+                    >
+                      <div className="option-header">
+                        <div className="option-selection">
+                          <input
+                            type="radio"
+                            name="pricing"
+                            checked={selectedPricing?.level === option?.level}
+                            onChange={() =>
+                              canInteract && this.handlePricingSelect(option)
+                            }
+                            className="pricing-radio"
+                            disabled={!canInteract}
+                          />
+                          <div className="option-info">
+                            <h3 className="option-level">{option.level}</h3>
+                            <div className="option-details">
+                              <div className="option-price">
+                                ₹{option.price}
+                              </div>
+                              <div className="option-delivery">
+                                <span className="delivery-icon">⚡</span>
+                                <span className="delivery-text">
+                                  {option.timeFrame}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {selectedPricing?.level === option?.level && (
+                          <div className="selected-indicator">
+                            <span className="check-icon">✓</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Cart Message Display */}
+                {cartMessage && (
+                  <div
+                    className={`cart-message ${
+                      cartMessage.includes("❌") ? "error" : "success"
+                    }`}
+                  >
+                    {cartMessage}
+                  </div>
+                )}
+
+                <div className="pricing-info">
+                  <div className="info-card">
+                    <div className="info-icon">💡</div>
+                    <div className="info-content">
+                      <h4 className="info-title">Custom Requirements?</h4>
+                      <p className="info-text">
+                        Contact <strong>VOAT Network</strong> for personalized
+                        quotes and tailored solutions.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pricing-actions">
+                  {!currentUserId ? (
+                    <div className="login-prompt">
+                      <p className="prompt-text">
+                        Please login to book services
+                      </p>
+                      <button
+                        className="action-btn secondary"
+                        onClick={() => (window.location.href = "/login")}
+                      >
+                        <span className="btn-icon">🔐</span>
+                        Login
+                      </button>
+                    </div>
+                  ) : isOwnProfile ? (
+                    <div className="own-profile-message">
+                      <p className="prompt-text">This is your own profile</p>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        className="action-btn primary"
+                        onClick={this.handleAddToCart}
+                        disabled={!selectedPricing || isAddingToCart}
+                      >
+                        <span className="btn-icon">
+                          {isAddingToCart ? "⏳" : "🛒"}
+                        </span>
+                        {isAddingToCart ? "Adding..." : "Add to Cart"}
+                      </button>
+                      <button
+                        className="action-btn secondary"
+                        onClick={this.handleBookNow}
+                        disabled={!selectedPricing || isAddingToCart}
+                      >
+                        <span className="btn-icon">⚡</span>
+                        Book Now
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Service Details */}
+                {selectedPricing && (
+                  <div className="selected-service-details">
+                    <h4 className="details-title">Selected Service Details:</h4>
+                    <div className="details-content">
+                      <div className="detail-item">
+                        <span className="detail-label">Service:</span>
+                        <span className="detail-value">{serviceName}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-label">Package:</span>
+                        <span className="detail-value">
+                          {selectedPricing.level}
+                        </span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-label">Price:</span>
+                        <span className="detail-value">
+                          ₹{selectedPricing.price}
+                        </span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-label">Delivery:</span>
+                        <span className="detail-value">
+                          {selectedPricing.timeFrame}
+                        </span>
+                      </div>
+                      {freelancerData && (
+                        <div className="detail-item">
+                          <span className="detail-label">Provider:</span>
+                          <span className="detail-value">
+                            {freelancerData.name}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="pricing-empty-state">
+                <div className="empty-icon">💰</div>
+                <h3 className="empty-title">No Pricing Available</h3>
+                <p className="empty-description">
+                  Pricing options for this service haven't been set up yet.
+                  Contact directly for quotes.
+                </p>
+                <button className="contact-btn">
+                  <span className="btn-icon">💬</span>
+                  Contact for Quote
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // MODAL FORMS (Add Service)
+  renderAddServiceForm() {
+    const { newServiceName, newServiceDescription, newServicePricing } =
+      this.state;
+
+    return (
+      <div className="modern-modal-overlay">
+        <div className="modern-modal">
+          <div className="modal-header">
+            <div className="header-content">
+              <span className="header-icon">➕</span>
+              <h2 className="modal-title">Add New Service</h2>
+            </div>
+            <button
+              className="modal-close-btn"
+              onClick={this.toggleAddServiceForm}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="modal-body">
+            <form onSubmit={this.handleSaveNewService} className="modern-form">
+              <div className="form-group">
+                <label htmlFor="service-name" className="form-label">
+                  Service Name
+                </label>
+                <input
+                  type="text"
+                  id="service-name"
+                  value={newServiceName}
+                  onChange={(e) => this.handleAddServiceFormChange(e, "name")}
+                  placeholder="e.g. Web Development, Logo Design"
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="service-description" className="form-label">
+                  Service Description
+                </label>
+                <textarea
+                  id="service-description"
+                  rows="4"
+                  value={newServiceDescription}
+                  onChange={(e) =>
+                    this.handleAddServiceFormChange(e, "description")
+                  }
+                  placeholder="Describe your service in detail..."
+                  className="form-textarea"
+                  required
+                />
+              </div>
+
+              <div className="pricing-setup">
+                <h4 className="pricing-setup-title">
+                  <span className="title-icon">💰</span>
+                  Set Pricing Packages
+                </h4>
+
+                {newServicePricing.map((pricing, index) => (
+                  <div key={index} className="pricing-package">
+                    <div className="package-header">
+                      <span className="package-level">
+                        {pricing.level} Package
+                      </span>
+                    </div>
+
+                    <div className="package-inputs">
+                      <div className="input-group">
+                        <label
+                          htmlFor={`new-price-${index}`}
+                          className="input-label"
+                        >
+                          Price (₹)
+                        </label>
+                        <input
+                          type="number"
+                          id={`new-price-${index}`}
+                          name="price"
+                          value={pricing.price}
+                          onChange={(e) =>
+                            this.handleAddServiceFormChange(e, "pricing", index)
+                          }
+                          placeholder="25000"
+                          className="form-input"
+                          required
+                        />
+                      </div>
+
+                      <div className="input-group">
+                        <label
+                          htmlFor={`new-timeFrame-${index}`}
+                          className="input-label"
+                        >
+                          Delivery Time
+                        </label>
+                        <input
+                          type="text"
+                          id={`new-timeFrame-${index}`}
+                          name="timeFrame"
+                          value={pricing.timeFrame}
+                          onChange={(e) =>
+                            this.handleAddServiceFormChange(e, "pricing", index)
+                          }
+                          placeholder="2 weeks"
+                          className="form-input"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="action-btn primary">
+                  <span className="btn-icon">✅</span>
+                  Add Service
+                </button>
+                <button
+                  type="button"
+                  className="action-btn secondary"
+                  onClick={this.toggleAddServiceForm}
+                >
+                  <span className="btn-icon">❌</span>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // MODAL FORMS (Edit Service)
   renderEditServiceForm() {
     const {
       editingServiceName,
@@ -1195,12 +1784,17 @@ class MyPortfolio extends Component {
     } = this.state;
 
     return (
-      <div className="myportfoliopage-modal-overlay">
-        <div className="myportfoliopage-modal-content">
-          <div className="myportfoliopage-modal-header">
-            <h2>Edit Service: {editingServiceName}</h2>
+      <div className="modern-modal-overlay">
+        <div className="modern-modal">
+          <div className="modal-header">
+            <div className="header-content">
+              <span className="header-icon">✏️</span>
+              <h2 className="modal-title">
+                Edit Service: {editingServiceName}
+              </h2>
+            </div>
             <button
-              className="myportfoliopage-close-modal-btn"
+              className="modal-close-btn"
               onClick={this.toggleEditServiceForm}
               aria-label="Close"
             >
@@ -1208,33 +1802,53 @@ class MyPortfolio extends Component {
             </button>
           </div>
 
-          <div className="myportfoliopage-modal-body">
-            <form onSubmit={this.handleSaveEditedService}>
-              <div className="myportfoliopage-form-section">
-                <label htmlFor="service-description">Service Description</label>
+          <div className="modal-body">
+            <form
+              onSubmit={this.handleSaveEditedService}
+              className="modern-form"
+            >
+              <div className="form-group">
+                <label
+                  htmlFor="edit-service-description"
+                  className="form-label"
+                >
+                  Service Description
+                </label>
                 <textarea
-                  id="service-description"
+                  id="edit-service-description"
                   rows="4"
                   value={editingServiceDescription}
                   onChange={(e) =>
                     this.handleEditServiceFormChange(e, "description")
                   }
-                  placeholder="Describe your service in detail"
-                  className="myportfoliopage-form-textarea"
+                  placeholder="Describe your service in detail..."
+                  className="form-textarea"
                   required
                 />
               </div>
 
-              <div className="myportfoliopage-pricing-section-form">
-                <h4>Update Pricing Options (in Rupees)</h4>
+              <div className="pricing-setup">
+                <h4 className="pricing-setup-title">
+                  <span className="title-icon">💰</span>
+                  Update Pricing Packages
+                </h4>
 
                 {editingServicePricing.map((pricing, index) => (
-                  <div key={index} className="myportfoliopage-pricing-level">
-                    <h5>{pricing.level} Package</h5>
+                  <div key={index} className="pricing-package">
+                    <div className="package-header">
+                      <span className="package-level">
+                        {pricing.level} Package
+                      </span>
+                    </div>
 
-                    <div className="myportfoliopage-form-row">
-                      <div className="myportfoliopage-form-group myportfoliopage-half">
-                        <label htmlFor={`edit-price-${index}`}>Price (₹)</label>
+                    <div className="package-inputs">
+                      <div className="input-group">
+                        <label
+                          htmlFor={`edit-price-${index}`}
+                          className="input-label"
+                        >
+                          Price (₹)
+                        </label>
                         <input
                           type="number"
                           id={`edit-price-${index}`}
@@ -1247,14 +1861,18 @@ class MyPortfolio extends Component {
                               index
                             )
                           }
-                          placeholder="e.g. 25000"
+                          placeholder="25000"
+                          className="form-input"
                           required
                         />
                       </div>
 
-                      <div className="myportfoliopage-form-group myportfoliopage-half">
-                        <label htmlFor={`edit-timeFrame-${index}`}>
-                          Time Frame
+                      <div className="input-group">
+                        <label
+                          htmlFor={`edit-timeFrame-${index}`}
+                          className="input-label"
+                        >
+                          Delivery Time
                         </label>
                         <input
                           type="text"
@@ -1268,7 +1886,8 @@ class MyPortfolio extends Component {
                               index
                             )
                           }
-                          placeholder="e.g. 2 weeks"
+                          placeholder="2 weeks"
+                          className="form-input"
                           required
                         />
                       </div>
@@ -1277,231 +1896,17 @@ class MyPortfolio extends Component {
                 ))}
               </div>
 
-              <div className="myportfoliopage-form-actions">
-                <button type="submit" className="myportfoliopage-btn-primary">
+              <div className="form-actions">
+                <button type="submit" className="action-btn primary">
+                  <span className="btn-icon">✅</span>
                   Save Changes
                 </button>
                 <button
                   type="button"
-                  className="myportfoliopage-btn-secondary"
+                  className="action-btn secondary"
                   onClick={this.toggleEditServiceForm}
                 >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  renderEditProfileForm() {
-    const {
-      editFormData,
-      profileImagePreview,
-      coverImagePreview,
-      portfolioData,
-    } = this.state;
-
-    const profileImageUrl =
-      profileImagePreview ||
-      (portfolioData.profileImage &&
-      portfolioData.profileImage !== "/api/placeholder/150/150"
-        ? portfolioData.profileImage
-        : "/api/placeholder/150/150");
-
-    const coverImageUrl =
-      coverImagePreview ||
-      (portfolioData.coverImage &&
-      portfolioData.coverImage !== "/api/placeholder/800/200"
-        ? portfolioData.coverImage
-        : "/api/placeholder/800/200");
-
-    return (
-      <div className="myportfoliopage-modal-overlay">
-        <div className="myportfoliopage-modal-content">
-          <div className="myportfoliopage-modal-header">
-            <h2>Edit Profile</h2>
-            <button
-              className="myportfoliopage-close-modal-btn"
-              onClick={this.toggleEditProfile}
-              aria-label="Close"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="myportfoliopage-modal-body">
-            <form onSubmit={this.handleSaveProfile}>
-              <div className="myportfoliopage-form-section">
-                <label>Cover Image</label>
-                <div className="myportfoliopage-cover-preview-container">
-                  {coverImageUrl !== "/api/placeholder/800/200" ? (
-                    <img
-                      src={coverImageUrl}
-                      alt="Cover Preview"
-                      className="myportfoliopage-cover-preview"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/api/placeholder/800/200";
-                      }}
-                    />
-                  ) : (
-                    <div className="myportfoliopage-empty-cover-preview">
-                      <span>No cover image selected</span>
-                    </div>
-                  )}
-                </div>
-                <label
-                  htmlFor="cover-image"
-                  className="myportfoliopage-choose-image-btn"
-                >
-                  Choose Cover Image
-                  <input
-                    type="file"
-                    id="cover-image"
-                    accept="image/*"
-                    onChange={this.handleCoverImageChange}
-                    style={{ display: "none" }}
-                  />
-                </label>
-              </div>
-
-              <div className="myportfoliopage-form-grid">
-                <div className="myportfoliopage-form-section">
-                  <label>Profile Image</label>
-                  <div className="myportfoliopage-profile-preview-wrapper">
-                    <div className="myportfoliopage-profile-preview-container">
-                      {profileImageUrl !== "/api/placeholder/150/150" ? (
-                        <img
-                          src={profileImageUrl}
-                          alt="Profile Preview"
-                          className="myportfoliopage-profile-preview"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = "/api/placeholder/150/150";
-                          }}
-                        />
-                      ) : (
-                        <div className="myportfoliopage-empty-profile-preview">
-                          <span>No image</span>
-                        </div>
-                      )}
-                    </div>
-                    <label
-                      htmlFor="profile-image"
-                      className="myportfoliopage-choose-image-btn"
-                    >
-                      Choose Profile Image
-                      <input
-                        type="file"
-                        id="profile-image"
-                        accept="image/*"
-                        onChange={this.handleProfileImageChange}
-                        style={{ display: "none" }}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="myportfoliopage-form-grid">
-                <div className="myportfoliopage-form-section">
-                  <label htmlFor="name">Full Name</label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={editFormData.name}
-                    onChange={this.handleInputChange}
-                    required
-                    placeholder="Your full name"
-                    className="myportfoliopage-form-input"
-                  />
-                </div>
-                <div className="myportfoliopage-form-section">
-                  <label htmlFor="profession">Profession</label>
-                  <input
-                    type="text"
-                    id="profession"
-                    name="profession"
-                    value={editFormData.profession}
-                    onChange={this.handleInputChange}
-                    required
-                    placeholder="e.g. Web Developer"
-                    className="myportfoliopage-form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="myportfoliopage-form-grid">
-                <div className="myportfoliopage-form-section">
-                  <label htmlFor="headline">Headline</label>
-                  <input
-                    type="text"
-                    id="headline"
-                    name="headline"
-                    value={editFormData.headline}
-                    onChange={this.handleInputChange}
-                    required
-                    placeholder="e.g. Mern Stack | Business Website"
-                    className="myportfoliopage-form-input"
-                  />
-                </div>
-
-                <div className="myportfoliopage-form-section">
-                  <label htmlFor="experience">Experience</label>
-                  <input
-                    type="text"
-                    id="experience"
-                    name="experience"
-                    value={editFormData.experience}
-                    onChange={this.handleInputChange}
-                    required
-                    placeholder="e.g. 5 years"
-                    className="myportfoliopage-form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="myportfoliopage-form-section">
-                <label htmlFor="about">About Me</label>
-                <textarea
-                  id="about"
-                  name="about"
-                  rows="4"
-                  value={editFormData.about}
-                  onChange={this.handleInputChange}
-                  required
-                  placeholder="Share details about your background, skills, and experience"
-                  className="myportfoliopage-form-textarea"
-                ></textarea>
-              </div>
-
-              <div className="myportfoliopage-form-section">
-                <label htmlFor="email">Email Address</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={editFormData.email}
-                  onChange={this.handleInputChange}
-                  required
-                  placeholder="youremail@example.com"
-                  className="myportfoliopage-form-input"
-                />
-              </div>
-
-              <div className="myportfoliopage-form-actions">
-                <button type="submit" className="myportfoliopage-btn-primary">
-                  Save Changes
-                </button>
-                <button
-                  type="button"
-                  className="myportfoliopage-btn-secondary"
-                  onClick={this.toggleEditProfile}
-                >
+                  <span className="btn-icon">❌</span>
                   Cancel
                 </button>
               </div>
@@ -1522,18 +1927,23 @@ class MyPortfolio extends Component {
 
     if (isLoading) {
       return (
-        <div className="myportfoliopage-loading-container">
-          <div className="myportfoliopage-loading-spinner"></div>
-          <p>Loading portfolio...</p>
+        <div className="modern-loading-container">
+          <div className="loading-spinner"></div>
+          <p className="loading-text">Loading portfolio...</p>
         </div>
       );
     }
 
     if (!portfolioData) {
       return (
-        <div className="myportfoliopage-no-portfolio">
-          <h2>No Portfolio Data Available</h2>
-          <p>This portfolio hasn't been created or approved yet.</p>
+        <div className="modern-error-container">
+          <div className="error-content">
+            <div className="error-icon">❌</div>
+            <h2 className="error-title">Portfolio Not Found</h2>
+            <p className="error-description">
+              This portfolio hasn't been created or is not available.
+            </p>
+          </div>
         </div>
       );
     }
@@ -1542,12 +1952,15 @@ class MyPortfolio extends Component {
       return (
         <>
           <NavBar />
-          <div className="myportfoliopage-container">
-            <div className="myportfoliopage-awaiting-approval">
-              <h2>Portfolio Not Available</h2>
-              <p>
-                This portfolio is not currently available for public viewing.
-              </p>
+          <div className="modern-container">
+            <div className="modern-status-container">
+              <div className="status-content">
+                <div className="status-icon">⏳</div>
+                <h2 className="status-title">Portfolio Not Available</h2>
+                <p className="status-description">
+                  This portfolio is not currently available for public viewing.
+                </p>
+              </div>
             </div>
           </div>
           <Footer />
@@ -1559,20 +1972,19 @@ class MyPortfolio extends Component {
       return (
         <>
           <NavBar />
-          <div className="myportfoliopage-container">
-            <div className="myportfoliopage-awaiting-approval">
-              <h2>Portfolio Awaiting Approval</h2>
-              <p>
-                Your portfolio has been submitted and is waiting for admin
-                approval.
-              </p>
-              <p>
-                You can continue to edit your details, but your portfolio will
-                not be visible to others until approved.
-              </p>
+          <div className="modern-container">
+            <div className="modern-status-container">
+              <div className="status-content">
+                <div className="status-icon">⏳</div>
+                <h2 className="status-title">Portfolio Awaiting Approval</h2>
+                <p className="status-description">
+                  Your portfolio has been submitted and is waiting for admin
+                  approval. You can continue to edit your details, but your
+                  portfolio will not be visible to others until approved.
+                </p>
+              </div>
             </div>
-            {this.renderProfile()}
-            <div className="myportfoliopage-main-content">
+            <div className="modern-main-content">
               {this.renderLeftColumn()}
               {this.renderRightColumn()}
             </div>
@@ -1585,9 +1997,8 @@ class MyPortfolio extends Component {
     return (
       <>
         <NavBar />
-        <div className="myportfoliopage-container">
-          {this.renderProfile()}
-          <div className="myportfoliopage-main-content">
+        <div className="modern-container">
+          <div className="modern-main-content">
             {this.renderLeftColumn()}
             {this.renderRightColumn()}
           </div>

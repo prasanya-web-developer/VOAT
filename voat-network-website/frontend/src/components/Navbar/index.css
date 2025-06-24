@@ -834,3 +834,46 @@
     text-overflow: ellipsis;
   }
 }
+
+.navbar-cart {
+  display: flex;
+  margin-right: 15px;
+  background: none;
+  border: none;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.navbar-cart:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.navbar-cart svg {
+  color: #fff;
+  transition: color 0.3s;
+}
+
+.navbar-cart svg:hover {
+  color: #dedaf5;
+}
+
+.mobile-cart-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 18px;
+  transition: color 0.3s;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.mobile-cart-btn:hover {
+  color: #fccf2b;
+}
