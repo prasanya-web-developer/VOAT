@@ -100,7 +100,7 @@ class Footer extends Component {
             </ul>
           </div>
 
-          {/* Contact Us Section - Updated to make both icon and text clickable */}
+          {/* Contact Us Section */}
           <div className="footer-column footer-contact-container">
             <h1>Contact Us</h1>
             <div className="section-divider"></div>
@@ -148,7 +148,7 @@ class Footer extends Component {
             </a>
           </div>
 
-          {/* Connect With Us Section - Updated to make both icon and text clickable */}
+          {/* Connect With Us Section */}
           <div className="footer-column footer-social-container">
             <h1>Connect With Us</h1>
             <div className="section-divider"></div>

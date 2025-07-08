@@ -289,7 +289,7 @@ class AdminPanel extends Component {
     }
   };
 
-  // New modern filter and search methods
+  // filter and search methods
   handleSearchChange = (e) => {
     this.setState({ searchTerm: e.target.value, currentPage: 1 });
   };

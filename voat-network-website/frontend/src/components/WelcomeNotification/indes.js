@@ -1,4 +1,3 @@
-// src/components/WelcomeNotification/index.js
 import React from "react";
 import "./index.css";
 

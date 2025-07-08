@@ -18,7 +18,6 @@ class MyPortfolio extends Component {
     editingServiceName: "",
     editingServiceDescription: "",
     editingServicePricing: [],
-    // Add new service form fields
     newServiceName: "",
     newServiceDescription: "",
     newServicePricing: [
@@ -41,11 +40,136 @@ class MyPortfolio extends Component {
     profileImagePreview: null,
     videos: [],
     newVideo: null,
-    // Cart related states
     isAddingToCart: false,
     cartMessage: "",
     currentUserId: null,
     freelancerData: null,
+  };
+
+  // Predefined list of professional roles (same as PortfolioList)
+  predefinedProfessions = [
+    "Web Developer",
+    "Mobile App Developer",
+    "Full Stack Developer",
+    "Frontend Developer",
+    "Backend Developer",
+    "UI/UX Designer",
+    "Graphic Designer",
+    "Digital Marketing Specialist",
+    "Content Writer",
+    "Copywriter",
+    "SEO Specialist",
+    "Social Media Manager",
+    "Video Editor",
+    "Photographer",
+    "Data Analyst",
+    "Data Scientist",
+    "Machine Learning Engineer",
+    "DevOps Engineer",
+    "Cybersecurity Specialist",
+    "Cloud Architect",
+    "Business Analyst",
+    "Project Manager",
+    "Product Manager",
+    "Technical Writer",
+    "Software Tester",
+    "Quality Assurance Engineer",
+    "Database Administrator",
+    "System Administrator",
+    "Network Engineer",
+    "Blockchain Developer",
+    "Game Developer",
+    "WordPress Developer",
+    "Shopify Developer",
+    "E-commerce Specialist",
+    "Email Marketing Specialist",
+    "PPC Specialist",
+    "Brand Designer",
+    "Logo Designer",
+    "Illustration Designer",
+    "Motion Graphics Designer",
+    "3D Modeler",
+    "Animation Specialist",
+    "Voice Over Artist",
+    "Translator",
+    "Virtual Assistant",
+    "Customer Support Specialist",
+    "Sales Specialist",
+    "Lead Generation Specialist",
+    "Market Research Analyst",
+    "Financial Analyst",
+    "Accounting Specialist",
+    "Tax Consultant",
+    "Legal Consultant",
+    "HR Consultant",
+    "Business Consultant",
+    "Marketing Consultant",
+    "Strategy Consultant",
+    "Interior Designer",
+    "Fashion Designer",
+    "Chartered Accountant",
+    "Digital Marketing",
+    "Web Development Professional",
+  ];
+
+  // Function to normalize and match profession names
+  normalizeProfession = (inputProfession) => {
+    if (!inputProfession || typeof inputProfession !== "string") {
+      return null;
+    }
+
+    const normalized = inputProfession.trim().toLowerCase();
+
+    // Find exact match first
+    const exactMatch = this.predefinedProfessions.find(
+      (prof) => prof.toLowerCase() === normalized
+    );
+
+    if (exactMatch) return exactMatch;
+
+    // Find partial match (contains)
+    const partialMatch = this.predefinedProfessions.find(
+      (prof) =>
+        prof.toLowerCase().includes(normalized) ||
+        normalized.includes(prof.toLowerCase())
+    );
+
+    if (partialMatch) return partialMatch;
+
+    const variations = {
+      "web dev": "Web Developer",
+      "frontend dev": "Frontend Developer",
+      "backend dev": "Backend Developer",
+      "fullstack dev": "Full Stack Developer",
+      "ui designer": "UI/UX Designer",
+      "ux designer": "UI/UX Designer",
+      "digital marketer": "Digital Marketing Specialist",
+      "seo expert": "SEO Specialist",
+      "social media": "Social Media Manager",
+      "data science": "Data Scientist",
+      "ml engineer": "Machine Learning Engineer",
+      "qa engineer": "Quality Assurance Engineer",
+      "qa tester": "Quality Assurance Engineer",
+      "software test": "Software Tester",
+      devops: "DevOps Engineer",
+      "cyber security": "Cybersecurity Specialist",
+      "security specialist": "Cybersecurity Specialist",
+      "wordpress dev": "WordPress Developer",
+      ecommerce: "E-commerce Specialist",
+      va: "Virtual Assistant",
+      "virtual assist": "Virtual Assistant",
+      "customer service": "Customer Support Specialist",
+      ca: "Chartered Accountant",
+      "chartered acc": "Chartered Accountant",
+    };
+
+    for (const [key, value] of Object.entries(variations)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return value;
+      }
+    }
+
+    return inputProfession;
   };
 
   componentDidMount() {
@@ -128,6 +252,9 @@ class MyPortfolio extends Component {
         throw new Error("User data not found in server response");
       }
 
+      // Normalize profession from user data
+      const normalizedProfession = this.normalizeProfession(user.profession);
+
       // Store freelancer data for cart functionality
       this.setState({
         freelancerData: {
@@ -152,7 +279,10 @@ class MyPortfolio extends Component {
         });
       }
 
-      const serviceNames = services.map((service) => service.name);
+      const serviceNames = [
+        ...new Set(services.map((service) => service.name)),
+      ];
+
       const firstServiceKey =
         serviceNames.length > 0
           ? serviceNames[0].toLowerCase().replace(/\s+/g, "-")
@@ -167,7 +297,8 @@ class MyPortfolio extends Component {
       const portfolioData = {
         name: portfolio?.name || user.name || "",
         headline: portfolio?.headline || "",
-        profession: user.profession || "",
+        profession: normalizedProfession || "Professional",
+        originalProfession: user.profession || "",
         experience: portfolio?.workExperience || "",
         about: portfolio?.about || "",
         email: portfolio?.email || user.email || "",
@@ -331,7 +462,7 @@ class MyPortfolio extends Component {
     }
   };
 
-  // Book Now functionality (can redirect to booking page or open a modal)
+  // Book Now functionality
   handleBookNow = async () => {
     const {
       selectedPricing,
@@ -407,7 +538,7 @@ class MyPortfolio extends Component {
 
       this.setState({
         cartMessage: "✅ Booking request sent successfully!",
-        selectedPricing: null, // Reset selection
+        selectedPricing: null,
       });
 
       // Show success message for 3 seconds
@@ -449,6 +580,17 @@ class MyPortfolio extends Component {
 
     const { newServiceName, newServiceDescription, newServicePricing } =
       this.state;
+
+    // Add duplicate check here
+    if (
+      this.state.services.some(
+        (service) =>
+          service.toLowerCase().trim() === newServiceName.toLowerCase().trim()
+      )
+    ) {
+      alert("A service with this name already exists!");
+      return;
+    }
 
     try {
       const userData = localStorage.getItem("user");
@@ -493,8 +635,10 @@ class MyPortfolio extends Component {
 
       console.log("Service added successfully:", result);
 
-      // Update local state
+      // Update local state with deduplication
       const newServices = [...this.state.services, newServiceName];
+      const deduplicatedServices = [...new Set(newServices)]; // Remove any duplicates
+
       const newServiceKey = newServiceName.toLowerCase().replace(/\s+/g, "-");
       const updatedServiceData = { ...this.state.serviceData };
       updatedServiceData[newServiceKey] = {
@@ -505,7 +649,7 @@ class MyPortfolio extends Component {
       };
 
       this.setState({
-        services: newServices,
+        services: deduplicatedServices,
         serviceData: updatedServiceData,
         activeServiceTab: newServiceKey,
         showAddServiceForm: false,
@@ -730,55 +874,55 @@ class MyPortfolio extends Component {
     }
   };
 
+  // In MyPortfolio.js
+
   handleAddVideo = async (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+    if (!e.target.files || !e.target.files[0]) {
+      return; // No file selected
+    }
+    const file = e.target.files[0];
+    const userData = JSON.parse(localStorage.getItem("user"));
 
-      try {
-        const userData = localStorage.getItem("user");
-        const userId = userData ? JSON.parse(userData).id : null;
+    if (!userData?.id) {
+      alert("You must be logged in to upload work.");
+      return;
+    }
 
-        if (!userId) {
-          throw new Error("User ID not found");
-        }
+    const formData = new FormData();
+    formData.append("workFile", file); // This key matches your backend multer config
+    formData.append("userId", userData.id);
+    formData.append("title", file.name);
 
-        const formData = new FormData();
-        formData.append("workFile", file);
-        formData.append("userId", userId);
-        formData.append("title", file.name);
-        formData.append("serviceName", this.state.activeServiceTab || "");
+    try {
+      const response = await fetch(`${this.state.baseUrl}/api/add-work`, {
+        method: "POST",
+        body: formData,
+      });
 
-        const response = await fetch(`${this.state.baseUrl}/api/add-work`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Upload error:", errorText);
-          throw new Error(`Upload failed: ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log("Work uploaded successfully:", result);
-
-        const newWork = {
-          id: result.workId,
-          url: result.workUrl,
-          thumbnail: result.workUrl,
-          serviceName: this.state.activeServiceTab || "",
-          type: file.type.startsWith("video/") ? "video" : "image",
-        };
-
-        this.setState((prevState) => ({
-          videos: [...prevState.videos, newWork],
-        }));
-
-        alert("Work uploaded successfully!");
-      } catch (error) {
-        console.error("Error uploading work:", error);
-        alert("Error uploading work: " + error.message);
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "File upload failed.");
       }
+
+      const newWorkItem = {
+        id: result.workId,
+        url: `${this.state.baseUrl}${result.workUrl}`,
+        thumbnail: file.type.startsWith("image/")
+          ? `${this.state.baseUrl}${result.workUrl}`
+          : "URL_TO_A_DEFAULT_VIDEO_ICON.png",
+        title: file.name,
+        type: file.type.startsWith("video/") ? "video" : "image",
+      };
+
+      // Update the state to show the new work immediately
+      this.setState((prevState) => ({
+        videos: [...prevState.videos, newWorkItem],
+      }));
+
+      alert("Work added successfully!");
+    } catch (error) {
+      console.error("Error adding work:", error);
+      alert(`Error: ${error.message}`);
     }
   };
 
@@ -838,6 +982,31 @@ class MyPortfolio extends Component {
       profileImage: null,
       profileImagePreview: null,
     }));
+  };
+
+  getInitials = (name) => {
+    if (!name || typeof name !== "string") {
+      return "";
+    }
+    // Remove extra whitespace and split into parts
+    const nameParts = name.trim().split(/\s+/);
+
+    if (nameParts.length > 1 && nameParts[1]) {
+      return (
+        nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)
+      ).toUpperCase();
+    }
+
+    if (nameParts[0] && nameParts[0].length > 1) {
+      return nameParts[0].substring(0, 2).toUpperCase();
+    }
+
+    // For single-character names
+    if (nameParts[0] && nameParts[0].length === 1) {
+      return nameParts[0].toUpperCase();
+    }
+
+    return "";
   };
 
   handleSaveProfile = async (e) => {
@@ -913,7 +1082,6 @@ class MyPortfolio extends Component {
     }
   };
 
-  // HERO SECTION (NOW WITH GRADIENT BACKGROUND INSTEAD OF COVER IMAGE)
   renderHeroSection() {
     const { portfolioData, isEditingProfile } = this.state;
 
@@ -929,7 +1097,7 @@ class MyPortfolio extends Component {
       portfolioData.profileImage &&
       portfolioData.profileImage !== "/api/placeholder/150/150"
         ? portfolioData.profileImage
-        : "/api/placeholder/150/150";
+        : null;
 
     return (
       <div className="modern-hero-section">
@@ -952,9 +1120,7 @@ class MyPortfolio extends Component {
                 />
               ) : (
                 <div className="hero-avatar-placeholder">
-                  {portfolioData.name
-                    ? portfolioData.name.charAt(0).toUpperCase()
-                    : "P"}
+                  {this.getInitials(portfolioData.name) || "P"}
                 </div>
               )}
             </div>
@@ -999,7 +1165,7 @@ class MyPortfolio extends Component {
     );
   }
 
-  // MODAL FORMS (Edit Profile) - COVER IMAGE SECTION COMMENTED OUT
+  //COVER IMAGE SECTION COMMENTED OUT
   renderEditProfileForm() {
     const { editFormData, profileImagePreview, portfolioData } = this.state;
 
@@ -1008,7 +1174,7 @@ class MyPortfolio extends Component {
       (portfolioData.profileImage &&
       portfolioData.profileImage !== "/api/placeholder/150/150"
         ? portfolioData.profileImage
-        : "/api/placeholder/150/150");
+        : null);
 
     return (
       <div className="modern-modal-overlay">
@@ -1034,7 +1200,7 @@ class MyPortfolio extends Component {
                   <label className="form-label">Profile Image</label>
                   <div className="profile-upload-area">
                     <div className="profile-preview-container">
-                      {profileImageUrl !== "/api/placeholder/150/150" ? (
+                      {profileImageUrl ? (
                         <img
                           src={profileImageUrl}
                           alt="Profile Preview"
@@ -1046,7 +1212,9 @@ class MyPortfolio extends Component {
                         />
                       ) : (
                         <div className="profile-placeholder">
-                          <span className="placeholder-text">No image</span>
+                          <span className="placeholder-text">
+                            {this.getInitials(editFormData.name)}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1185,7 +1353,6 @@ class MyPortfolio extends Component {
     );
   }
 
-  // LEFT COLUMN WITH ALL CONTENT
   renderLeftColumn() {
     const { portfolioData, services, activeServiceTab, serviceData, videos } =
       this.state;
@@ -1244,13 +1411,13 @@ class MyPortfolio extends Component {
             {services.length > 0 ? (
               <>
                 <div className="service-tabs">
-                  {services.map((service, index) => {
+                  {[...new Set(services)].map((service, index) => {
                     const serviceKey = service
                       .toLowerCase()
                       .replace(/\s+/g, "-");
                     return (
                       <button
-                        key={index}
+                        key={`${serviceKey}-${index}`}
                         className={`service-tab ${
                           activeServiceTab === serviceKey ? "active" : ""
                         }`}
@@ -1262,7 +1429,11 @@ class MyPortfolio extends Component {
                             className="tab-remove"
                             onClick={(e) => {
                               e.stopPropagation();
-                              this.handleServiceHoverRemove(index);
+                              // Find the actual index in the original services array
+                              const actualIndex = services.findIndex(
+                                (s) => s === service
+                              );
+                              this.handleServiceHoverRemove(actualIndex);
                             }}
                             title="Remove service"
                           >
@@ -1392,7 +1563,6 @@ class MyPortfolio extends Component {
     );
   }
 
-  // RIGHT COLUMN - STICKY PRICING
   renderRightColumn() {
     const {
       serviceData,
@@ -1637,7 +1807,6 @@ class MyPortfolio extends Component {
     );
   }
 
-  // MODAL FORMS (Add Service)
   renderAddServiceForm() {
     const { newServiceName, newServiceDescription, newServicePricing } =
       this.state;
@@ -1775,7 +1944,6 @@ class MyPortfolio extends Component {
     );
   }
 
-  // MODAL FORMS (Edit Service)
   renderEditServiceForm() {
     const {
       editingServiceName,

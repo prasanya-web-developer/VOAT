@@ -25,7 +25,7 @@ class ServicesPage extends Component {
           "Custom websites and web applications tailored to your business needs with responsive design and modern technologies.",
         icon: <Code size={28} />,
         color: "#6b5ce7",
-        filterValue: "Web Developer", // This should match the profession values in your portfolio data
+        filterValue: "Web Developer",
       },
       {
         id: 2,
@@ -34,7 +34,7 @@ class ServicesPage extends Component {
           "Strategic campaigns designed to boost your online presence and drive qualified traffic to your business.",
         icon: <Megaphone size={28} />,
         color: "#7b6cff",
-        filterValue: "Digital Marketer",
+        filterValue: "Digital Marketing Specialist",
       },
       {
         id: 3,

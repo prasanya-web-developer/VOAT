@@ -47,7 +47,6 @@ class NavBar extends Component {
   storageEventBound = false;
 
   componentDidMount() {
-    // Make the NavBar component accessible globally for testing
     window.navbarComponent = this;
 
     this.checkScreenSize();
@@ -70,7 +69,7 @@ class NavBar extends Component {
     // Check initial login status without showing notifications
     this.loadUserData();
 
-    // Set up interval to check for login status changes (reduced frequency)
+    // Set up interval to check for login status changes
     this.loginCheckInterval = setInterval(
       this.checkLoginStatusPeriodically,
       2000
@@ -603,9 +602,12 @@ class NavBar extends Component {
   // Handle search form submission
   handleSearchSubmit = (e) => {
     e.preventDefault();
-    // Implement search functionality here
-    console.log("Search query:", this.state.searchQuery);
-    // You can redirect to search results page or handle search in another way
+    const { searchQuery } = this.state;
+    if (searchQuery.trim()) {
+      window.location.href = `/portfolio-list?profession=${encodeURIComponent(
+        searchQuery.trim()
+      )}`;
+    }
   };
 
   // Manual update method for testing/debugging
@@ -828,11 +830,11 @@ class NavBar extends Component {
                 {!isLoggedIn && (
                   <div className="navbar-auth desktop-auth">
                     <Link
-                      to="/signup"
+                      to="/login"
                       className="get-started-btn"
                       onClick={this.scrollToTop}
                     >
-                      Register
+                      Login
                     </Link>
                   </div>
                 )}
@@ -843,11 +845,11 @@ class NavBar extends Component {
                 <div className="mobile-nav-controls">
                   {!isLoggedIn && (
                     <Link
-                      to="/signup"
+                      to="/login"
                       className="get-started-btn mobile-auth"
                       onClick={this.scrollToTop}
                     >
-                      Register
+                      login
                     </Link>
                   )}
 
@@ -1082,5 +1084,4 @@ class NavBar extends Component {
   }
 }
 
-// Wrap with withRouter to access location props
 export default NavBar;

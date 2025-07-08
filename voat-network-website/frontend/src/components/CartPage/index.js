@@ -1,11 +1,14 @@
 import React, { Component } from "react";
-import { X, Plus, Minus, ShoppingBag, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { X, ShoppingBag, Trash2 } from "lucide-react";
 import "./index.css";
 
 class CartSidebar extends Component {
   state = {
     cartItems: [],
+    selectedItems: new Set(),
     isLoading: false,
+    isCheckingOut: false,
     error: null,
     baseUrl: "https://voat.onrender.com",
     currentUserId: null,
@@ -108,7 +111,6 @@ class CartSidebar extends Component {
         id: item._id,
         name: `${item.serviceName} - ${item.serviceLevel}`,
         price: item.selectedPaymentAmount,
-        quantity: 1,
         image: this.getProfileImageUrl(item.freelancerProfileImage),
         seller: item.freelancerName,
         category: item.serviceName,
@@ -121,8 +123,12 @@ class CartSidebar extends Component {
 
       console.log("=== TRANSFORMED ITEMS ===", transformedItems);
 
+      // Initialize all items as selected by default
+      const allItemIds = new Set(transformedItems.map((item) => item.id));
+
       this.setState({
         cartItems: transformedItems,
+        selectedItems: allItemIds,
         isLoading: false,
       });
     } catch (error) {
@@ -135,13 +141,14 @@ class CartSidebar extends Component {
         error: error.message,
         isLoading: false,
         cartItems: [],
+        selectedItems: new Set(),
       });
     }
   };
 
   getProfileImageUrl = (imagePath) => {
     if (!imagePath || imagePath === "/api/placeholder/150/150") {
-      return "/api/placeholder/150/150";
+      return null;
     }
 
     if (imagePath.startsWith("http")) {
@@ -153,32 +160,147 @@ class CartSidebar extends Component {
     }${imagePath}`;
   };
 
-  // Calculate total price
+  // Generate initials from seller name
+  getSellerInitials = (sellerName) => {
+    if (!sellerName) return "U";
+
+    const names = sellerName.trim().split(" ");
+    if (names.length === 1) {
+      return names[0].substring(0, 2).toUpperCase();
+    } else {
+      return (names[0][0] + names[1][0]).toUpperCase();
+    }
+  };
+
+  // Handle individual item selection
+  toggleItemSelection = (itemId) => {
+    this.setState((prevState) => {
+      const newSelectedItems = new Set(prevState.selectedItems);
+      if (newSelectedItems.has(itemId)) {
+        newSelectedItems.delete(itemId);
+      } else {
+        newSelectedItems.add(itemId);
+      }
+      return { selectedItems: newSelectedItems };
+    });
+  };
+
+  // Handle select all / deselect all
+  toggleSelectAll = () => {
+    const { cartItems, selectedItems } = this.state;
+    const allItemIds = cartItems.map((item) => item.id);
+    const allSelected = allItemIds.every((id) => selectedItems.has(id));
+
+    if (allSelected) {
+      // Deselect all
+      this.setState({ selectedItems: new Set() });
+    } else {
+      // Select all
+      this.setState({ selectedItems: new Set(allItemIds) });
+    }
+  };
+
+  // Calculate total price for selected items only
   calculateTotal = () => {
-    return this.state.cartItems
-      .reduce((total, item) => {
-        return total + item.price * item.quantity;
-      }, 0)
+    const { cartItems, selectedItems } = this.state;
+    return cartItems
+      .filter((item) => selectedItems.has(item.id))
+      .reduce((total, item) => total + item.price, 0)
       .toFixed(2);
   };
 
   // Calculate total items count
   getTotalItemsCount = () => {
-    return this.state.cartItems.reduce((total, item) => {
-      return total + item.quantity;
-    }, 0);
+    return this.state.cartItems.length;
   };
 
-  // Update item quantity (not really applicable for services, but keeping for consistency)
-  updateQuantity = async (itemId, newQuantity) => {
-    if (newQuantity < 1) return;
+  // Get selected items count
+  getSelectedItemsCount = () => {
+    return this.state.selectedItems.size;
+  };
 
-    // For services, quantity should always be 1, but we'll keep this for UI consistency
-    this.setState((prevState) => ({
-      cartItems: prevState.cartItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
-      ),
-    }));
+  // Remove from both cart and wishlist
+  removeFromWishlistIfExists = async (itemToRemove) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) return;
+
+      console.log("=== CHECKING WISHLIST FOR REMOVAL ===");
+      console.log("Item to check:", itemToRemove);
+
+      // Get current wishlist
+      const wishlistResponse = await fetch(
+        `${this.state.baseUrl}/api/wishlist/${userData.id}`
+      );
+
+      if (wishlistResponse.ok) {
+        const currentWishlist = await wishlistResponse.json();
+        console.log("Current wishlist:", currentWishlist);
+
+        // Find matching wishlist item
+        // Match by service name and provider name
+        const matchingWishlistItem = currentWishlist.find((wishlistItem) => {
+          const serviceMatch = wishlistItem.service === itemToRemove.category;
+          const providerMatch = wishlistItem.provider === itemToRemove.seller;
+
+          console.log("Checking match:", {
+            wishlistService: wishlistItem.service,
+            cartService: itemToRemove.category,
+            wishlistProvider: wishlistItem.provider,
+            cartProvider: itemToRemove.seller,
+            serviceMatch,
+            providerMatch,
+          });
+
+          return serviceMatch && providerMatch;
+        });
+
+        if (matchingWishlistItem) {
+          console.log(
+            "=== FOUND MATCHING WISHLIST ITEM ===",
+            matchingWishlistItem
+          );
+
+          // Remove from wishlist
+          const updatedWishlist = currentWishlist.filter(
+            (item) => item.id !== matchingWishlistItem.id
+          );
+
+          // Update server wishlist
+          await fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(updatedWishlist),
+          });
+
+          // Update localStorage
+          localStorage.setItem(
+            `wishlist_${userData.id}`,
+            JSON.stringify(updatedWishlist)
+          );
+
+          // Trigger dashboard wishlist refresh if callback exists
+          if (this.props.onWishlistUpdate) {
+            this.props.onWishlistUpdate();
+          }
+
+          // Dispatch custom event for dashboard to listen
+          window.dispatchEvent(
+            new CustomEvent("wishlistUpdated", {
+              detail: { updatedWishlist },
+            })
+          );
+
+          console.log("=== WISHLIST UPDATED AFTER CART REMOVAL ===");
+        } else {
+          console.log("=== NO MATCHING WISHLIST ITEM FOUND ===");
+        }
+      }
+    } catch (error) {
+      console.error("Error updating wishlist after cart removal:", error);
+    }
   };
 
   // Remove item from cart
@@ -202,6 +324,12 @@ class CartSidebar extends Component {
       console.log("=== REMOVING CART ITEM ===");
       console.log("Item ID:", itemId);
       console.log("User ID:", currentUserId);
+
+      // Get the item details before removing it (for wishlist sync)
+      const itemToRemove = this.state.cartItems.find(
+        (item) => item.id === itemId
+      );
+      console.log("Item to remove:", itemToRemove);
 
       const response = await fetch(`${this.state.baseUrl}/api/cart/remove`, {
         method: "DELETE",
@@ -244,10 +372,26 @@ class CartSidebar extends Component {
         throw new Error(result.message || "Failed to remove item");
       }
 
-      // Remove item from local state
-      this.setState((prevState) => ({
-        cartItems: prevState.cartItems.filter((item) => item.id !== itemId),
-      }));
+      // Remove item from local state and selected items
+      this.setState((prevState) => {
+        const newSelectedItems = new Set(prevState.selectedItems);
+        newSelectedItems.delete(itemId);
+
+        return {
+          cartItems: prevState.cartItems.filter((item) => item.id !== itemId),
+          selectedItems: newSelectedItems,
+        };
+      });
+
+      // Remove from wishlist if it exists there
+      if (itemToRemove) {
+        await this.removeFromWishlistIfExists(itemToRemove);
+      }
+
+      // Trigger dashboard orders refresh if callback exists
+      if (this.props.onOrdersUpdate) {
+        this.props.onOrdersUpdate();
+      }
 
       console.log("Item removed from cart successfully");
     } catch (error) {
@@ -272,6 +416,9 @@ class CartSidebar extends Component {
     try {
       console.log("=== CLEARING CART ===");
       console.log("User ID:", currentUserId);
+
+      // Store current cart items for wishlist sync
+      const currentCartItems = [...this.state.cartItems];
 
       const response = await fetch(
         `${this.state.baseUrl}/api/cart/clear/${currentUserId}`,
@@ -313,7 +460,20 @@ class CartSidebar extends Component {
       }
 
       // Clear local state
-      this.setState({ cartItems: [] });
+      this.setState({
+        cartItems: [],
+        selectedItems: new Set(),
+      });
+
+      // Remove corresponding items from wishlist
+      for (const cartItem of currentCartItems) {
+        await this.removeFromWishlistIfExists(cartItem);
+      }
+
+      // Trigger dashboard orders refresh if callback exists
+      if (this.props.onOrdersUpdate) {
+        this.props.onOrdersUpdate();
+      }
 
       console.log("Cart cleared successfully");
     } catch (error) {
@@ -322,9 +482,9 @@ class CartSidebar extends Component {
     }
   };
 
-  // Handle checkout
-  handleCheckout = () => {
-    const { cartItems, currentUserId } = this.state;
+  // Handle checkout for selected items only
+  handleCheckout = async () => {
+    const { cartItems, selectedItems, currentUserId } = this.state;
 
     if (!currentUserId) {
       alert("Please log in to proceed with checkout");
@@ -336,88 +496,94 @@ class CartSidebar extends Component {
       return;
     }
 
-    // Here you can implement the checkout logic
-    console.log("Proceeding to checkout with items:", cartItems);
-
-    // For now, just show a message
-    alert(
-      `Proceeding to checkout with ${
-        cartItems.length
-      } items. Total: ₹${this.calculateTotal()}`
-    );
-
-    // You could redirect to a checkout page or open a checkout modal
-    // window.location.href = '/checkout';
-  };
-
-  // Handle individual item booking
-  handleBookItem = async (item) => {
-    const { currentUserId } = this.state;
-
-    if (!currentUserId) {
-      alert("Please log in to book services");
+    if (selectedItems.size === 0) {
+      alert("Please select at least one item to checkout");
       return;
     }
 
+    // Get selected items for checkout
+    const selectedCartItems = cartItems.filter((item) =>
+      selectedItems.has(item.id)
+    );
+
+    console.log("=== PROCEEDING TO CHECKOUT ===");
+    console.log("Selected items:", selectedCartItems);
+
+    this.setState({ isCheckingOut: true });
+
     try {
-      // Get current user data
-      const userData = localStorage.getItem("user");
-      const currentUser = JSON.parse(userData);
-
-      const bookingData = {
-        clientId: currentUserId,
-        clientName: currentUser.name,
-        clientEmail: currentUser.email,
-        clientProfileImage: currentUser.profileImage,
-        freelancerId: item.freelancerId,
-        freelancerName: item.seller,
-        freelancerEmail: "", // We don't have this in cart data
-        serviceName: item.name,
-        servicePrice: item.price,
-      };
-
-      console.log("Creating booking for item:", bookingData);
-
-      const response = await fetch(`${this.state.baseUrl}/api/create-booking`, {
+      // Call the new checkout API endpoint
+      const response = await fetch(`${this.state.baseUrl}/api/cart/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(bookingData),
+        body: JSON.stringify({
+          userId: currentUserId,
+          selectedItems: Array.from(selectedItems),
+        }),
       });
-
-      // Check if response is JSON
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.log("=== BOOKING NON-JSON RESPONSE ===", text);
-        throw new Error(
-          `Server returned non-JSON response: ${response.status}`
-        );
-      }
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to create booking");
+        throw new Error(result.message || "Failed to process checkout");
       }
 
-      console.log("Booking created successfully:", result);
-      alert("Booking request sent successfully!");
+      console.log("=== CHECKOUT SUCCESS ===", result);
 
-      // Optionally remove the item from cart after booking
-      // await this.removeItem(item.id);
+      // Remove checked out items from local state
+      this.setState((prevState) => ({
+        cartItems: prevState.cartItems.filter(
+          (item) => !selectedItems.has(item.id)
+        ),
+        selectedItems: new Set(),
+        isCheckingOut: false,
+      }));
+
+      // Show success message
+      alert(
+        `Checkout successful! ${result.orders.length} orders created. Check your "My Orders" section to track progress.`
+      );
+
+      // Trigger dashboard orders refresh if callback exists
+      if (this.props.onOrdersUpdate) {
+        this.props.onOrdersUpdate();
+      }
+
+      // Dispatch custom event for dashboard to listen
+      window.dispatchEvent(
+        new CustomEvent("ordersUpdated", {
+          detail: { newOrders: result.orders },
+        })
+      );
+
+      // Close cart sidebar after successful checkout
+      if (this.props.onClose) {
+        this.props.onClose();
+      }
     } catch (error) {
-      console.error("Error creating booking:", error);
-      alert("Error creating booking: " + error.message);
+      console.error("Checkout error:", error);
+      alert("Checkout failed: " + error.message);
+      this.setState({ isCheckingOut: false });
     }
   };
 
   render() {
     const { isOpen, onClose } = this.props;
-    const { cartItems, isLoading, error } = this.state;
+    const { cartItems, selectedItems, isLoading, isCheckingOut, error } =
+      this.state;
     const totalPrice = this.calculateTotal();
     const totalItems = this.getTotalItemsCount();
+    const selectedItemsCount = this.getSelectedItemsCount();
+    const showCheckboxes = cartItems.length > 1;
+
+    // Check if all items are selected
+    const allSelected =
+      cartItems.length > 0 &&
+      cartItems.every((item) => selectedItems.has(item.id));
+    const someSelected =
+      selectedItems.size > 0 && selectedItems.size < cartItems.length;
 
     return (
       <>
@@ -487,85 +653,82 @@ class CartSidebar extends Component {
             ) : (
               // Cart Items
               <div className="cartpage-items-container">
+                {/* Select All Header - Only show if more than 1 item */}
+                {showCheckboxes && (
+                  <div className="cartpage-select-all-header">
+                    <label className="cartpage-select-all-label">
+                      <input
+                        type="checkbox"
+                        className="cartpage-select-all-checkbox"
+                        checked={allSelected}
+                        ref={(input) => {
+                          if (input) input.indeterminate = someSelected;
+                        }}
+                        onChange={this.toggleSelectAll}
+                      />
+                      <span className="cartpage-select-all-text">
+                        {allSelected ? "Deselect All" : "Select All"}
+                        {selectedItemsCount > 0 &&
+                          ` (${selectedItemsCount} selected)`}
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 {cartItems.map((item) => (
                   <div key={item.id} className="cartpage-item">
+                    {/* Checkbox - Only show if more than 1 item */}
+                    {showCheckboxes && (
+                      <div className="cartpage-item-checkbox">
+                        <input
+                          type="checkbox"
+                          className="cartpage-checkbox"
+                          checked={selectedItems.has(item.id)}
+                          onChange={() => this.toggleItemSelection(item.id)}
+                        />
+                      </div>
+                    )}
+
                     <div className="cartpage-item-image">
-                      <img
-                        src={item.image}
-                        alt={item.seller}
-                        onError={(e) => {
-                          e.target.src = "/api/placeholder/100x100";
+                      {this.getProfileImageUrl(item.image) ? (
+                        <img
+                          src={this.getProfileImageUrl(item.image)}
+                          alt={item.seller}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="cartpage-profile-placeholder"
+                        style={{
+                          display: this.getProfileImageUrl(item.image)
+                            ? "none"
+                            : "flex",
                         }}
-                      />
+                      >
+                        {this.getSellerInitials(item.seller)}
+                      </div>
                     </div>
 
                     <div className="cartpage-item-details">
                       <h4 className="cartpage-item-name">{item.name}</h4>
-                      <p className="cartpage-item-seller">by {item.seller}</p>
-                      <span className="cartpage-item-category">
-                        {item.category}
-                      </span>
-
-                      {/* Payment Structure Info */}
-                      {item.paymentStructure && (
-                        <div className="cartpage-payment-info">
-                          <span className="payment-type">
-                            {item.paymentStructure.description}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="cartpage-item-actions">
-                        <div className="cartpage-quantity-controls">
-                          <button
-                            className="cartpage-quantity-btn"
-                            onClick={() =>
-                              this.updateQuantity(item.id, item.quantity - 1)
-                            }
-                            disabled={item.quantity <= 1}
-                          >
-                            <Minus size={16} />
-                          </button>
-                          <span className="cartpage-quantity">
-                            {item.quantity}
-                          </span>
-                          <button
-                            className="cartpage-quantity-btn"
-                            onClick={() =>
-                              this.updateQuantity(item.id, item.quantity + 1)
-                            }
-                          >
-                            <Plus size={16} />
-                          </button>
-                        </div>
-
+                      <div className="cartpage-seller-row">
+                        <p className="cartpage-item-seller">by {item.seller}</p>
                         <button
                           className="cartpage-remove-btn"
                           onClick={() => this.removeItem(item.id)}
                           aria-label="Remove item"
+                          disabled={isCheckingOut}
                         >
                           <Trash2 size={16} />
                         </button>
                       </div>
-
-                      {/* Book Individual Item Button */}
-                      <button
-                        className="cartpage-book-item-btn"
-                        onClick={() => this.handleBookItem(item)}
-                        title="Book this service now"
-                      >
-                        <span className="btn-icon">⚡</span>
-                        Book Now
-                      </button>
                     </div>
 
                     <div className="cartpage-item-price">
                       <span className="cartpage-price">₹{item.price}</span>
-                      {item.quantity > 1 && (
-                        <span className="cartpage-total-price">
-                          Total: ₹{(item.price * item.quantity).toFixed(2)}
-                        </span>
-                      )}
                       {item.basePrice !== item.price && (
                         <span className="cartpage-base-price">
                           Base: ₹{item.basePrice}
@@ -583,33 +746,53 @@ class CartSidebar extends Component {
             <div className="cartpage-footer">
               <div className="cartpage-total-section">
                 <div className="cartpage-subtotal">
-                  <span className="cartpage-subtotal-label">Subtotal:</span>
+                  <span className="cartpage-subtotal-label">
+                    Subtotal {showCheckboxes && `(${selectedItemsCount} items)`}
+                    :
+                  </span>
                   <span className="cartpage-subtotal-amount">
                     ₹{totalPrice}
                   </span>
                 </div>
                 <p className="cartpage-tax-note">
-                  Final pricing will be confirmed with service provider
+                  Services will be processed as orders after checkout
                 </p>
               </div>
 
               <div className="cartpage-checkout-actions">
-                <button
-                  className="cartpage-checkout-btn"
-                  onClick={this.handleCheckout}
-                >
-                  Proceed to Checkout
-                </button>
-                <button
-                  className="cartpage-continue-shopping"
-                  onClick={onClose}
-                >
-                  Continue Shopping
-                </button>
+                <div className="cartpage-buttons-row">
+                  <button
+                    className="cartpage-checkout-btn"
+                    onClick={this.handleCheckout}
+                    disabled={selectedItemsCount === 0 || isCheckingOut}
+                  >
+                    {isCheckingOut ? (
+                      <>
+                        <div className="checkout-loading-spinner"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      <Link to="/payment" className="checkout-link">
+                        Checkout
+                        {showCheckboxes &&
+                          selectedItemsCount > 0 &&
+                          ` (${selectedItemsCount})`}
+                      </Link>
+                    )}
+                  </button>
+                  <button
+                    className="cartpage-continue-shopping"
+                    onClick={onClose}
+                    disabled={isCheckingOut}
+                  >
+                    <Link to="/services"> Continue Shopping</Link>
+                  </button>
+                </div>
                 {cartItems.length > 1 && (
                   <button
                     className="cartpage-clear-cart"
                     onClick={this.clearCart}
+                    disabled={isCheckingOut}
                   >
                     Clear Cart
                   </button>

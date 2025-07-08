@@ -48,11 +48,19 @@ class LandingPage extends Component {
       "https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
       "https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080",
     ],
-    // Add these new properties
-    freelancerImage:
-      "https://www.shutterstock.com/shutterstock/photos/1447806011/display_1500/stock-vector-flat-banner-advertising-freelance-remote-work-at-home-outsourced-employee-developer-or-webpage-1447806011.jpg",
-    clientImage:
-      "https://synques-cdn.s3.ap-south-1.amazonaws.com/writeonwalls.in/images/client_banner2.png",
+
+    freelancerImages: [
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+    ],
+    clientImages: [
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+    ],
+    currentFreelancerSlide: 0,
+    currentClientSlide: 0,
     isLoggedIn: false,
     user: null,
     userRole: null,
@@ -60,6 +68,7 @@ class LandingPage extends Component {
     visionInView: false,
     chooseUsInView: false,
     contactInView: false,
+    clientCardsInView: false,
     // Contact form state
     fullName: "",
     email: "",
@@ -78,9 +87,9 @@ class LandingPage extends Component {
   visionRef = React.createRef();
   chooseUsRef = React.createRef();
   contactRef = React.createRef();
+  clientCardsRef = React.createRef();
 
   componentDidMount() {
-    // Add these lines at the beginning
     this.loadUserData();
     window.addEventListener("storage", this.handleStorageEvent);
     this.loginCheckInterval = setInterval(
@@ -88,7 +97,6 @@ class LandingPage extends Component {
       2000
     );
 
-    // Update this line to use publicImages instead of images
     this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
     window.addEventListener("scroll", this.handleScroll);
     this.handleScroll();
@@ -96,7 +104,6 @@ class LandingPage extends Component {
 
   componentWillUnmount() {
     clearInterval(this.slideInterval);
-    // Add these lines
     if (this.loginCheckInterval) {
       clearInterval(this.loginCheckInterval);
     }
@@ -122,6 +129,33 @@ class LandingPage extends Component {
     this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
   };
 
+  nextFreelancerSlide = () => {
+    this.setState({
+      currentFreelancerSlide:
+        (this.state.currentFreelancerSlide + 1) %
+        this.state.freelancerImages.length,
+    });
+  };
+
+  nextClientSlide = () => {
+    this.setState({
+      currentClientSlide:
+        (this.state.currentClientSlide + 1) % this.state.clientImages.length,
+    });
+  };
+
+  setFreelancerSlide = (index) => {
+    clearInterval(this.slideInterval);
+    this.setState({ currentFreelancerSlide: index });
+    this.slideInterval = setInterval(this.nextFreelancerSlide, 5000);
+  };
+
+  setClientSlide = (index) => {
+    clearInterval(this.slideInterval);
+    this.setState({ currentClientSlide: index });
+    this.slideInterval = setInterval(this.nextClientSlide, 5000);
+  };
+
   isElementInViewport = (el) => {
     if (!el) return false;
     const rect = el.getBoundingClientRect();
@@ -138,10 +172,10 @@ class LandingPage extends Component {
       visionInView: this.isElementInViewport(this.visionRef.current),
       chooseUsInView: this.isElementInViewport(this.chooseUsRef.current),
       contactInView: this.isElementInViewport(this.contactRef.current),
+      clientCardsInView: this.isElementInViewport(this.clientCardsRef.current),
     });
   };
 
-  // Updated contact form methods with Web3Forms integration
   handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -160,14 +194,11 @@ class LandingPage extends Component {
     formData.append("profession", this.state.profession);
     formData.append("message", this.state.message);
 
-    // Add a honeypot field to prevent spam
     formData.append("botcheck", "");
 
-    // Add subject to the form
     formData.append("subject", "New message from VOAT NETWORK website");
 
     try {
-      // Submit to Web3Forms API
       const response = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
         body: formData,
@@ -176,7 +207,6 @@ class LandingPage extends Component {
       const data = await response.json();
 
       if (data.success) {
-        // On success, clear form and show success message
         this.setState({
           fullName: "",
           email: "",
@@ -222,39 +252,31 @@ class LandingPage extends Component {
     });
   };
 
-  // Add these methods before your render() method
-
-  // Load user data using same method as NavBar
   loadUserData = () => {
     try {
       const userDataString = localStorage.getItem("user");
+
+      if (this.slideInterval) {
+        clearInterval(this.slideInterval);
+        this.slideInterval = null;
+      }
+
       if (userDataString) {
-        try {
-          const userData = JSON.parse(userDataString);
-          if (userData && userData.name) {
-            this.setState({
-              user: userData,
-              isLoggedIn: true,
-              userRole: userData.role || null,
-            });
-            // Stop carousel if user is logged in
-            if (this.slideInterval) {
-              clearInterval(this.slideInterval);
-              this.slideInterval = null;
-            }
-          } else {
-            this.setState({
-              isLoggedIn: false,
-              user: null,
-              userRole: null,
-            });
-          }
-        } catch (error) {
+        const userData = JSON.parse(userDataString);
+        if (userData && userData.name) {
           this.setState({
-            isLoggedIn: false,
-            user: null,
-            userRole: null,
+            isLoggedIn: true,
+            user: userData,
+            userRole: userData.role || null,
           });
+
+          // Determine user type and start the correct carousel
+          const userType = this.getUserType();
+          if (userType === "freelancer") {
+            this.slideInterval = setInterval(this.nextFreelancerSlide, 5000);
+          } else if (userType === "client") {
+            this.slideInterval = setInterval(this.nextClientSlide, 5000);
+          }
         }
       } else {
         this.setState({
@@ -262,12 +284,10 @@ class LandingPage extends Component {
           user: null,
           userRole: null,
         });
-        // Start carousel for public users
-        if (!this.slideInterval && this.state.publicImages.length > 0) {
-          this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
-        }
+        this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
       }
     } catch (error) {
+      console.error("Failed to load user data:", error);
       this.setState({
         isLoggedIn: false,
         user: null,
@@ -276,7 +296,6 @@ class LandingPage extends Component {
     }
   };
 
-  // Handle storage events exactly like NavBar
   handleStorageEvent = (event) => {
     if (event.key === "user") {
       if (event.newValue) {
@@ -316,7 +335,7 @@ class LandingPage extends Component {
     }
   };
 
-  // Check login status periodically like NavBar
+  // Check login status periodically
   checkLoginStatusPeriodically = () => {
     try {
       let userData = null;
@@ -359,7 +378,7 @@ class LandingPage extends Component {
     }
   };
 
-  // Determine user type using same logic as NavBar
+  // Determine user type
   getUserType = () => {
     const { user, userRole } = this.state;
     if (!user || !userRole) return null;
@@ -379,7 +398,10 @@ class LandingPage extends Component {
     } else if (
       role === "client" ||
       role === "Client" ||
-      role.toLowerCase().includes("client")
+      role === "individual" ||
+      role === "Individual" ||
+      role.toLowerCase().includes("client") ||
+      role.toLowerCase().includes("individual")
     ) {
       return "client";
     }
@@ -425,67 +447,15 @@ class LandingPage extends Component {
       };
     } else if (userType === "freelancer") {
       return {
-        title: (
-          <>
-            Welcome Back,
-            <br />
-            <span className="landing-page-text-gradient">Freelancer!</span>
-            <br />
-            Ready to <span className="landing-page-text-gradient">Work</span>?
-          </>
-        ),
-        description:
-          "Discover new projects, manage your portfolio, and connect with clients who need your expertise.",
-        buttons: (
-          <div className="landing-page-hero-buttons">
-            <Link
-              to="/projects"
-              className="landing-page-button landing-page-button-primary"
-            >
-              <Search className="landing-page-button-icon" />
-              Browse Projects
-            </Link>
-            <Link
-              to="/user-dashboard"
-              className="landing-page-button landing-page-button-outline"
-            >
-              <Briefcase className="landing-page-button-icon" />
-              My Dashboard
-            </Link>
-          </div>
-        ),
+        title: null, // No title for client
+        description: null, // No description for client
+        buttons: null, // No buttons for client
       };
     } else if (userType === "client") {
       return {
-        title: (
-          <>
-            Welcome Back,
-            <br />
-            <span className="landing-page-text-gradient">Client!</span>
-            <br />
-            Find Your <span className="landing-page-text-gradient">Expert</span>
-          </>
-        ),
-        description:
-          "Connect with talented freelancers, post your projects, and get your work done by skilled professionals.",
-        buttons: (
-          <div className="landing-page-hero-buttons">
-            <Link
-              to="/post-project"
-              className="landing-page-button landing-page-button-primary"
-            >
-              <Plus className="landing-page-button-icon" />
-              Post a Project
-            </Link>
-            <Link
-              to="/freelancers"
-              className="landing-page-button landing-page-button-outline"
-            >
-              <UserCheck className="landing-page-button-icon" />
-              Find Freelancers
-            </Link>
-          </div>
-        ),
+        title: null, // No title for client
+        description: null, // No description for client
+        buttons: null, // No buttons for client
       };
     } else {
       return {
@@ -523,6 +493,51 @@ class LandingPage extends Component {
   };
 
   render() {
+    const servicesData = [
+      {
+        icon: <Code size={28} />,
+        title: "Web Development",
+        description:
+          "Custom websites and web applications built with cutting-edge technology that deliver exceptional user experiences.",
+        filterValue: "Web Developer",
+      },
+      {
+        icon: <Megaphone size={28} />,
+        title: "Digital Marketing",
+        description:
+          "Strategic digital marketing solutions to boost your online presence and reach your target audience effectively.",
+        filterValue: "Digital Marketer",
+      },
+      {
+        icon: <Globe size={28} />,
+        title: "SEO & SMM",
+        description:
+          "Optimize your search rankings and social media presence to connect with your audience and drive organic growth.",
+        filterValue: "SEO Specialist",
+      },
+      {
+        icon: <Palette size={28} />,
+        title: "Brand Development",
+        description:
+          "Creative branding solutions that make your business stand out with a memorable and impactful identity.",
+        filterValue: "Brand Designer",
+      },
+      {
+        icon: <Calculator size={28} />,
+        title: "Taxation",
+        description:
+          "Expert tax planning and preparation services to optimize your financial position and ensure compliance.",
+        filterValue: "Tax Consultant",
+      },
+      {
+        icon: <Camera size={28} />,
+        title: "Photo & Video Editing",
+        description:
+          "Professional photo and video editing services to create stunning visual content for your brand.",
+        filterValue: "Video Editor",
+      },
+    ];
+
     const visionPoints = [
       {
         icon: <Rocket />,
@@ -599,7 +614,56 @@ class LandingPage extends Component {
       },
     ];
 
-    // Form submission status styling
+    // Client services cards data
+    const clientServices = [
+      {
+        image:
+          "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212086/BRAND_DEVELOPMENT_o7p66b.png",
+        title: "Brand Development",
+        description:
+          "Comprehensive branding solutions to establish your unique identity in the market.",
+      },
+      {
+        image:
+          "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212086/6_bkq3hw.png",
+        title: "Digital Marketing",
+        description:
+          "Strategic digital marketing campaigns to boost your online presence and reach.",
+      },
+      {
+        image:
+          "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212086/Web_Development_q5l6li.png",
+        title: "Web Development",
+        description:
+          "Custom websites and applications built with cutting-edge technology.",
+      },
+      {
+        image:
+          "https://res.cloudinary.com/dffu1ungl/image/upload/v1750950262/DM_k7w2p1.jpg",
+        title: "SEO Optimization",
+        description:
+          "Improve your search rankings and drive organic traffic to your business.",
+      },
+      {
+        image:
+          "https://res.cloudinary.com/dffu1ungl/image/upload/v1750950262/Brand_Development_h25ds0.jpg",
+        title: "Social Media Management",
+        description:
+          "Professional social media strategies to engage your audience effectively.",
+      },
+      {
+        image:
+          "https://res.cloudinary.com/dffu1ungl/image/upload/v1750950262/DM_k7w2p1.jpg",
+        title: "Content Creation",
+        description:
+          "High-quality content that resonates with your target audience and drives engagement.",
+      },
+    ];
+
+    const userType = this.getUserType();
+    const isClient = userType === "client";
+
+    // Form submission status
     const formStatusDisplay = () => {
       if (this.state.formStatus === "submitting") {
         return (
@@ -633,10 +697,13 @@ class LandingPage extends Component {
           <NavBar />
         </ErrorBoundary>
         <div className="landing-page">
-          {/* Hero Section - Updated Modern Design */}
-          {/* Hero Section with Conditional Banners */}
-          <section className="landing-page-hero">
+          <section
+            className={`landing-page-hero ${
+              this.getUserType() === "client" ? "client-hero" : ""
+            }`}
+          >
             {/* Conditional Banner Rendering */}
+
             {!this.state.isLoggedIn ? (
               // Public users - carousel slides
               <>
@@ -667,19 +734,90 @@ class LandingPage extends Component {
                 </div>
               </>
             ) : this.getUserType() === "freelancer" ? (
-              // Freelancer banner
-              <div className="landing-page-single-banner">
-                <div className="landing-page-carousel-overlay"></div>
-                <img
-                  src={this.state.freelancerImage}
-                  alt="Freelancer Dashboard"
-                />
+              // Freelancer carousel
+              <div className="landing-page-client-banner">
+                {this.state.freelancerImages.map((image, index) => (
+                  <div
+                    key={index}
+                    className={`landing-page-carousel-slide ${
+                      index === this.state.currentFreelancerSlide
+                        ? "active"
+                        : ""
+                    }`}
+                    style={{
+                      position: index === 0 ? "relative" : "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
+                    <img
+                      src={image}
+                      alt={`Freelancer Banner ${index + 1}`}
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                ))}
+                <div className="landing-page-carousel-indicators">
+                  {this.state.freelancerImages.map((_, index) => (
+                    <button
+                      key={index}
+                      className={`landing-page-indicator ${
+                        index === this.state.currentFreelancerSlide
+                          ? "active"
+                          : ""
+                      }`}
+                      onClick={() => this.setFreelancerSlide(index)}
+                      aria-label={`Go to freelancer slide ${index + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
             ) : this.getUserType() === "client" ? (
-              // Client banner
-              <div className="landing-page-single-banner">
-                <div className="landing-page-carousel-overlay"></div>
-                <img src={this.state.clientImage} alt="Client Dashboard" />
+              // Client carousel
+              <div className="landing-page-client-banner">
+                {this.state.clientImages.map((image, index) => (
+                  <div
+                    key={index}
+                    className={`landing-page-carousel-slide ${
+                      index === this.state.currentClientSlide ? "active" : ""
+                    }`}
+                    style={{
+                      position: index === 0 ? "relative" : "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
+                    <img
+                      src={image}
+                      alt={`Client Banner ${index + 1}`}
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                ))}
+                <div className="landing-page-carousel-indicators">
+                  {this.state.clientImages.map((_, index) => (
+                    <button
+                      key={index}
+                      className={`landing-page-indicator ${
+                        index === this.state.currentClientSlide ? "active" : ""
+                      }`}
+                      onClick={() => this.setClientSlide(index)}
+                      aria-label={`Go to client slide ${index + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               // Default logged-in user banner
@@ -689,18 +827,20 @@ class LandingPage extends Component {
               </div>
             )}
 
-            {/* Hero Content */}
-            <div className="landing-page-hero-content-wrapper">
-              <div className="landing-page-hero-content">
-                <h1 className="landing-page-hero-title">
-                  {this.renderHeroContent().title}
-                </h1>
-                <p className="landing-page-hero-description">
-                  {this.renderHeroContent().description}
-                </p>
-                {this.renderHeroContent().buttons}
+            {/* Hero Content - Only show for non-client users */}
+            {this.getUserType() !== "client" && (
+              <div className="landing-page-hero-content-wrapper">
+                <div className="landing-page-hero-content">
+                  <h1 className="landing-page-hero-title">
+                    {this.renderHeroContent().title}
+                  </h1>
+                  <p className="landing-page-hero-description">
+                    {this.renderHeroContent().description}
+                  </p>
+                  {this.renderHeroContent().buttons}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Service content card - only show for public users */}
             {!this.state.isLoggedIn && (
@@ -711,94 +851,108 @@ class LandingPage extends Component {
             )}
           </section>
 
-          {/* Services Section - Updated with Modern Design */}
-          <section
-            className={`landing-page-services-section ${
-              this.state.servicesInView ? "in-view" : ""
-            }`}
-            ref={this.servicesRef}
-            id="services"
-          >
-            <div className="landing-page-services-blob landing-page-services-blob-1"></div>
-            <div className="landing-page-services-blob landing-page-services-blob-2"></div>
+          {/* Client Services Cards Section - Only show for clients */}
+          {isClient && (
+            <section
+              className={`landing-page-client-services-section ${
+                this.state.clientCardsInView ? "in-view" : ""
+              }`}
+              ref={this.clientCardsRef}
+            >
+              <div className="landing-page-container">
+                <div className="landing-page-section-header">
+                  <h2 className="landing-page-section-title">CLIENTS</h2>
+                  <p className="landing-page-client-services-description">
+                    Discover our comprehensive range of professional services
+                    designed specifically for clients like you.
+                  </p>
+                </div>
 
-            <div className="landing-page-container">
-              <div className="landing-page-section-header">
-                <h2 className="landing-page-section-title">Our Services</h2>
-                <p className="landing-page-services-description">
-                  We offer a comprehensive range of digital services to help
-                  your business thrive in the online world and achieve
-                  sustainable growth.
-                </p>
-              </div>
-
-              <div className="landing-page-services-grid">
-                {[
-                  {
-                    icon: <Code size={28} />,
-                    title: "Web Development",
-                    description:
-                      "Custom websites and web applications built with cutting-edge technology that deliver exceptional user experiences.",
-                  },
-                  {
-                    icon: <Megaphone size={28} />,
-                    title: "Digital Marketing",
-                    description:
-                      "Strategic digital marketing solutions to boost your online presence and reach your target audience effectively.",
-                  },
-                  {
-                    icon: <Globe size={28} />,
-                    title: "SEO & SMM",
-                    description:
-                      "Optimize your search rankings and social media presence to connect with your audience and drive organic growth.",
-                  },
-                  {
-                    icon: <Palette size={28} />,
-                    title: "Brand Development",
-                    description:
-                      "Creative branding solutions that make your business stand out with a memorable and impactful identity.",
-                  },
-                  {
-                    icon: <Calculator size={28} />,
-                    title: "Taxation",
-                    description:
-                      "Expert tax planning and preparation services to optimize your financial position and ensure compliance.",
-                  },
-                  {
-                    icon: <Camera size={28} />,
-                    title: "Photo & Video Editing",
-                    description:
-                      "Professional photo and video editing services to create stunning visual content for your brand.",
-                  },
-                ].map((service, index) => (
-                  <div
-                    key={index}
-                    className={`landing-page-service-card landing-page-service-card-${
-                      index + 1
-                    }`}
-                  >
-                    <div className="landing-page-service-content">
-                      <div className="landing-page-service-icon-wrapper">
-                        {service.icon}
+                <div className="landing-page-client-services-grid">
+                  {clientServices.map((service, index) => (
+                    <div
+                      key={index}
+                      className={`landing-page-client-service-card landing-page-client-service-card-${
+                        index + 1
+                      }`}
+                    >
+                      <div className="landing-page-client-service-image">
+                        <img src={service.image} alt={service.title} />
+                        <div className="landing-page-client-service-overlay"></div>
                       </div>
-                      <h3>{service.title}</h3>
-                      <p>{service.description}</p>
+                      <div className="landing-page-client-service-content">
+                        <h3>{service.title}</h3>
+                        <p>{service.description}</p>
+                        <Link
+                          to="/services"
+                          className="landing-page-client-service-link"
+                        >
+                          Learn More <ArrowRight size={16} />
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+            </section>
+          )}
 
-              <div className="landing-page-services-view-all">
-                <Link
-                  to={"/services"}
-                  className="landing-page-button landing-page-button-primary"
-                >
-                  View more
-                  <ArrowRight className="landing-page-button-icon" />
-                </Link>
+          {/* Services Section - Only show for non-clients */}
+          {!isClient && (
+            <section
+              className={`landing-page-services-section ${
+                this.state.servicesInView ? "in-view" : ""
+              }`}
+              ref={this.servicesRef}
+              id="services"
+            >
+              <div className="landing-page-services-blob landing-page-services-blob-1"></div>
+              <div className="landing-page-services-blob landing-page-services-blob-2"></div>
+
+              <div className="landing-page-container">
+                <div className="landing-page-section-header">
+                  <h2 className="landing-page-section-title">Our Services</h2>
+                  <p className="landing-page-services-description">
+                    We offer a comprehensive range of digital services to help
+                    your business thrive in the online world and achieve
+                    sustainable growth.
+                  </p>
+                </div>
+
+                <div className="landing-page-services-grid">
+                  {servicesData.map((service, index) => (
+                    <Link
+                      key={index}
+                      to={`/portfolio-list?profession=${encodeURIComponent(
+                        service.filterValue
+                      )}`}
+                      className={`landing-page-service-card landing-page-service-card-${
+                        index + 1
+                      }`}
+                    >
+                      <div className="landing-page-service-content">
+                        <div className="landing-page-service-icon-wrapper">
+                          {service.icon}
+                        </div>
+                        <h3>{service.title}</h3>
+                        <p>{service.description}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="landing-page-services-view-all">
+                  <Link
+                    to={"/services"}
+                    className="landing-page-button landing-page-button-primary"
+                  >
+                    View more
+                    <ArrowRight className="landing-page-button-icon" />
+                  </Link>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Why Choose Us Section - Modernized */}
           <section
@@ -856,7 +1010,7 @@ class LandingPage extends Component {
             <div className="landing-page-choose-us-shape"></div>
           </section>
 
-          {/* Vision Section - Redesigned with Modern UI */}
+          {/* Vision Section*/}
           <section
             className={`landing-page-vision-section-new ${
               this.state.visionInView ? "in-view" : ""
@@ -865,7 +1019,7 @@ class LandingPage extends Component {
             id="vision"
           >
             <div className="landing-page-vision-waves"></div>
-            {/* Removed orb-1 which was on the top right */}
+
             <div className="landing-page-vision-orb orb-2"></div>
             <div className="landing-page-vision-orb orb-3"></div>
 
@@ -909,7 +1063,7 @@ class LandingPage extends Component {
             </div>
           </section>
 
-          {/* Contact Us Section - Styled like other sections */}
+          {/* Contact Us Section */}
           <section
             className={`landing-page-contact-section ${
               this.state.contactInView ? "in-view" : ""
@@ -987,7 +1141,7 @@ class LandingPage extends Component {
                 </div>
               </div>
 
-              {/* Contact Form Section - Updated with Web3Forms */}
+              {/* Contact Form Section*/}
               <div className="landing-page-contact-form-container">
                 <div className="landing-page-contact-form-panel">
                   <h3 className="landing-page-contact-form-title">
@@ -1134,7 +1288,6 @@ class LandingPage extends Component {
                 </div>
               </div>
 
-              {/* Hidden honeypot field to prevent spam */}
               <div
                 className="landing-page-honeypot"
                 style={{ position: "absolute", left: "-9999px" }}
@@ -1206,7 +1359,7 @@ class LandingPage extends Component {
             </div>
           </section>
 
-          {/* Call to Action - New Section */}
+          {/* Call to Action */}
           <section className="landing-page-cta-section">
             <div className="landing-page-container">
               <div className="landing-page-cta-content">

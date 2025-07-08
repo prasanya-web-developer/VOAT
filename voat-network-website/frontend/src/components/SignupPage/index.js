@@ -1,11 +1,10 @@
 import { Component } from "react";
 import { Link } from "react-router-dom";
 import { Navigate } from "react-router-dom";
-import { Eye, EyeOff, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, ChevronDown, Home } from "lucide-react";
 import axios from "axios";
 import "./index.css";
 
-// Add CSS for welcome card if not already present
 const welcomeCardStyles = `
 .welcome-card {
   position: fixed;
@@ -62,9 +61,7 @@ const welcomeCardStyles = `
 }
 `;
 
-// Inject styles once when component is imported
 (function injectStyles() {
-  // Check if styles are already injected
   if (!document.getElementById("welcome-card-styles")) {
     const styleElement = document.createElement("style");
     styleElement.id = "welcome-card-styles";
@@ -90,7 +87,7 @@ class SignupPage extends Component {
     showWelcomeCard: false,
   };
 
-  // Backend URLs - try both environments
+  // Backend URLs
   backendUrls = [
     "https://voat.onrender.com", // Production/Render
     "http://localhost:5000", // Local development (keep for dev)
@@ -325,6 +322,11 @@ class SignupPage extends Component {
 
     return (
       <div className="register-screen">
+        <Link to="/" className="register-home-button">
+          <Home className="h-5 w-5" />
+          <span>Home</span>
+        </Link>
+
         <div className="register-container">
           <h2 className="register-title">Create your account</h2>
 
@@ -532,7 +534,7 @@ class SignupPage extends Component {
             </div>
 
             <Link to="/login" className="register-login-link">
-              Sign in
+              Login
             </Link>
           </div>
         </div>

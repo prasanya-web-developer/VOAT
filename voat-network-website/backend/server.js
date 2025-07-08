@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     "https://voatnetwork.com",
+    "www.voatnetwork.com",
     "http://localhost:3000",
     "https://voat-network.netlify.app",
   ],
@@ -27,7 +28,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Add a preflight handler for OPTIONS requests
+// andler for OPTIONS requests
 app.options("*", cors(corsOptions));
 app.use(bodyParser.json());
 
@@ -43,7 +44,7 @@ if (!fs.existsSync(resumesDir)) {
   fs.mkdirSync(resumesDir, { recursive: true });
 }
 
-// Set up multer for file uploads
+// Multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/");
@@ -86,7 +87,6 @@ const workUpload = multer({
   },
 });
 
-// Add this line after your resumeUpload definition
 const upload = multer({
   storage: storage,
   limits: {
@@ -94,7 +94,7 @@ const upload = multer({
   },
 });
 
-// Set up multer for resume uploads
+// Multer for resume uploads
 const resumeStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/resumes/");
@@ -130,7 +130,7 @@ const UserSchema = new mongoose.Schema({
   password: String,
   role: String,
   profession: String,
-  phone: String, // Add this line
+  phone: String,
   profileImage: String,
   voatId: { type: String, unique: true, sparse: true },
   voatPoints: { type: Number, default: 0 },
@@ -178,7 +178,7 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
     portfolioLink: { type: String },
     resumePath: { type: String },
     services: [ServiceSchema],
-    // Add this works array for portfolio work samples
+    // Portfolio work samples
     works: [
       {
         url: { type: String },
@@ -216,7 +216,6 @@ const PortfolioSubmission = mongoose.model(
   PortfolioSubmissionSchema
 );
 
-// Add this new schema after your existing schemas
 const WishlistSchema = new mongoose.Schema(
   {
     userId: {
@@ -324,10 +323,59 @@ const CartSchema = new mongoose.Schema(
 
 const Cart = mongoose.model("Cart", CartSchema);
 
+const OrderSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    userName: { type: String, required: true },
+    userEmail: { type: String, required: true },
+    freelancerId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    freelancerName: { type: String, required: true },
+    freelancerEmail: { type: String, required: true },
+    freelancerProfileImage: { type: String },
+    serviceName: { type: String, required: true },
+    serviceLevel: { type: String, required: true }, // Basic, Standard, Premium
+    servicePrice: { type: Number, required: true },
+    paymentStructure: {
+      type: {
+        type: String,
+        enum: ["advance", "middle", "final", "custom"],
+        required: true,
+      },
+      amount: { type: Number, required: true },
+      description: { type: String, required: true },
+    },
+    status: {
+      type: String,
+      enum: ["pending", "in-progress", "completed", "cancelled"],
+      default: "pending",
+    },
+    orderDate: {
+      type: Date,
+      default: Date.now,
+    },
+    completedDate: {
+      type: Date,
+    },
+    notes: { type: String },
+    fromCart: { type: Boolean, default: true }, // Track if order came from cart
+  },
+  { timestamps: true }
+);
+
+const Order = mongoose.model("Order", OrderSchema);
+
 // Signup Route
 app.post("/api/signup", async (req, res) => {
   try {
-    const { name, email, password, role, profession, phone } = req.body; // Add phone here
+    const { name, email, password, role, profession, phone } = req.body;
 
     // Log the request data (without password) for debugging
     console.log("Signup request received:", {
@@ -336,7 +384,7 @@ app.post("/api/signup", async (req, res) => {
       role,
       profession,
       phone,
-    }); // Add phone here
+    });
 
     // Validate required fields
     if (!name || !email || !password || !phone) {
@@ -374,7 +422,7 @@ app.post("/api/signup", async (req, res) => {
       password: hashedPassword,
       role,
       profession,
-      phone, // Add this line
+      phone,
       voatId,
       voatPoints: 0,
       badge: "bronze",
@@ -394,7 +442,7 @@ app.post("/api/signup", async (req, res) => {
         email: savedUser.email,
         role: savedUser.role,
         profession: savedUser.profession,
-        phone: savedUser.phone, // Add this line
+        phone: savedUser.phone,
         voatId: savedUser.voatId,
         voatPoints: savedUser.voatPoints,
         badge: savedUser.badge,
@@ -434,10 +482,9 @@ app.post("/api/login", async (req, res) => {
         8
       )}`;
       wasUpdated = true;
-      console.log(`Generated VOAT ID during login: ${user.voatId}`); // Debug log
+      console.log(`Generated VOAT ID during login: ${user.voatId}`);
     }
 
-    // Set defaults for other fields if needed
     if (user.voatPoints === undefined) {
       user.voatPoints = 0;
       wasUpdated = true;
@@ -448,7 +495,6 @@ app.post("/api/login", async (req, res) => {
       wasUpdated = true;
     }
 
-    // Save updates if needed
     if (wasUpdated) {
       await user.save();
       console.log("User updated with VOAT ID during login");
@@ -462,7 +508,7 @@ app.post("/api/login", async (req, res) => {
         email: user.email,
         role: user.role,
         profession: user.profession,
-        phone: user.phone, // Add this line
+        phone: user.phone,
         profileImage: user.profileImage,
         voatId: user.voatId,
         voatPoints: user.voatPoints,
@@ -475,7 +521,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Update profile route with file upload
+// profile route with file upload
 app.post(
   "/api/update-profile",
   upload.single("profileImage"),
@@ -505,12 +551,10 @@ app.post(
       user.profession = profession || headline || user.profession;
       user.phone = phone || user.phone;
 
-      // Update VOAT information if provided
       if (voatId) user.voatId = voatId;
       if (voatPoints !== undefined) user.voatPoints = voatPoints;
       if (badge) user.badge = badge;
 
-      // Improved image handling
       if (req.file) {
         // Clean up old image if it exists and isn't a placeholder
         if (
@@ -534,7 +578,6 @@ app.post(
           }
         }
 
-        // Store path with leading slash for consistency
         user.profileImage = `/uploads/${req.file.filename}`;
 
         // Also update any portfolio submissions with this new image
@@ -562,7 +605,7 @@ app.post(
           email: user.email,
           role: user.role,
           profession: user.profession,
-          phone: user.phone, // Add this line
+          phone: user.phone,
           profileImage: user.profileImage,
           voatId: user.voatId,
           voatPoints: user.voatPoints,
@@ -580,7 +623,7 @@ app.post(
 app.post("/api/update-user-data", async (req, res) => {
   try {
     const { userId, voatId, voatPoints, badge } = req.body;
-    console.log("Update user data request:", req.body); // Debug log
+    console.log("Update user data request:", req.body);
 
     // Validate required fields
     if (!userId) {
@@ -598,7 +641,7 @@ app.post("/api/update-user-data", async (req, res) => {
     if (voatId && user.voatId !== voatId) {
       user.voatId = voatId;
       wasUpdated = true;
-      console.log(`Updated VOAT ID to: ${voatId}`); // Debug log
+      console.log(`Updated VOAT ID to: ${voatId}`);
     }
 
     if (voatPoints !== undefined && user.voatPoints !== voatPoints) {
@@ -613,7 +656,7 @@ app.post("/api/update-user-data", async (req, res) => {
 
     if (wasUpdated) {
       const updatedUser = await user.save();
-      console.log("User updated successfully, VOAT ID:", updatedUser.voatId); // Debug log
+      console.log("User updated successfully, VOAT ID:", updatedUser.voatId);
     } else {
       console.log("No changes detected, user not updated");
     }
@@ -653,7 +696,7 @@ app.get("/api/debug/user/:userId", async (req, res) => {
       email: user.email,
       role: user.role,
       profession: user.profession,
-      phone: user.phone, // Check if this is null/undefined
+      phone: user.phone,
       profileImage: user.profileImage,
       voatId: user.voatId,
       voatPoints: user.voatPoints,
@@ -675,7 +718,6 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-// Improved test-connection endpoint
 app.post("/api/test-connection", (req, res) => {
   console.log("Test connection request received from:", req.headers.origin);
   res.status(200).json({
@@ -686,7 +728,8 @@ app.post("/api/test-connection", (req, res) => {
   });
 });
 
-// Updated /api/portfolio endpoint to handle both headline and profession fields
+// Portfolio Submission Route
+
 app.post(
   "/api/portfolio",
   upload.fields([
@@ -708,7 +751,6 @@ app.post(
         service,
       } = req.body;
 
-      // Validate essential fields
       if (!name || !profession || !email) {
         return res.status(400).json({
           success: false,
@@ -724,14 +766,13 @@ app.post(
       const portfolioData = {
         name,
         profession,
-        headline, // Store headline explicitly
+        headline,
         workExperience,
         about,
         email,
         portfolioLink,
       };
 
-      // Add file paths if uploaded
       if (profileImageFile) {
         portfolioData.profileImage = `/uploads/${profileImageFile.filename}`;
       }
@@ -932,7 +973,6 @@ app.get("/api/admin/portfolio-submissions", async (req, res) => {
         sub.profileImage = sub.userId.profileImage;
       }
 
-      // Make sure services are properly included
       if (sub.services) {
         // Ensure services array is properly formatted and accessible
         console.log("Original services for submission:", sub._id, sub.services);
@@ -999,7 +1039,6 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
   }
 });
 
-// Consolidated status update route
 app.put("/api/admin/portfolio-submissions/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1033,7 +1072,7 @@ app.put("/api/admin/portfolio-submissions/:id/status", async (req, res) => {
     submission.updatedDate = new Date();
     await submission.save();
 
-    // Send notification to user (you could implement email notification here)
+    // Send notification to user
     console.log(`Portfolio submission ${id} status updated to ${status}`);
 
     res.status(200).json(submission);
@@ -1043,7 +1082,6 @@ app.put("/api/admin/portfolio-submissions/:id/status", async (req, res) => {
   }
 });
 
-// Helper route to check if user has an existing portfolio
 app.get("/api/portfolio/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1059,8 +1097,6 @@ app.get("/api/portfolio/user/:userId", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
-// Update the /api/portfolios endpoint
 
 app.get("/api/portfolios", async (req, res) => {
   try {
@@ -1102,7 +1138,6 @@ app.get("/api/portfolios", async (req, res) => {
   }
 });
 
-// Update the /api/portfolios-with-users endpoint
 app.get("/api/portfolios-with-users", async (req, res) => {
   try {
     const approvedPortfolios = await PortfolioSubmission.find({
@@ -1118,7 +1153,7 @@ app.get("/api/portfolios-with-users", async (req, res) => {
           name: portfolio.name,
           email: portfolio.email,
           workExperience: portfolio.workExperience,
-          profession: portfolio.profession || portfolio.headline, // Use headline as fallback
+          profession: portfolio.profession || portfolio.headline,
           profileImage: portfolio.profileImage,
           portfolioLink: portfolio.portfolioLink,
           about: portfolio.about,
@@ -1155,7 +1190,6 @@ app.get("/api/portfolios-with-users", async (req, res) => {
   }
 });
 
-// Add a new service endpoint for a user's portfolio
 app.post("/api/add-service", async (req, res) => {
   try {
     const { userId, name, description, pricing } = req.body;
@@ -1238,7 +1272,6 @@ app.put("/api/update-service", async (req, res) => {
 
     const { userId, serviceName, description, pricing } = req.body;
 
-    // Validate required fields
     if (!userId || !serviceName) {
       console.log("Validation failed - missing fields");
       return res.status(400).json({
@@ -1584,56 +1617,49 @@ app.post("/api/remove-video", async (req, res) => {
 app.post("/api/add-work", workUpload.single("workFile"), async (req, res) => {
   try {
     const { userId, title, serviceName } = req.body;
+    const workFile = req.file;
 
     if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID is required" });
     }
-
-    const workFile = req.file;
     if (!workFile) {
-      return res.status(400).json({
-        success: false,
-        message: "No work file provided",
-      });
-    }
+      return res
+        .status(400)
+        .json({ success: false, message: "No work file provided" });
+    } // Prepare the data for the new work item
 
-    // Create work data
-    const workPath = `/uploads/${workFile.filename}`;
     const workData = {
-      url: workPath,
-      thumbnail: workFile.mimetype.startsWith("image/") ? workPath : "",
-      title: title || "",
+      url: `/uploads/${workFile.filename}`, // For images, thumbnail is the image itself. Videos will get a placeholder on the frontend.
+      thumbnail: workFile.mimetype.startsWith("image/")
+        ? `/uploads/${workFile.filename}`
+        : "",
+      title: title || workFile.originalname,
       type: workFile.mimetype.startsWith("video/") ? "video" : "image",
       serviceName: serviceName || "",
       uploadedDate: new Date(),
-    };
+    }; // Find the user's portfolio and push the new work item. // `upsert: true` creates a new portfolio document if one doesn't exist.
 
-    // Find the user's portfolio submission
-    const portfolio = await PortfolioSubmission.findOne({ userId });
+    const updatedPortfolio = await PortfolioSubmission.findOneAndUpdate(
+      { userId: userId },
+      { $push: { works: workData } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
-    if (!portfolio) {
-      return res.status(404).json({
-        success: false,
-        message: "Portfolio not found",
-      });
-    }
+    if (!updatedPortfolio) {
+      throw new Error("Could not save portfolio work.");
+    } // Get the ID of the item we just added
 
-    // Add work to portfolio works array
-    if (!portfolio.works) {
-      portfolio.works = [];
-    }
-
-    portfolio.works.push(workData);
-    await portfolio.save();
+    const newWork = updatedPortfolio.works[updatedPortfolio.works.length - 1];
 
     res.status(201).json({
       success: true,
       message: "Work added successfully",
-      workId: portfolio.works[portfolio.works.length - 1]._id,
-      workUrl: workPath,
+      workId: newWork._id,
+      workUrl: newWork.url,
+      workThumbnail: newWork.thumbnail,
+      workType: newWork.type,
     });
   } catch (error) {
     console.error("Error adding work:", error);
@@ -1651,39 +1677,28 @@ app.get("/api/user/:userId", async (req, res) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
-    }
+    } // Get the user's portfolio submission if it exists
 
-    // Get the user's portfolio submission if it exists
     const portfolio = await PortfolioSubmission.findOne({ userId: userId });
 
-    // Ensure headline is available in portfolio
     if (portfolio && !portfolio.headline && portfolio.profession) {
       portfolio.headline = portfolio.profession;
       await portfolio.save();
-    }
+    } // Extract services from portfolio for easier access in frontend
 
-    // Extract services from portfolio for easier access in frontend
     const services = portfolio?.services || [];
 
-    // Extract videos from all services for easier access in frontend
-    let videos = [];
-    if (portfolio && portfolio.services) {
-      portfolio.services.forEach((service) => {
-        if (service.videos && service.videos.length > 0) {
-          const serviceKey = service.name.toLowerCase().replace(/\s+/g, "-");
-          service.videos.forEach((video) => {
-            videos.push({
-              id: video._id,
-              url: video.url,
-              thumbnail: video.thumbnail,
-              serviceName: serviceKey,
-            });
-          });
-        }
-      });
-    }
+    const works = portfolio?.works || [];
+    const formattedWorks = works.map((work) => ({
+      id: work._id,
+      url: work.url,
+      thumbnail: work.thumbnail || work.url,
+      title: work.title,
+      type: work.type,
+      serviceName: work.serviceName,
+      uploadedDate: work.uploadedDate,
+    })); // Return user data with their portfolio information
 
-    // Return user data with their portfolio information
     res.status(200).json({
       user: {
         id: user._id,
@@ -1691,7 +1706,7 @@ app.get("/api/user/:userId", async (req, res) => {
         email: user.email,
         role: user.role,
         profession: user.profession,
-        phone: user.phone, // Add this line
+        phone: user.phone,
         profileImage: user.profileImage,
         voatId: user.voatId,
         voatPoints: user.voatPoints,
@@ -1699,7 +1714,8 @@ app.get("/api/user/:userId", async (req, res) => {
       },
       portfolio: portfolio || null,
       services: services,
-      videos: videos,
+      // The frontend expects this key to be 'videos', so we send the formatted works here
+      videos: formattedWorks,
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
@@ -1707,7 +1723,6 @@ app.get("/api/user/:userId", async (req, res) => {
   }
 });
 
-// Add this temporary endpoint to debug VOAT IDs
 app.get("/api/debug/users-voat", async (req, res) => {
   try {
     const users = await User.find({}, { name: 1, email: 1, voatId: 1 });
@@ -1767,7 +1782,6 @@ app.post("/api/wishlist/:userId", async (req, res) => {
   }
 });
 
-// Also make sure GET endpoint is properly defined
 app.get("/api/wishlist/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1799,7 +1813,6 @@ app.get("/api/wishlist/:userId", async (req, res) => {
   }
 });
 
-// Add this test endpoint to verify routing works
 app.get("/api/test-wishlist", (req, res) => {
   res.json({
     message: "Wishlist route is working",
@@ -1863,7 +1876,7 @@ app.get("/api/cart/test", (req, res) => {
   res.json({ message: "Cart routes are working", timestamp: new Date() });
 });
 
-// Debugging middleware for cart routes (only for specific cart routes)
+// Debugging middleware for cart routes
 app.use("/api/cart*", (req, res, next) => {
   console.log(`=== CART ROUTE HIT ===`);
   console.log(`Method: ${req.method}`);
@@ -1875,7 +1888,7 @@ app.use("/api/cart*", (req, res, next) => {
   next();
 });
 
-// GET - Get user's cart items (FIXED VERSION)
+// GET - Get user's cart items=
 app.get("/api/cart/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1914,7 +1927,7 @@ app.get("/api/cart/:userId", async (req, res) => {
   }
 });
 
-// POST - Add item to cart (FIXED VERSION)
+// POST - Add item to cart
 app.post("/api/cart/add", async (req, res) => {
   try {
     const {
@@ -2109,7 +2122,6 @@ app.put("/api/cart/update-payment", async (req, res) => {
     cart.items[itemIndex].paymentStructure = paymentStructure;
     cart.items[itemIndex].selectedPaymentAmount = paymentStructure.amount;
 
-    // Mark the items array as modified for MongoDB
     cart.markModified("items");
     await cart.save();
 
@@ -2130,7 +2142,7 @@ app.put("/api/cart/update-payment", async (req, res) => {
   }
 });
 
-// DELETE - Remove item from cart (FIXED VERSION)
+// DELETE - Remove item from cart
 app.delete("/api/cart/remove", async (req, res) => {
   try {
     const { userId, itemId } = req.body;
@@ -2196,7 +2208,7 @@ app.delete("/api/cart/remove", async (req, res) => {
   }
 });
 
-// DELETE - Clear entire cart (FIXED VERSION)
+// DELETE - Clear entire cart
 app.delete("/api/cart/clear/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2711,9 +2723,6 @@ app.put("/api/booking/:bookingId/action", async (req, res) => {
 
     console.log(`Booking ${bookingId} successfully ${action}ed`);
 
-    // Here you could also send email notifications to the client
-    // or create notifications in the system
-
     res.status(200).json({
       success: true,
       message: `Booking request ${action}ed successfully`,
@@ -3144,7 +3153,7 @@ app.post("/api/check-booking-eligibility", async (req, res) => {
 
 console.log("✅ Booking API endpoints loaded successfully");
 
-// Add these debugging routes for development
+// debugging routes
 if (process.env.NODE_ENV === "development") {
   // Debug endpoint to clear all bookings
   app.delete("/api/debug/clear-bookings", async (req, res) => {
@@ -3324,7 +3333,7 @@ app.get("/api/admin/migrate-headlines", async (req, res) => {
       updatedCount++;
     }
 
-    // Now check for portfolios without profession
+    // check for portfolios without profession
     const portfoliosWithoutProfession = await PortfolioSubmission.find({
       $or: [
         { profession: { $exists: false } },
@@ -3368,7 +3377,7 @@ app.get("/api/debug/routes", (req, res) => {
   res.json(routes);
 });
 
-// Add global error handler middleware (ADD THIS AFTER ALL ROUTES)
+//Global error handler middleware
 app.use((err, req, res, next) => {
   console.error("Global error handler:", err);
 
@@ -3385,7 +3394,7 @@ app.use((err, req, res, next) => {
   }
 });
 
-// Handle 404 errors with JSON response (ADD THIS BEFORE THE ERROR HANDLER)
+// Handle 404 errors with JSON response
 app.use("*", (req, res) => {
   console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
   return res.status(404).json({
@@ -3399,7 +3408,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add this after all your routes are defined but before app.listen()
 console.log("=== REGISTERED ROUTES ===");
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {

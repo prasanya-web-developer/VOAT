@@ -1,7 +1,5 @@
-/* Modern Admin Panel Styles - VOAT Network Theme - Complete Updated CSS */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
 
-/* CSS Reset & Base Styles */
 * {
   margin: 0;
   padding: 0;
@@ -370,7 +368,7 @@
   padding: 2.5rem 2rem;
 }
 
-/* Stats Grid - SMALLER & CONSISTENT SIZE */
+/* Stats Grid  */
 .adminpanel-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -390,7 +388,7 @@
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-  height: 100px; /* Fixed height for consistency */
+  height: 100px;
   min-height: 100px;
   max-height: 100px;
 }
@@ -620,7 +618,7 @@
   font-weight: 500;
 }
 
-/* Submissions Grid - FIXED CARD SIZING */
+/* Submissions Grid */
 .adminpanel-submissions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -637,7 +635,7 @@
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  height: 320px; /* Increased height to accommodate button */
+  height: 320px;
   min-height: 320px;
   max-height: 320px;
   width: 100%;

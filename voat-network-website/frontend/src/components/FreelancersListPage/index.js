@@ -5,6 +5,113 @@ import Footer from "../Footer";
 import "./index.css";
 
 class PortfolioList extends Component {
+  professionMap = {
+    // Canonical Names (map to themselves)
+    "web developer": "Web Developer",
+    "mobile app developer": "Mobile App Developer",
+    "full stack developer": "Full Stack Developer",
+    "frontend developer": "Frontend Developer",
+    "backend developer": "Backend Developer",
+    "ui/ux designer": "UI/UX Designer",
+    "graphic designer": "Graphic Designer",
+    "digital marketing specialist": "Digital Marketing Specialist",
+    "content writer": "Content Writer",
+    copywriter: "Copywriter",
+    "seo specialist": "SEO Specialist",
+    "social media manager": "Social Media Manager",
+    "video editor": "Video Editor",
+    photographer: "Photographer",
+    "data analyst": "Data Analyst",
+    "data scientist": "Data Scientist",
+    "machine learning engineer": "Machine Learning Engineer",
+    "devops engineer": "DevOps Engineer",
+    "cybersecurity specialist": "Cybersecurity Specialist",
+    "cloud architect": "Cloud Architect",
+    "business analyst": "Business Analyst",
+    "project manager": "Project Manager",
+    "product manager": "Product Manager",
+    "technical writer": "Technical Writer",
+    "software tester": "Software Tester",
+    "quality assurance engineer": "Quality Assurance Engineer",
+    "database administrator": "Database Administrator",
+    "system administrator": "System Administrator",
+    "network engineer": "Network Engineer",
+    "blockchain developer": "Blockchain Developer",
+    "game developer": "Game Developer",
+    "wordpress developer": "WordPress Developer",
+    "shopify developer": "Shopify Developer",
+    "e-commerce specialist": "E-commerce Specialist",
+    "email marketing specialist": "Email Marketing Specialist",
+    "ppc specialist": "PPC Specialist",
+    "brand designer": "Brand Designer",
+    "logo designer": "Logo Designer",
+    "illustration designer": "Illustration Designer",
+    "motion graphics designer": "Motion Graphics Designer",
+    "3d modeler": "3D Modeler",
+    "animation specialist": "Animation Specialist",
+    "voice over artist": "Voice Over Artist",
+    translator: "Translator",
+    "virtual assistant": "Virtual Assistant",
+    "customer support specialist": "Customer Support Specialist",
+    "sales specialist": "Sales Specialist",
+    "lead generation specialist": "Lead Generation Specialist",
+    "market research analyst": "Market Research Analyst",
+    "financial analyst": "Financial Analyst",
+    "accounting specialist": "Accounting Specialist",
+    "tax consultant": "Tax Consultant",
+    "legal consultant": "Legal Consultant",
+    "hr consultant": "HR Consultant",
+    "business consultant": "Business Consultant",
+    "marketing consultant": "Marketing Consultant",
+    "strategy consultant": "Strategy Consultant",
+    "interior designer": "Interior Designer",
+    "fashion designer": "Fashion Designer",
+    "chartered accountant": "Chartered Accountant",
+    "automation specialist": "Automation Specialist",
+
+    // Aliases and Variations
+    "web development": "Web Developer",
+    "web development professional": "Web Developer",
+    "web dev": "Web Developer",
+    "frontend dev": "Frontend Developer",
+    "backend dev": "Backend Developer",
+    "fullstack dev": "Full Stack Developer",
+    "wordpress dev": "WordPress Developer",
+    "shopify dev": "Shopify Developer",
+    "digital marketing": "Digital Marketing Specialist",
+    "digital marketer": "Digital Marketing Specialist",
+    "seo expert": "SEO Specialist",
+    smm: "Social Media Manager",
+    "social media": "Social Media Manager",
+    ecommerce: "E-commerce Specialist",
+    "email marketing": "Email Marketing Specialist",
+    ppc: "PPC Specialist",
+    "ui designer": "UI/UX Designer",
+    "ux designer": "UI/UX Designer",
+    "brand development": "Brand Designer",
+    "content creator": "Content Writer",
+    "ml engineer": "Machine Learning Engineer",
+    "qa engineer": "Quality Assurance Engineer",
+    "qa tester": "Quality Assurance Engineer",
+    "software test": "Software Tester",
+    devops: "DevOps Engineer",
+    "cyber security": "Cybersecurity Specialist",
+    "security specialist": "Cybersecurity Specialist",
+    taxation: "Tax Consultant",
+    ca: "Chartered Accountant",
+    "chartered acc": "Chartered Accountant",
+    "photo and video editing": "Video Editor",
+    automation: "Automation Specialist",
+    va: "Virtual Assistant",
+    "virtual assist": "Virtual Assistant",
+    "customer service": "Customer Support Specialist",
+  };
+
+  // Generate the list of professions dynamically from the map's values.
+  predefinedProfessions = [
+    ...new Set(Object.values(this.professionMap)),
+  ].sort();
+
   state = {
     portfolios: [],
     isLoading: true,
@@ -23,6 +130,17 @@ class PortfolioList extends Component {
     isMobileFilterOpen: false,
     notification: null,
     currentUser: null,
+    // Quick Booking Modal State
+    isQuickBookingModalOpen: false,
+    quickBookingForm: {
+      userName: "",
+      serviceName: "",
+      budget: "",
+      contactNumber: "",
+      email: "",
+      description: "",
+    },
+    isSubmittingQuickBooking: false,
   };
 
   getColorForName = (name) => {
@@ -59,9 +177,115 @@ class PortfolioList extends Component {
   loadCurrentUser = () => {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
-      this.setState({ currentUser: userData });
+      this.setState({
+        currentUser: userData,
+        quickBookingForm: {
+          ...this.state.quickBookingForm,
+          userName: userData.name || "",
+          email: userData.email || "",
+          contactNumber: userData.phone || userData.contactNumber || "",
+        },
+      });
     } catch (error) {
       console.error("Error loading current user:", error);
+    }
+  };
+
+  // Quick Booking Modal Functions
+  openQuickBookingModal = () => {
+    const { currentUser } = this.state;
+
+    if (!currentUser || !currentUser.id) {
+      alert("Please login to access quick booking");
+      window.location.href = "/login";
+      return;
+    }
+
+    this.setState({ isQuickBookingModalOpen: true });
+  };
+
+  closeQuickBookingModal = () => {
+    this.setState({
+      isQuickBookingModalOpen: false,
+      quickBookingForm: {
+        userName: this.state.currentUser?.name || "",
+        serviceName: "",
+        budget: "",
+        contactNumber:
+          this.state.currentUser?.phone ||
+          this.state.currentUser?.contactNumber ||
+          "",
+        email: this.state.currentUser?.email || "",
+        description: "",
+      },
+    });
+  };
+
+  handleQuickBookingFormChange = (e) => {
+    const { name, value } = e.target;
+    this.setState((prevState) => ({
+      quickBookingForm: {
+        ...prevState.quickBookingForm,
+        [name]: value,
+      },
+    }));
+  };
+
+  submitQuickBooking = async (e) => {
+    e.preventDefault();
+    const { currentUser, quickBookingForm } = this.state;
+
+    // Validation
+    if (
+      !quickBookingForm.serviceName ||
+      !quickBookingForm.budget ||
+      !quickBookingForm.contactNumber
+    ) {
+      this.showNotification("Please fill in all required fields", "error");
+      return;
+    }
+
+    this.setState({ isSubmittingQuickBooking: true });
+
+    try {
+      const quickBookingData = {
+        clientId: currentUser.id,
+        clientName: quickBookingForm.userName,
+        clientEmail: quickBookingForm.email,
+        clientPhone: quickBookingForm.contactNumber,
+        serviceName: quickBookingForm.serviceName,
+        budget: quickBookingForm.budget,
+        description: quickBookingForm.description,
+        status: "pending",
+        requestDate: new Date().toISOString(),
+        type: "quick_booking",
+      };
+
+      const response = await fetch(`${this.state.baseUrl}/api/quick-booking`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(quickBookingData),
+      });
+
+      if (response.ok) {
+        this.showNotification(
+          "Quick booking request submitted successfully! We'll match you with suitable freelancers."
+        );
+        this.closeQuickBookingModal();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to submit quick booking");
+      }
+    } catch (error) {
+      console.error("Quick booking error:", error);
+      this.showNotification(
+        `Failed to submit quick booking: ${error.message}`,
+        "error"
+      );
+    } finally {
+      this.setState({ isSubmittingQuickBooking: false });
     }
   };
 
@@ -71,10 +295,14 @@ class PortfolioList extends Component {
     const professionFromUrl = urlParams.get("profession");
 
     if (professionFromUrl) {
+      // Normalize the profession from the URL before setting it in the filter state
+      const normalizedProfession = this.normalizeProfession(
+        decodeURIComponent(professionFromUrl)
+      );
       this.setState((prevState) => ({
         filters: {
           ...prevState.filters,
-          profession: decodeURIComponent(professionFromUrl),
+          profession: normalizedProfession || "", // Use normalized value
         },
       }));
     }
@@ -108,6 +336,189 @@ class PortfolioList extends Component {
             }`}
           ></i>
           <span>{message}</span>
+        </div>
+      </div>
+    );
+  };
+
+  // Quick Booking Modal Render
+  renderQuickBookingModal = () => {
+    const {
+      isQuickBookingModalOpen,
+      quickBookingForm,
+      isSubmittingQuickBooking,
+    } = this.state;
+
+    if (!isQuickBookingModalOpen) return null;
+
+    return (
+      <div
+        className="quick-booking-modal-overlay"
+        onClick={this.closeQuickBookingModal}
+      >
+        <div
+          className="quick-booking-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>Quick Booking Request</h2>
+            <button
+              className="modal-close-btn"
+              onClick={this.closeQuickBookingModal}
+              type="button"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <form
+            onSubmit={this.submitQuickBooking}
+            className="quick-booking-form"
+          >
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="userName">Full Name *</label>
+                <input
+                  type="text"
+                  id="userName"
+                  name="userName"
+                  value={quickBookingForm.userName}
+                  onChange={this.handleQuickBookingFormChange}
+                  required
+                  readOnly
+                  className="readonly-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="email">Email Address *</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={quickBookingForm.email}
+                  onChange={this.handleQuickBookingFormChange}
+                  required
+                  readOnly
+                  className="readonly-input"
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="serviceName">Service Required *</label>
+                <select
+                  id="serviceName"
+                  name="serviceName"
+                  value={quickBookingForm.serviceName}
+                  onChange={this.handleQuickBookingFormChange}
+                  required
+                >
+                  <option value="">Select a service</option>
+                  {this.predefinedProfessions.map((profession, index) => (
+                    <option key={index} value={profession}>
+                      {profession}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="budget">Budget Range *</label>
+                <select
+                  id="budget"
+                  name="budget"
+                  value={quickBookingForm.budget}
+                  onChange={this.handleQuickBookingFormChange}
+                  required
+                >
+                  <option value="">Select budget range</option>
+                  <option value="1000-5000">₹1,000 - ₹5,000</option>
+                  <option value="5000-10000">₹5,000 - ₹10,000</option>
+                  <option value="10000-15000">₹10,000 - ₹15,000</option>
+                  <option value="15000-20000">₹15,000 - ₹20,000</option>
+                  <option value="20000-30000">₹20,000 - ₹30,000</option>
+                  <option value="30000+">₹30,000+</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="contactNumber">Contact Number *</label>
+              <input
+                type="tel"
+                id="contactNumber"
+                name="contactNumber"
+                value={quickBookingForm.contactNumber}
+                onChange={this.handleQuickBookingFormChange}
+                placeholder="Enter your phone number"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="description">
+                Project Description (Optional)
+              </label>
+              <textarea
+                id="description"
+                name="description"
+                value={quickBookingForm.description}
+                onChange={this.handleQuickBookingFormChange}
+                placeholder="Describe your project requirements, timeline, and any specific needs..."
+                rows="4"
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={this.closeQuickBookingModal}
+                disabled={isSubmittingQuickBooking}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="submit-btn"
+                disabled={isSubmittingQuickBooking}
+              >
+                {isSubmittingQuickBooking ? (
+                  <>
+                    <div className="button-spinner"></div>
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22,4 12,14.01 9,11.01"></polyline>
+                    </svg>
+                    Submit Request
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );
@@ -165,6 +576,32 @@ class PortfolioList extends Component {
     }
   };
 
+  // This function now uses the professionMap for consistent normalization.
+  normalizeProfession = (inputProfession) => {
+    if (!inputProfession || typeof inputProfession !== "string") {
+      return null;
+    }
+
+    const normalizedInput = inputProfession.trim().toLowerCase();
+
+    // Try a direct lookup in our comprehensive map
+    const mappedProfession = this.professionMap[normalizedInput];
+    if (mappedProfession) {
+      return mappedProfession;
+    }
+
+    // Fallback for cases where the input might be a partial match
+    const partialMatchKey = Object.keys(this.professionMap).find(
+      (key) => normalizedInput.includes(key) || key.includes(normalizedInput)
+    );
+    if (partialMatchKey) {
+      return this.professionMap[partialMatchKey];
+    }
+
+    // If no match is found, return null
+    return null;
+  };
+
   fetchApprovedPortfolios = async () => {
     try {
       const response = await fetch(`${this.state.baseUrl}/api/portfolios`);
@@ -175,13 +612,16 @@ class PortfolioList extends Component {
         portfolioData = await response.json();
 
         portfolioData = portfolioData.map((portfolio) => {
-          if (!portfolio.profession && portfolio.headline) {
-            portfolio.profession = portfolio.profession;
-            portfolio.headline = portfolio.headline;
-          }
+          // Normalize profession using the new robust function
+          const normalizedProfession = this.normalizeProfession(
+            portfolio.profession || portfolio.headline
+          );
 
-          const { headline, ...portfolioWithoutHeadline } = portfolio;
-          return portfolioWithoutHeadline;
+          return {
+            ...portfolio,
+            profession: normalizedProfession,
+            originalProfession: portfolio.profession || portfolio.headline, // Keep original for reference
+          };
         });
       } else {
         let approvedPortfolios = JSON.parse(
@@ -192,16 +632,23 @@ class PortfolioList extends Component {
           approvedPortfolios = [];
         }
 
-        portfolioData = approvedPortfolios;
+        portfolioData = approvedPortfolios.map((portfolio) => {
+          const normalizedProfession = this.normalizeProfession(
+            portfolio.profession || portfolio.headline
+          );
 
-        portfolioData = portfolioData.map((portfolio) => {
-          if (!portfolio.profession && portfolio.headline) {
-            portfolio.profession = portfolio.headline;
-          }
-          const { headline, ...portfolioWithoutHeadline } = portfolio;
-          return portfolioWithoutHeadline;
+          return {
+            ...portfolio,
+            profession: normalizedProfession,
+            originalProfession: portfolio.profession || portfolio.headline,
+          };
         });
       }
+
+      // Filter out portfolios with null profession (unmatched/invalid professions)
+      portfolioData = portfolioData.filter(
+        (portfolio) => portfolio.profession !== null
+      );
 
       const uniquePortfolios = this.removeDuplicatePortfolios(portfolioData);
       await this.fetchUserData(uniquePortfolios);
@@ -218,19 +665,24 @@ class PortfolioList extends Component {
       );
 
       if (approvedPortfolios.length > 0) {
-        const uniquePortfolios =
-          this.removeDuplicatePortfolios(approvedPortfolios);
+        const portfolioData = approvedPortfolios
+          .map((portfolio) => {
+            const normalizedProfession = this.normalizeProfession(
+              portfolio.profession || portfolio.headline
+            );
 
-        const cleanedPortfolios = uniquePortfolios.map((portfolio) => {
-          if (!portfolio.profession && portfolio.headline) {
-            portfolio.profession = portfolio.headline;
-          }
-          const { headline, ...portfolioWithoutHeadline } = portfolio;
-          return portfolioWithoutHeadline;
-        });
+            return {
+              ...portfolio,
+              profession: normalizedProfession,
+              originalProfession: portfolio.profession || portfolio.headline,
+            };
+          })
+          .filter((portfolio) => portfolio.profession !== null);
+
+        const uniquePortfolios = this.removeDuplicatePortfolios(portfolioData);
 
         this.setState({
-          portfolios: cleanedPortfolios,
+          portfolios: uniquePortfolios,
           isLoading: false,
         });
       } else {
@@ -363,7 +815,7 @@ class PortfolioList extends Component {
       },
     });
 
-    // Also update URL to remove query parameters
+    //  URL to remove query parameters
     const newUrl = window.location.pathname;
     window.history.replaceState({}, "", newUrl);
   };
@@ -544,20 +996,25 @@ class PortfolioList extends Component {
     );
   };
 
+  //  function to return only valid, unique professions
   getUniqueOptions = (field) => {
     const { portfolios } = this.state;
 
     if (field === "profession") {
-      const values = [
-        ...new Set(
-          portfolios
-            .map((item) => item.profession)
-            .filter((value) => value && value.trim !== "")
-        ),
-      ];
-      return values.sort();
+      // Get all professions from portfolios
+      const portfolioProfessions = portfolios
+        .map((item) => item.profession)
+        .filter(
+          (value) => value && typeof value === "string" && value.trim() !== ""
+        );
+
+      // Create unique set and sort
+      const uniqueProfessions = [...new Set(portfolioProfessions)].sort();
+
+      return uniqueProfessions;
     }
 
+    // For other fields, use the original logic
     const values = [
       ...new Set(
         portfolios
@@ -702,6 +1159,8 @@ class PortfolioList extends Component {
       <div className="app-container">
         <NavBar />
         {this.renderNotification()}
+        {this.renderQuickBookingModal()}
+
         <div className="portfolios-main-container">
           {/* Mobile Filter Toggle */}
           <button
@@ -844,11 +1303,11 @@ class PortfolioList extends Component {
               </label>
               <div className="amount-checkboxes">
                 {[
-                  { value: "1000-5000", label: "$1K - $5K" },
-                  { value: "5000-10000", label: "$5K - $10K" },
-                  { value: "10000-15000", label: "$10K - $15K" },
-                  { value: "15000-20000", label: "$15K - $20K" },
-                  { value: "20000+", label: "$20K+" },
+                  { value: "1000-5000", label: "₹1K - ₹5K" },
+                  { value: "5000-10000", label: "₹5K - ₹10K" },
+                  { value: "10000-15000", label: "₹10K - ₹15K" },
+                  { value: "15000-20000", label: "₹15K - ₹20K" },
+                  { value: "20000+", label: "₹20K+" },
                 ].map((option) => (
                   <label key={option.value} className="checkbox-label">
                     <input
@@ -885,7 +1344,10 @@ class PortfolioList extends Component {
                   </p>
                 </div>
                 <div className="header-right">
-                  <button className="quick-booking-btn">
+                  <button
+                    className="quick-booking-btn"
+                    onClick={this.openQuickBookingModal}
+                  >
                     <svg
                       width="16"
                       height="16"
@@ -936,7 +1398,7 @@ class PortfolioList extends Component {
                 <h3>No Freelancers Found</h3>
                 <p>
                   {filters.profession
-                    ? `No ${filters.profession}s found matching your criteria. Try adjusting your filters.`
+                    ? `No freelancers found for "${filters.profession}". Try adjusting your filters.`
                     : "Try adjusting your filters to see more results"}
                 </p>
               </div>
@@ -1013,7 +1475,7 @@ class PortfolioList extends Component {
                         <div className="voat-id">
                           <span className="voat-label">VOAT ID:</span>
                           <span className="voat-value">
-                            {portfolio.uservoatId}
+                            {portfolio.voatId || "Not Available"}
                           </span>
                         </div>
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Home } from "lucide-react";
 import axios from "axios";
 import "./index.css";
 
@@ -305,8 +305,12 @@ class LoginPage extends React.Component {
 
     return (
       <div className="login-screen">
+        <Link to="/" className="login-home-button">
+          <Home className="h-5 w-5" />
+          <span>Home</span>
+        </Link>
         <div className="login-container">
-          <h2 className="login-title">Sign in to your account</h2>
+          <h2 className="login-title">Login in to your account</h2>
 
           {errors.general && (
             <div className="login-error-alert">{errors.general}</div>
@@ -369,7 +373,7 @@ class LoginPage extends React.Component {
                 disabled={isSubmitting}
                 className="login-submit-button"
               >
-                {isSubmitting ? "Signing in..." : "Sign in"}
+                {isSubmitting ? "Logging in..." : "Login"}
               </button>
             </form>
 
@@ -384,7 +388,7 @@ class LoginPage extends React.Component {
             </div>
 
             <Link to="/signup" className="login-register-link">
-              Sign up
+              Register
             </Link>
           </div>
         </div>

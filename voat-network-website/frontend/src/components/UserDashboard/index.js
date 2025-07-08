@@ -1,7 +1,7 @@
 import { Component } from "react";
 import { Link } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid"; // For VOAT ID generation
-import "./index.css"; // Updated CSS file
+import "./index.css";
 
 class UserDashboard extends Component {
   state = {
@@ -153,6 +153,10 @@ class UserDashboard extends Component {
     this.wishlistRefreshInterval = setInterval(() => {
       this.fetchWishlist();
     }, 10000);
+
+    // Listen for wishlist updates from cart
+    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
+    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
   }
 
   loadUserData = async () => {
@@ -227,7 +231,27 @@ class UserDashboard extends Component {
     if (this.portfolioStatusTimeout) {
       clearTimeout(this.portfolioStatusTimeout);
     }
+    // Remove event listener
+    window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
   }
+
+  // Handle wishlist updates from cart
+  handleWishlistUpdate = (event) => {
+    console.log("=== DASHBOARD RECEIVED WISHLIST UPDATE ===");
+    if (event.detail && event.detail.updatedWishlist) {
+      this.setState({
+        wishlist: event.detail.updatedWishlist,
+        stats: {
+          ...this.state.stats,
+          savedItems: event.detail.updatedWishlist.length,
+        },
+      });
+      console.log("Dashboard wishlist updated from cart sync");
+    } else {
+      // Fallback: refresh wishlist from server
+      this.fetchWishlist();
+    }
+  };
 
   updateUserDataInDatabase = async (userData) => {
     try {
@@ -1266,10 +1290,10 @@ class UserDashboard extends Component {
                 <div className="activity-stats">
                   <div className="activity-stat">
                     <div className="stat-icon money">
-                      <i className="fas fa-dollar-sign"></i>
+                      <i class="fa-solid fa-indian-rupee-sign"></i>
                     </div>
                     <div className="stat-details">
-                      <div className="stat-value">${stats.totalSpent || 0}</div>
+                      <div className="stat-value">{stats.totalSpent || 0}</div>
                       <div className="stat-label">Total Spent</div>
                     </div>
                   </div>
@@ -1342,7 +1366,7 @@ class UserDashboard extends Component {
                         <div className="activity-meta">
                           <span className="activity-date">{order.date}</span>
                           <span className="activity-price">
-                            ${order.amount}
+                            ₹ {order.amount}
                           </span>
                         </div>
                       </div>
@@ -1643,8 +1667,8 @@ class UserDashboard extends Component {
                       <span>{order.date}</span>
                     </div>
                     <div className="meta-item">
-                      <i className="fas fa-dollar-sign"></i>
-                      <span>${order.amount}</span>
+                      <i class="fa-solid fa-indian-rupee-sign"></i>
+                      <span>{order.amount}</span>
                     </div>
                   </div>
                 </div>
