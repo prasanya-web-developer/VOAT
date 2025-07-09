@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     "https://voatnetwork.com",
-    "www.voatnetwork.com",
+    "https://www.voatnetwork.com",
     "http://localhost:3000",
     "https://voat-network.netlify.app",
   ],
@@ -1098,38 +1098,59 @@ app.get("/api/portfolio/user/:userId", async (req, res) => {
   }
 });
 
+// ✅ THIS IS THE EFFICIENT REPLACEMENT
 app.get("/api/portfolios", async (req, res) => {
   try {
-    const approvedPortfolios = await PortfolioSubmission.find({
-      status: "approved",
-    }).sort({ submittedDate: -1 });
     console.log("in /api/portfolios");
-    const portfolios = await Promise.all(
-      approvedPortfolios.map(async (portfolio) => {
-        const user = await User.findById(portfolio.userId);
-        const voatId = user?.voatId || null;
 
-        return {
-          _id: portfolio._id,
-          id: portfolio.id,
-          userId: portfolio.userId,
-          uservoatId: voatId,
-          name: portfolio.name,
-          email: portfolio.email,
-          workExperience: portfolio.workExperience,
-          profession: portfolio.profession,
-          headline: portfolio.headline,
-          profileImage: portfolio.profileImage,
-          portfolioLink: portfolio.portfolioLink,
-          about: portfolio.about,
-          coverImage: portfolio.coverImage,
-          status: portfolio.status,
-          submittedDate: portfolio.submittedDate,
-          updatedDate: portfolio.updatedDate,
-          services: portfolio.services,
-        };
-      })
-    );
+    const portfolios = await PortfolioSubmission.aggregate([
+      // Step 1: Find only the approved portfolios
+      {
+        $match: { status: "approved" },
+      },
+      // Step 2: Sort by date, newest first
+      {
+        $sort: { submittedDate: -1 },
+      },
+      // Step 3: Join with the 'users' collection
+      {
+        $lookup: {
+          from: "users", // The name of the User collection
+          localField: "userId", // Field from PortfolioSubmission
+          foreignField: "_id", // Field from User
+          as: "userDetails", // The new array field with user info
+        },
+      },
+      // Step 4: Deconstruct the userDetails array
+      {
+        $unwind: {
+          path: "$userDetails",
+          preserveNullAndEmptyArrays: true, // Keep portfolios even if user is not found
+        },
+      },
+      // Step 5: Shape the final output
+      {
+        $project: {
+          _id: 1, // Use 1 to include a field, 0 to exclude
+          id: "$_id",
+          userId: 1,
+          uservoatId: "$userDetails.voatId", // Get voatId from the joined userDetails
+          name: 1,
+          email: 1,
+          workExperience: 1,
+          profession: 1,
+          headline: 1,
+          profileImage: 1,
+          portfolioLink: 1,
+          about: 1,
+          coverImage: 1,
+          status: 1,
+          submittedDate: 1,
+          updatedDate: 1,
+          services: 1,
+        },
+      },
+    ]);
 
     res.status(200).json(portfolios);
   } catch (error) {
