@@ -133,6 +133,7 @@ body {
   box-shadow: 0 15px 25px rgba(0, 0, 0, 0.15);
 }
 
+/* Hero Section */
 .landing-page-hero {
   position: relative;
   width: 100%;
@@ -141,14 +142,17 @@ body {
   overflow: hidden;
 }
 
+/* Main carousel container */
 .landing-page-carousel-slides-container {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
+/* PUBLIC CAROUSEL STYLES (Original fade effect) */
 .landing-page-carousel-slide {
   position: absolute;
   top: 0;
@@ -191,18 +195,6 @@ body {
   z-index: 1;
 }
 
-.landing-page-hero-content-wrapper {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  z-index: 2;
-  padding-left: 10%;
-}
-
 /* Override hero section height for client users */
 .landing-page-hero:has(.landing-page-client-banner) {
   height: auto !important;
@@ -211,7 +203,7 @@ body {
   margin: 0 !important;
 }
 
-/* Client banner specific styles */
+/* CLIENT/FREELANCER CAROUSEL STYLES (Sliding effect) */
 .landing-page-client-banner {
   position: relative;
   width: 100%;
@@ -223,7 +215,51 @@ body {
   margin-top: 100px;
 }
 
-.landing-page-client-banner img {
+.landing-page-client-banner .landing-page-carousel-slides-container {
+  position: relative;
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+}
+
+.landing-page-client-banner .landing-page-carousel-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  transform: translateX(100%);
+  transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  z-index: 1;
+}
+
+/* First slide should be visible by default */
+.landing-page-client-banner .landing-page-carousel-slide:first-child {
+  position: relative;
+  transform: translateX(0);
+}
+
+/* Active slide comes into view */
+.landing-page-client-banner .landing-page-carousel-slide.active {
+  opacity: 1;
+  transform: translateX(0);
+  z-index: 2;
+}
+
+/* Previous slide goes to the left */
+.landing-page-client-banner .landing-page-carousel-slide.prev {
+  transform: translateX(-100%);
+  z-index: 1;
+}
+
+/* Next slide waits on the right */
+.landing-page-client-banner .landing-page-carousel-slide.next {
+  transform: translateX(100%);
+  z-index: 1;
+}
+
+.landing-page-client-banner .landing-page-carousel-slide img {
   width: 100%;
   height: auto;
   display: block;
@@ -231,6 +267,20 @@ body {
   margin: 0;
   padding: 0;
   vertical-align: top;
+  /* Remove the zoom effect for client banners */
+  transform: none !important;
+  transition: none !important;
+}
+
+/* Ensure proper positioning for indicators */
+.landing-page-client-banner .landing-page-carousel-indicators {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 3;
 }
 
 .landing-page-hero.client-hero {
@@ -243,6 +293,18 @@ body {
 .landing-page-hero.client-hero::before,
 .landing-page-hero.client-hero::after {
   display: none !important;
+}
+
+.landing-page-hero-content-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  z-index: 2;
+  padding-left: 10%;
 }
 
 .landing-page-service-content-card {
@@ -325,6 +387,38 @@ body {
 .landing-page-indicator.active {
   background-color: white;
   transform: scale(1.2);
+}
+
+/* Single banner styles for logged-in users */
+.landing-page-single-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.landing-page-single-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.landing-page-single-banner .landing-page-carousel-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
+  z-index: 1;
 }
 
 /* Services Section */
@@ -599,7 +693,6 @@ body {
 .landing-page-services-view-all .landing-page-button:hover {
   transform: translateY(-10px);
   box-shadow: 0 20px 35px rgba(92, 77, 244, 0.35);
-  /* letter-spacing: 0.5px; */
 }
 
 .landing-page-services-view-all .landing-page-button:hover::before {
@@ -814,8 +907,6 @@ body {
   filter: blur(10px);
   z-index: 0;
 }
-
-/* Orb 1 removed */
 
 .landing-page-vision-orb.orb-2 {
   width: 200px;
@@ -1093,99 +1184,6 @@ body {
   font-size: 1.2rem;
   margin-bottom: 40px;
   opacity: 0.9;
-}
-
-/* Animations */
-@keyframes wave-animation {
-  0% {
-    background-position: 0% 0%;
-  }
-  100% {
-    background-position: 100% 100%;
-  }
-}
-
-@keyframes float-orb {
-  0% {
-    transform: translate(0, 0);
-  }
-  100% {
-    transform: translate(20px, 20px);
-  }
-}
-
-@keyframes shine {
-  0% {
-    left: -50%;
-    opacity: 0;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    left: 150%;
-    opacity: 0;
-  }
-}
-
-@keyframes float-slow {
-  0% {
-    transform: translate(0, 0);
-  }
-  100% {
-    transform: translate(30px, 30px);
-  }
-}
-
-@keyframes morph {
-  0% {
-    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
-  }
-  25% {
-    border-radius: 70% 30% 50% 50% / 30% 60% 40% 70%;
-  }
-  50% {
-    border-radius: 40% 60% 30% 70% / 50% 60% 70% 40%;
-  }
-  75% {
-    border-radius: 30% 60% 70% 40% / 50% 30% 60% 60%;
-  }
-  100% {
-    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-  }
-}
-
-@keyframes fadeInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-50px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fadeInRight {
-  from {
-    opacity: 0;
-    transform: translateX(50px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Contact Section*/
@@ -1585,48 +1583,6 @@ body {
   box-shadow: 0 8px 15px rgba(92, 77, 244, 0.15) !important;
 }
 
-/* Message fade in/out animations */
-.landing-page-form-status {
-  animation: fadeIn 0.5s ease forwards;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-}
-
-/* Responsive adjustments for form status */
-@media (max-width: 768px) {
-  .landing-page-form-status {
-    padding: 10px 12px;
-    font-size: 0.9rem;
-  }
-}
-
-@media (max-width: 576px) {
-  .landing-page-form-status {
-    padding: 8px 10px;
-    font-size: 0.85rem;
-  }
-}
-
 .landing-page-contact-submit-button {
   align-self: center;
   padding: 14px 30px;
@@ -1691,24 +1647,107 @@ body {
   font-size: 20px;
 }
 
-/* Single banner styles for logged-in users */
-.landing-page-single-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+/* Client Services Section */
+.landing-page-client-services-section {
+  padding: 80px 0;
+  background-color: #f8f9fa;
+  position: relative;
   overflow: hidden;
 }
 
-.landing-page-single-banner img {
+.landing-page-client-services-description {
+  font-size: 1.2rem;
+  color: #666;
+  text-align: center;
+  max-width: 900px;
+  margin: 0 auto 4rem;
+  line-height: 1.8;
+  position: relative;
+  z-index: 2;
+}
+
+/* Client Services Grid */
+.landing-page-client-services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 30px;
+  position: relative;
+  z-index: 2;
+  margin-bottom: 60px;
+}
+
+/* Client Service Card */
+.landing-page-client-service-card {
+  background-color: white;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  height: 100%;
+  opacity: 0;
+  transform: translateY(50px) scale(0.95);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Staggered animation delays */
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card-1 {
+  transition-delay: 0.1s;
+}
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card-2 {
+  transition-delay: 0.2s;
+}
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card-3 {
+  transition-delay: 0.3s;
+}
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card-4 {
+  transition-delay: 0.4s;
+}
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card-5 {
+  transition-delay: 0.5s;
+}
+.landing-page-client-services-section.in-view
+  .landing-page-client-service-card-6 {
+  transition-delay: 0.6s;
+}
+
+.landing-page-client-service-card:hover {
+  transform: translateY(-15px) scale(1.02);
+  box-shadow: 0 25px 45px rgba(92, 77, 244, 0.15);
+  z-index: 5;
+}
+
+/* Client Service Image */
+.landing-page-client-service-image {
+  position: relative;
+  height: 250px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+}
+
+.landing-page-client-service-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
+  transition: transform 0.5s ease;
 }
 
-.landing-page-single-banner .landing-page-carousel-overlay {
+.landing-page-client-service-card:hover .landing-page-client-service-image img {
+  transform: scale(1.1);
+}
+
+.landing-page-client-service-overlay {
   position: absolute;
   top: 0;
   left: 0;
@@ -1716,13 +1755,208 @@ body {
   height: 100%;
   background: linear-gradient(
     135deg,
-    rgba(0, 0, 0, 0.6) 0%,
-    rgba(0, 0, 0, 0.3) 50%,
-    rgba(0, 0, 0, 0.7) 100%
+    rgba(92, 77, 244, 0.1) 0%,
+    rgba(122, 112, 249, 0.15) 100%
   );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.landing-page-client-service-card:hover .landing-page-client-service-overlay {
+  opacity: 1;
+}
+
+/* Client Service Content */
+.landing-page-client-service-content {
+  padding: 30px;
+  position: relative;
   z-index: 1;
 }
 
+.landing-page-client-service-card h3 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 15px;
+  color: #333;
+  font-family: "Montserrat", sans-serif;
+  transition: all 0.3s ease;
+}
+
+.landing-page-client-service-card:hover h3 {
+  color: #5c4df4;
+  transform: translateX(5px);
+}
+
+.landing-page-client-service-card p {
+  color: #666;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+
+/* Client Service Link */
+.landing-page-client-service-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #5c4df4;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+}
+
+.landing-page-client-service-link:hover {
+  gap: 12px;
+  color: #7a70f9;
+  transform: translateX(5px);
+}
+
+.landing-page-client-service-link svg {
+  transition: transform 0.3s ease;
+}
+
+.landing-page-client-service-link:hover svg {
+  transform: translateX(3px);
+}
+
+/* Animation for client services section title */
+.landing-page-client-services-section .landing-page-section-title {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #333;
+  margin-bottom: 1.5rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Honeypot field */
+.landing-page-honeypot {
+  position: absolute;
+  left: -9999px;
+}
+
+/* Animations */
+@keyframes wave-animation {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+@keyframes float-orb {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(20px, 20px);
+  }
+}
+
+@keyframes shine {
+  0% {
+    left: -50%;
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    left: 150%;
+    opacity: 0;
+  }
+}
+
+@keyframes float-slow {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(30px, 30px);
+  }
+}
+
+@keyframes morph {
+  0% {
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  25% {
+    border-radius: 70% 30% 50% 50% / 30% 60% 40% 70%;
+  }
+  50% {
+    border-radius: 40% 60% 30% 70% / 50% 60% 70% 40%;
+  }
+  75% {
+    border-radius: 30% 60% 70% 40% / 50% 30% 60% 60%;
+  }
+  100% {
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Message fade in/out animations */
+.landing-page-form-status {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Responsive Design */
 @media (max-width: 1300px) {
   .landing-page-container {
     padding: 0 20px;
@@ -1739,6 +1973,16 @@ body {
   .landing-page-service-content-card {
     max-width: 350px;
     right: 60px;
+  }
+
+  .landing-page-client-services-grid {
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 25px;
+  }
+
+  .landing-page-client-services-section .landing-page-section-title {
+    font-size: 2.8rem;
+    letter-spacing: 1px;
   }
 }
 
@@ -1827,6 +2071,25 @@ body {
 
   .landing-page-contact-form-container {
     max-width: 90%;
+  }
+
+  .landing-page-client-services-section {
+    padding: 60px 0;
+  }
+
+  .landing-page-client-services-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 25px;
+  }
+
+  .landing-page-client-services-section .landing-page-section-title {
+    font-size: 2.5rem;
+    letter-spacing: 1px;
+  }
+
+  .landing-page-client-services-description {
+    font-size: 1.1rem;
+    margin-bottom: 3rem;
   }
 }
 
@@ -1959,6 +2222,44 @@ body {
   .landing-page-cta-content p {
     font-size: 1.1rem;
     margin-bottom: 30px;
+  }
+
+  .landing-page-client-services-section {
+    padding: 50px 0;
+  }
+
+  .landing-page-client-services-grid {
+    grid-template-columns: 1fr;
+    max-width: 500px;
+    margin: 0 auto;
+    gap: 20px;
+  }
+
+  .landing-page-client-service-card {
+    max-width: 100%;
+  }
+
+  .landing-page-client-services-section .landing-page-section-title {
+    font-size: 2.2rem;
+    letter-spacing: 1px;
+  }
+
+  .landing-page-client-service-image {
+    height: 180px;
+  }
+
+  .landing-page-client-service-content {
+    padding: 25px 20px;
+  }
+
+  .landing-page-client-service-card h3 {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+  }
+
+  .landing-page-client-service-card p {
+    font-size: 0.95rem;
+    margin-bottom: 15px;
   }
 }
 
@@ -2209,6 +2510,36 @@ body {
     font-size: 0.95rem;
     margin-bottom: 25px;
   }
+
+  .landing-page-client-services-section .landing-page-section-title {
+    font-size: 1.8rem;
+    letter-spacing: 0.5px;
+  }
+
+  .landing-page-client-services-description {
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+  }
+
+  .landing-page-client-service-image {
+    height: 160px;
+  }
+
+  .landing-page-client-service-content {
+    padding: 20px 15px;
+  }
+
+  .landing-page-client-service-card h3 {
+    font-size: 1.3rem;
+  }
+
+  .landing-page-client-service-card p {
+    font-size: 0.9rem;
+  }
+
+  .landing-page-client-service-link {
+    font-size: 0.95rem;
+  }
 }
 
 /* Extra Small Mobile Styles */
@@ -2242,6 +2573,11 @@ body {
     grid-template-columns: repeat(2, 1fr);
     max-width: 200px;
   }
+
+  .landing-page-client-services-section .landing-page-section-title {
+    font-size: 1.6rem;
+    letter-spacing: 0.3px;
+  }
 }
 
 /* Additional fixes for form and layout on smaller screens */
@@ -2258,6 +2594,25 @@ body {
   .landing-page-contact-form-panel {
     padding: 25px 15px;
   }
+
+  .landing-page-client-service-image {
+    height: 170px;
+  }
+}
+
+/* Responsive adjustments for form status */
+@media (max-width: 768px) {
+  .landing-page-form-status {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .landing-page-form-status {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
 }
 
 /* Safari-specific fixes */
@@ -2265,327 +2620,7 @@ body {
   @supports (-webkit-appearance: none) {
     .landing-page-vision-card-inner,
     .landing-page-service-card,
-    .landing-page-contact-card {
-      transform: translateZ(
-        0
-      ); /* Force GPU acceleration for smoother animations */
-    }
-  }
-}
-
-@media screen and (-webkit-min-device-pixel-ratio: 0) {
-  .landing-page-vision-card-new:hover .landing-page-vision-card-inner,
-  .landing-page-service-card:hover,
-  .landing-page-contact-card:hover {
-    will-change: transform; /* Hint to browsers for animation performance */
-  }
-}
-
-/* Client Services Section */
-.landing-page-client-services-section {
-  padding: 80px 0;
-  background-color: #f8f9fa;
-  position: relative;
-  overflow: hidden;
-}
-
-.landing-page-client-services-description {
-  font-size: 1.2rem;
-  color: #666;
-  text-align: center;
-  max-width: 900px;
-  margin: 0 auto 4rem;
-  line-height: 1.8;
-  position: relative;
-  z-index: 2;
-}
-
-/* Client Services Grid */
-.landing-page-client-services-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 30px;
-  position: relative;
-  z-index: 2;
-  margin-bottom: 60px;
-}
-
-/* Client Service Card */
-.landing-page-client-service-card {
-  background-color: white;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
-  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
-  position: relative;
-  height: 100%;
-  opacity: 0;
-  transform: translateY(50px) scale(0.95);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-/* Staggered animation delays */
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card-1 {
-  transition-delay: 0.1s;
-}
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card-2 {
-  transition-delay: 0.2s;
-}
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card-3 {
-  transition-delay: 0.3s;
-}
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card-4 {
-  transition-delay: 0.4s;
-}
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card-5 {
-  transition-delay: 0.5s;
-}
-.landing-page-client-services-section.in-view
-  .landing-page-client-service-card-6 {
-  transition-delay: 0.6s;
-}
-
-.landing-page-client-service-card:hover {
-  transform: translateY(-15px) scale(1.02);
-  box-shadow: 0 25px 45px rgba(92, 77, 244, 0.15);
-  z-index: 5;
-}
-
-/* Client Service Image */
-.landing-page-client-service-image {
-  position: relative;
-  height: 250px;
-  overflow: hidden;
-  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-}
-
-.landing-page-client-service-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s ease;
-}
-
-.landing-page-client-service-card:hover .landing-page-client-service-image img {
-  transform: scale(1.1);
-}
-
-.landing-page-client-service-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    135deg,
-    rgba(92, 77, 244, 0.1) 0%,
-    rgba(122, 112, 249, 0.15) 100%
-  );
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.landing-page-client-service-card:hover .landing-page-client-service-overlay {
-  opacity: 1;
-}
-
-/* Client Service Content */
-.landing-page-client-service-content {
-  padding: 30px;
-  position: relative;
-  z-index: 1;
-}
-
-.landing-page-client-service-card h3 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  margin-bottom: 15px;
-  color: #333;
-  font-family: "Montserrat", sans-serif;
-  transition: all 0.3s ease;
-}
-
-.landing-page-client-service-card:hover h3 {
-  color: #5c4df4;
-  transform: translateX(5px);
-}
-
-.landing-page-client-service-card p {
-  color: #666;
-  font-size: 1.05rem;
-  line-height: 1.7;
-  margin-bottom: 20px;
-}
-
-/* Client Service Link */
-.landing-page-client-service-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #5c4df4;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.3s ease;
-  font-size: 1rem;
-}
-
-.landing-page-client-service-link:hover {
-  gap: 12px;
-  color: #7a70f9;
-  transform: translateX(5px);
-}
-
-.landing-page-client-service-link svg {
-  transition: transform 0.3s ease;
-}
-
-.landing-page-client-service-link:hover svg {
-  transform: translateX(3px);
-}
-
-/* Animation for client services section title */
-.landing-page-client-services-section .landing-page-section-title {
-  font-size: 3rem;
-  font-weight: 800;
-  color: #333;
-  margin-bottom: 1.5rem;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-
-/* Responsive Design for Client Services */
-@media (max-width: 1300px) {
-  .landing-page-client-services-grid {
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 25px;
-  }
-
-  .landing-page-client-services-section .landing-page-section-title {
-    font-size: 2.8rem;
-    letter-spacing: 1px;
-  }
-}
-
-@media (max-width: 992px) {
-  .landing-page-client-services-section {
-    padding: 60px 0;
-  }
-
-  .landing-page-client-services-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 25px;
-  }
-
-  .landing-page-client-services-section .landing-page-section-title {
-    font-size: 2.5rem;
-    letter-spacing: 1px;
-  }
-
-  .landing-page-client-services-description {
-    font-size: 1.1rem;
-    margin-bottom: 3rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .landing-page-client-services-section {
-    padding: 50px 0;
-  }
-
-  .landing-page-client-services-grid {
-    grid-template-columns: 1fr;
-    max-width: 500px;
-    margin: 0 auto;
-    gap: 20px;
-  }
-
-  .landing-page-client-service-card {
-    max-width: 100%;
-  }
-
-  .landing-page-client-services-section .landing-page-section-title {
-    font-size: 2.2rem;
-    letter-spacing: 1px;
-  }
-
-  .landing-page-client-service-image {
-    height: 180px;
-  }
-
-  .landing-page-client-service-content {
-    padding: 25px 20px;
-  }
-
-  .landing-page-client-service-card h3 {
-    font-size: 1.4rem;
-    margin-bottom: 12px;
-  }
-
-  .landing-page-client-service-card p {
-    font-size: 0.95rem;
-    margin-bottom: 15px;
-  }
-}
-
-@media (max-width: 576px) {
-  .landing-page-client-services-section .landing-page-section-title {
-    font-size: 1.8rem;
-    letter-spacing: 0.5px;
-  }
-
-  .landing-page-client-services-description {
-    font-size: 0.95rem;
-    margin-bottom: 2rem;
-  }
-
-  .landing-page-client-service-image {
-    height: 160px;
-  }
-
-  .landing-page-client-service-content {
-    padding: 20px 15px;
-  }
-
-  .landing-page-client-service-card h3 {
-    font-size: 1.3rem;
-  }
-
-  .landing-page-client-service-card p {
-    font-size: 0.9rem;
-  }
-
-  .landing-page-client-service-link {
-    font-size: 0.95rem;
-  }
-}
-
-@media (max-width: 375px) {
-  .landing-page-client-services-section .landing-page-section-title {
-    font-size: 1.6rem;
-    letter-spacing: 0.3px;
-  }
-}
-
-@media (max-width: 480px) {
-  .landing-page-client-service-image {
-    height: 170px;
-  }
-}
-
-/* Safari-specific fixes for client service cards */
-@media not all and (min-resolution: 0.001dpcm) {
-  @supports (-webkit-appearance: none) {
+    .landing-page-contact-card,
     .landing-page-client-service-card {
       transform: translateZ(0);
     }
@@ -2593,6 +2628,9 @@ body {
 }
 
 @media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .landing-page-vision-card-new:hover .landing-page-vision-card-inner,
+  .landing-page-service-card:hover,
+  .landing-page-contact-card:hover,
   .landing-page-client-service-card:hover {
     will-change: transform;
   }

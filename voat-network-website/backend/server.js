@@ -1098,7 +1098,6 @@ app.get("/api/portfolio/user/:userId", async (req, res) => {
   }
 });
 
-// ✅ THIS IS THE EFFICIENT REPLACEMENT
 app.get("/api/portfolios", async (req, res) => {
   try {
     console.log("in /api/portfolios");
@@ -1131,10 +1130,10 @@ app.get("/api/portfolios", async (req, res) => {
       // Step 5: Shape the final output
       {
         $project: {
-          _id: 1, // Use 1 to include a field, 0 to exclude
+          _id: 1,
           id: "$_id",
           userId: 1,
-          uservoatId: "$userDetails.voatId", // Get voatId from the joined userDetails
+          uservoatId: "$userDetails.voatId",
           name: 1,
           email: 1,
           workExperience: 1,

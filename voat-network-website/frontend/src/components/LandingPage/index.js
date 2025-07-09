@@ -50,13 +50,13 @@ class LandingPage extends Component {
     ],
 
     freelancerImages: [
-      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
-      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1752060338/2_oxsz5t.jpg",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1752060338/1_jfhwai.jpg",
       "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
     ],
     clientImages: [
-      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
-      "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1752060338/2_oxsz5t.jpg",
+      "https://res.cloudinary.com/dffu1ungl/image/upload/v1752060338/1_jfhwai.jpg",
       "https://res.cloudinary.com/dffu1ungl/image/upload/v1751212085/demo_banner_byj1ol.png",
     ],
     currentFreelancerSlide: 0,
@@ -89,6 +89,29 @@ class LandingPage extends Component {
   contactRef = React.createRef();
   clientCardsRef = React.createRef();
 
+  // Separate intervals for different carousels
+  publicSlideInterval = null;
+  freelancerSlideInterval = null;
+  clientSlideInterval = null;
+
+  // Add helper method to manage slide classes
+  updateSlideClasses = (slides, currentIndex) => {
+    slides.forEach((slide, index) => {
+      slide.classList.remove("active", "prev", "next");
+
+      if (index === currentIndex) {
+        slide.classList.add("active");
+      } else if (
+        index === currentIndex - 1 ||
+        (currentIndex === 0 && index === slides.length - 1)
+      ) {
+        slide.classList.add("prev");
+      } else {
+        slide.classList.add("next");
+      }
+    });
+  };
+
   componentDidMount() {
     this.loadUserData();
     window.addEventListener("storage", this.handleStorageEvent);
@@ -97,18 +120,39 @@ class LandingPage extends Component {
       2000
     );
 
-    this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
+    // Start the appropriate carousel based on user type
+    this.startCarousel();
+
     window.addEventListener("scroll", this.handleScroll);
     this.handleScroll();
+
+    // Initialize slide classes for client/freelancer carousels after component mounts
+    setTimeout(() => {
+      const userType = this.getUserType();
+      if (userType === "freelancer") {
+        const slides = document.querySelectorAll(
+          ".landing-page-client-banner .landing-page-carousel-slide"
+        );
+        if (slides.length > 0) {
+          this.updateSlideClasses(slides, this.state.currentFreelancerSlide);
+        }
+      } else if (userType === "client") {
+        const slides = document.querySelectorAll(
+          ".landing-page-client-banner .landing-page-carousel-slide"
+        );
+        if (slides.length > 0) {
+          this.updateSlideClasses(slides, this.state.currentClientSlide);
+        }
+      }
+    }, 100);
   }
 
   componentWillUnmount() {
-    clearInterval(this.slideInterval);
+    this.clearAllIntervals();
     if (this.loginCheckInterval) {
       clearInterval(this.loginCheckInterval);
     }
     window.removeEventListener("storage", this.handleStorageEvent);
-
     window.removeEventListener("scroll", this.handleScroll);
 
     if (this.state.successTimer) {
@@ -116,44 +160,139 @@ class LandingPage extends Component {
     }
   }
 
-  nextSlide() {
+  // Clear all carousel intervals
+  clearAllIntervals = () => {
+    if (this.publicSlideInterval) {
+      clearInterval(this.publicSlideInterval);
+      this.publicSlideInterval = null;
+    }
+    if (this.freelancerSlideInterval) {
+      clearInterval(this.freelancerSlideInterval);
+      this.freelancerSlideInterval = null;
+    }
+    if (this.clientSlideInterval) {
+      clearInterval(this.clientSlideInterval);
+      this.clientSlideInterval = null;
+    }
+  };
+
+  // Start the appropriate carousel based on user type
+  startCarousel = () => {
+    this.clearAllIntervals();
+
+    const userType = this.getUserType();
+
+    if (!this.state.isLoggedIn) {
+      // Public carousel - KEEP AS IS
+      this.publicSlideInterval = setInterval(() => {
+        this.setState({
+          currentSlide:
+            (this.state.currentSlide + 1) % this.state.publicImages.length,
+        });
+      }, 5000);
+    } else if (userType === "freelancer") {
+      // Freelancer carousel - UPDATED
+      this.freelancerSlideInterval = setInterval(() => {
+        this.nextFreelancerSlide();
+      }, 3000);
+    } else if (userType === "client") {
+      // Client carousel - UPDATED
+      this.clientSlideInterval = setInterval(() => {
+        this.nextClientSlide();
+      }, 3000);
+    }
+  };
+
+  // Public carousel methods
+  nextSlide = () => {
     this.setState({
       currentSlide:
         (this.state.currentSlide + 1) % this.state.publicImages.length,
     });
-  }
+  };
 
   setSlide = (index) => {
-    clearInterval(this.slideInterval);
+    if (this.publicSlideInterval) {
+      clearInterval(this.publicSlideInterval);
+    }
     this.setState({ currentSlide: index });
-    this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
+    this.publicSlideInterval = setInterval(() => {
+      this.setState({
+        currentSlide:
+          (this.state.currentSlide + 1) % this.state.publicImages.length,
+      });
+    }, 5000);
   };
 
+  // Freelancer carousel methods - UPDATED
   nextFreelancerSlide = () => {
-    this.setState({
-      currentFreelancerSlide:
-        (this.state.currentFreelancerSlide + 1) %
-        this.state.freelancerImages.length,
-    });
-  };
-
-  nextClientSlide = () => {
-    this.setState({
-      currentClientSlide:
-        (this.state.currentClientSlide + 1) % this.state.clientImages.length,
+    const newIndex =
+      (this.state.currentFreelancerSlide + 1) %
+      this.state.freelancerImages.length;
+    this.setState({ currentFreelancerSlide: newIndex }, () => {
+      // Update slide classes after state update
+      const slides = document.querySelectorAll(
+        ".landing-page-client-banner .landing-page-carousel-slide"
+      );
+      if (slides.length > 0) {
+        this.updateSlideClasses(slides, newIndex);
+      }
     });
   };
 
   setFreelancerSlide = (index) => {
-    clearInterval(this.slideInterval);
-    this.setState({ currentFreelancerSlide: index });
-    this.slideInterval = setInterval(this.nextFreelancerSlide, 5000);
+    if (this.freelancerSlideInterval) {
+      clearInterval(this.freelancerSlideInterval);
+    }
+
+    this.setState({ currentFreelancerSlide: index }, () => {
+      // Update slide classes after state update
+      const slides = document.querySelectorAll(
+        ".landing-page-client-banner .landing-page-carousel-slide"
+      );
+      if (slides.length > 0) {
+        this.updateSlideClasses(slides, index);
+      }
+    });
+
+    this.freelancerSlideInterval = setInterval(() => {
+      this.nextFreelancerSlide();
+    }, 3000);
+  };
+
+  // Client carousel methods - UPDATED
+  nextClientSlide = () => {
+    const newIndex =
+      (this.state.currentClientSlide + 1) % this.state.clientImages.length;
+    this.setState({ currentClientSlide: newIndex }, () => {
+      // Update slide classes after state update
+      const slides = document.querySelectorAll(
+        ".landing-page-client-banner .landing-page-carousel-slide"
+      );
+      if (slides.length > 0) {
+        this.updateSlideClasses(slides, newIndex);
+      }
+    });
   };
 
   setClientSlide = (index) => {
-    clearInterval(this.slideInterval);
-    this.setState({ currentClientSlide: index });
-    this.slideInterval = setInterval(this.nextClientSlide, 5000);
+    if (this.clientSlideInterval) {
+      clearInterval(this.clientSlideInterval);
+    }
+
+    this.setState({ currentClientSlide: index }, () => {
+      // Update slide classes after state update
+      const slides = document.querySelectorAll(
+        ".landing-page-client-banner .landing-page-carousel-slide"
+      );
+      if (slides.length > 0) {
+        this.updateSlideClasses(slides, index);
+      }
+    });
+
+    this.clientSlideInterval = setInterval(() => {
+      this.nextClientSlide();
+    }, 3000);
   };
 
   isElementInViewport = (el) => {
@@ -256,43 +395,46 @@ class LandingPage extends Component {
     try {
       const userDataString = localStorage.getItem("user");
 
-      if (this.slideInterval) {
-        clearInterval(this.slideInterval);
-        this.slideInterval = null;
-      }
-
       if (userDataString) {
         const userData = JSON.parse(userDataString);
         if (userData && userData.name) {
-          this.setState({
-            isLoggedIn: true,
-            user: userData,
-            userRole: userData.role || null,
-          });
-
-          // Determine user type and start the correct carousel
-          const userType = this.getUserType();
-          if (userType === "freelancer") {
-            this.slideInterval = setInterval(this.nextFreelancerSlide, 5000);
-          } else if (userType === "client") {
-            this.slideInterval = setInterval(this.nextClientSlide, 5000);
-          }
+          this.setState(
+            {
+              isLoggedIn: true,
+              user: userData,
+              userRole: userData.role || null,
+            },
+            () => {
+              // Start the appropriate carousel after state is updated
+              this.startCarousel();
+            }
+          );
         }
       } else {
-        this.setState({
-          isLoggedIn: false,
-          user: null,
-          userRole: null,
-        });
-        this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
+        this.setState(
+          {
+            isLoggedIn: false,
+            user: null,
+            userRole: null,
+          },
+          () => {
+            // Start public carousel
+            this.startCarousel();
+          }
+        );
       }
     } catch (error) {
       console.error("Failed to load user data:", error);
-      this.setState({
-        isLoggedIn: false,
-        user: null,
-        userRole: null,
-      });
+      this.setState(
+        {
+          isLoggedIn: false,
+          user: null,
+          userRole: null,
+        },
+        () => {
+          this.startCarousel();
+        }
+      );
     }
   };
 
@@ -302,34 +444,42 @@ class LandingPage extends Component {
         try {
           const userData = JSON.parse(event.newValue);
           if (!this.state.isLoggedIn) {
-            this.setState({
-              isLoggedIn: true,
-              user: userData,
-              userRole: userData.role || null,
-            });
-            if (this.slideInterval) {
-              clearInterval(this.slideInterval);
-              this.slideInterval = null;
-            }
+            this.setState(
+              {
+                isLoggedIn: true,
+                user: userData,
+                userRole: userData.role || null,
+              },
+              () => {
+                this.startCarousel();
+              }
+            );
           } else {
-            this.setState({
-              user: userData,
-              userRole: userData.role || null,
-            });
+            this.setState(
+              {
+                user: userData,
+                userRole: userData.role || null,
+              },
+              () => {
+                this.startCarousel();
+              }
+            );
           }
         } catch (e) {
           console.error("Error parsing user data from storage event:", e);
         }
       } else {
         if (this.state.isLoggedIn) {
-          this.setState({
-            isLoggedIn: false,
-            user: null,
-            userRole: null,
-          });
-          if (!this.slideInterval && this.state.publicImages.length > 0) {
-            this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
-          }
+          this.setState(
+            {
+              isLoggedIn: false,
+              user: null,
+              userRole: null,
+            },
+            () => {
+              this.startCarousel();
+            }
+          );
         }
       }
     }
@@ -352,14 +502,16 @@ class LandingPage extends Component {
       if (!wasLoggedIn && isLoggedIn) {
         this.loadUserData();
       } else if (wasLoggedIn && !isLoggedIn) {
-        this.setState({
-          isLoggedIn: false,
-          user: null,
-          userRole: null,
-        });
-        if (!this.slideInterval && this.state.publicImages.length > 0) {
-          this.slideInterval = setInterval(this.nextSlide.bind(this), 5000);
-        }
+        this.setState(
+          {
+            isLoggedIn: false,
+            user: null,
+            userRole: null,
+          },
+          () => {
+            this.startCarousel();
+          }
+        );
       } else if (isLoggedIn && userData && this.state.user) {
         const currentUser = this.state.user;
         if (
@@ -367,10 +519,15 @@ class LandingPage extends Component {
           userData.email !== currentUser.email ||
           userData.role !== currentUser.role
         ) {
-          this.setState({
-            user: userData,
-            userRole: userData.role || null,
-          });
+          this.setState(
+            {
+              user: userData,
+              userRole: userData.role || null,
+            },
+            () => {
+              this.startCarousel();
+            }
+          );
         }
       }
     } catch (error) {
@@ -447,9 +604,9 @@ class LandingPage extends Component {
       };
     } else if (userType === "freelancer") {
       return {
-        title: null, // No title for client
-        description: null, // No description for client
-        buttons: null, // No buttons for client
+        title: null, // No title for freelancer
+        description: null, // No description for freelancer
+        buttons: null, // No buttons for freelancer
       };
     } else if (userType === "client") {
       return {
@@ -736,33 +893,21 @@ class LandingPage extends Component {
             ) : this.getUserType() === "freelancer" ? (
               // Freelancer carousel
               <div className="landing-page-client-banner">
-                {this.state.freelancerImages.map((image, index) => (
-                  <div
-                    key={index}
-                    className={`landing-page-carousel-slide ${
-                      index === this.state.currentFreelancerSlide
-                        ? "active"
-                        : ""
-                    }`}
-                    style={{
-                      position: index === 0 ? "relative" : "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: "100%",
-                    }}
-                  >
-                    <img
-                      src={image}
-                      alt={`Freelancer Banner ${index + 1}`}
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        display: "block",
-                      }}
-                    />
-                  </div>
-                ))}
+                <div className="landing-page-carousel-slides-container">
+                  {this.state.freelancerImages.map((image, index) => (
+                    <div key={index} className="landing-page-carousel-slide">
+                      <img
+                        src={image}
+                        alt={`Freelancer Banner ${index + 1}`}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          display: "block",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
                 <div className="landing-page-carousel-indicators">
                   {this.state.freelancerImages.map((_, index) => (
                     <button
@@ -781,31 +926,21 @@ class LandingPage extends Component {
             ) : this.getUserType() === "client" ? (
               // Client carousel
               <div className="landing-page-client-banner">
-                {this.state.clientImages.map((image, index) => (
-                  <div
-                    key={index}
-                    className={`landing-page-carousel-slide ${
-                      index === this.state.currentClientSlide ? "active" : ""
-                    }`}
-                    style={{
-                      position: index === 0 ? "relative" : "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: "100%",
-                    }}
-                  >
-                    <img
-                      src={image}
-                      alt={`Client Banner ${index + 1}`}
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        display: "block",
-                      }}
-                    />
-                  </div>
-                ))}
+                <div className="landing-page-carousel-slides-container">
+                  {this.state.clientImages.map((image, index) => (
+                    <div key={index} className="landing-page-carousel-slide">
+                      <img
+                        src={image}
+                        alt={`Client Banner ${index + 1}`}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          display: "block",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
                 <div className="landing-page-carousel-indicators">
                   {this.state.clientImages.map((_, index) => (
                     <button
