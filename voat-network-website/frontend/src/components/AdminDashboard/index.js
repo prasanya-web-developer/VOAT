@@ -28,6 +28,42 @@ class AdminPanel extends Component {
     }
   }
 
+  // Helper function to generate proper initials
+  getInitials = (name) => {
+    if (!name) return "?";
+
+    const nameParts = name.trim().split(/\s+/);
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      return (
+        nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)
+      ).toUpperCase();
+    }
+  };
+
+  // Helper function to get profile image source
+  getProfileImageSrc = (profileImage) => {
+    console.log("Processing profile image:", profileImage);
+
+    if (!profileImage) {
+      console.log("No profile image provided");
+      return null;
+    }
+
+    if (
+      profileImage.startsWith("http") ||
+      profileImage.startsWith("/api/placeholder")
+    ) {
+      console.log("Using direct URL:", profileImage);
+      return profileImage;
+    }
+
+    const constructedUrl = `${this.state.baseUrl}${profileImage}`;
+    console.log("Constructed URL:", constructedUrl);
+    return constructedUrl;
+  };
+
   checkAuthentication = () => {
     const adminData = localStorage.getItem("adminData");
     if (adminData) {
@@ -544,6 +580,16 @@ class AdminPanel extends Component {
     const { isLoading } = this.state;
     const filteredSubmissions = this.getFilteredSubmissions();
 
+    //  debug log
+    console.log(
+      "Filtered submissions with profile images:",
+      filteredSubmissions.map((sub) => ({
+        name: sub.name,
+        profileImage: sub.profileImage,
+        processedSrc: this.getProfileImageSrc(sub.profileImage),
+      }))
+    );
+
     if (isLoading) {
       return (
         <div className="adminpanel-loading-state">
@@ -592,17 +638,25 @@ class AdminPanel extends Component {
                         src={profileImageSrc}
                         alt={submission.name}
                         onError={(e) => {
+                          console.log("Image failed to load:", e.target.src);
                           e.target.onerror = null;
-                          e.target.src = "/api/placeholder/60/60";
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                        onLoad={(e) => {
+                          console.log(
+                            "Image loaded successfully:",
+                            e.target.src
+                          );
                         }}
                       />
-                    ) : (
-                      <div className="adminpanel-avatar-initials">
-                        {submission.name
-                          ? submission.name.charAt(0).toUpperCase()
-                          : "?"}
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="adminpanel-avatar-initials"
+                      style={{ display: profileImageSrc ? "none" : "flex" }}
+                    >
+                      {this.getInitials(submission.name)}
+                    </div>
                   </div>
                   <div className="adminpanel-profile-info">
                     <h3 className="adminpanel-profile-name">
@@ -672,14 +726,10 @@ class AdminPanel extends Component {
     const { viewingSubmission } = this.state;
     if (!viewingSubmission) return null;
 
-    let profileImageSrc = viewingSubmission.profileImage;
-    if (
-      profileImageSrc &&
-      !profileImageSrc.startsWith("http") &&
-      !profileImageSrc.startsWith("/api/placeholder")
-    ) {
-      profileImageSrc = `${this.state.baseUrl}${profileImageSrc}`;
-    }
+    const profileImageSrc = this.getProfileImageSrc(
+      viewingSubmission.profileImage
+    );
+    const initials = this.getInitials(viewingSubmission.name);
 
     let services = [];
     if (viewingSubmission.services) {
@@ -725,16 +775,17 @@ class AdminPanel extends Component {
                     alt={viewingSubmission.name}
                     onError={(e) => {
                       e.target.onerror = null;
-                      e.target.src = "/api/placeholder/120/120";
+                      e.target.style.display = "none";
+                      e.target.nextSibling.style.display = "flex";
                     }}
                   />
-                ) : (
-                  <div className="adminpanel-large-avatar-initials">
-                    {viewingSubmission.name
-                      ? viewingSubmission.name.charAt(0).toUpperCase()
-                      : "?"}
-                  </div>
-                )}
+                ) : null}
+                <div
+                  className="adminpanel-large-avatar-initials"
+                  style={{ display: profileImageSrc ? "none" : "flex" }}
+                >
+                  {this.getInitials(viewingSubmission.name)}
+                </div>
               </div>
 
               <div className="adminpanel-profile-details">

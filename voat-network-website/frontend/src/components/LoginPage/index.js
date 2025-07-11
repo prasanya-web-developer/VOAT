@@ -60,7 +60,6 @@ const welcomeCardStyles = `
 }
 `;
 
-// Inject styles once when component is imported
 (function injectStyles() {
   // Check if styles are already injected
   if (!document.getElementById("welcome-card-styles")) {
@@ -83,7 +82,7 @@ class LoginPage extends React.Component {
 
   backendUrls = [
     "https://voat.onrender.com", // Production/Render
-    "http://localhost:5000", // Local development (keep for dev)
+    "http://localhost:5000", // Local development
   ];
 
   componentDidMount() {
@@ -202,7 +201,7 @@ class LoginPage extends React.Component {
               Accept: "application/json",
               "Content-Type": "application/json",
             },
-            timeout: 10000, // Increase timeout for slow server response
+            timeout: 10000,
           }
         );
 

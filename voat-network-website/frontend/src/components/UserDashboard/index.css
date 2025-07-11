@@ -2068,3 +2068,53 @@ textarea {
   background: var(--badge-platinum);
   color: #333;
 }
+
+.current-profile-preview {
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-4);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid #e2e8f0;
+}
+
+.current-profile-preview label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
+}
+
+.profile-preview-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.current-profile-image {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  border: 2px solid var(--voat-accent);
+}
+
+.current-profile-placeholder {
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--voat-accent);
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--voat-accent);
+}
+
+.preview-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}

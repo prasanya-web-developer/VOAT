@@ -137,10 +137,10 @@ class UserDashboard extends Component {
       },
     });
 
+    // Load user data (which now always fetches from database)
     this.loadUserData().then(() => {
-      // Fetch portfolio status first to ensure it's loaded
+      // After user data is loaded, fetch other data
       this.fetchPortfolioStatus().then(() => {
-        // Fetch other data after ensuring status is fetched
         this.fetchOrders();
         this.fetchWishlist();
         this.fetchBookings();
@@ -189,10 +189,10 @@ class UserDashboard extends Component {
           }
         }
 
-        // Now set state with the updated userData (which includes VOAT ID)
+        // Set initial state with localStorage data (without profile image)
         this.setState({
           userData: userData,
-          isLoading: false,
+          isLoading: true, // Keep loading true until we fetch from database
           formData: {
             name: userData.name || "",
             email: userData.email || "",
@@ -200,13 +200,37 @@ class UserDashboard extends Component {
             profession: userData.profession || "",
             phone: userData.phone || "",
           },
-          previewImage: userData.profileImage
-            ? this.getFullImageUrl(userData.profileImage)
-            : null,
+          // Don't set previewImage here - wait for database fetch
         });
 
-        // Now refresh user data from database to get any other server-side updates
-        await this.refreshUserFromDatabase();
+        // Always fetch fresh data from database, especially profile image
+        const freshUserData = await this.refreshUserFromDatabase();
+
+        if (freshUserData) {
+          // Update state with fresh data from database
+          this.setState({
+            userData: freshUserData,
+            isLoading: false,
+            formData: {
+              name: freshUserData.name || "",
+              email: freshUserData.email || "",
+              role: freshUserData.role || "",
+              profession: freshUserData.profession || "",
+              phone: freshUserData.phone || "",
+            },
+            previewImage: freshUserData.profileImage
+              ? this.getFullImageUrl(freshUserData.profileImage)
+              : null,
+          });
+        } else {
+          // Fallback to localStorage data if database fetch fails
+          this.setState({
+            isLoading: false,
+            previewImage: userData.profileImage
+              ? this.getFullImageUrl(userData.profileImage)
+              : null,
+          });
+        }
       } catch (error) {
         console.error("Error loading user data:", error);
         this.setState({
@@ -234,6 +258,23 @@ class UserDashboard extends Component {
     // Remove event listener
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
   }
+
+  generateInitials = (name) => {
+    if (!name) return "U";
+
+    const words = name.trim().split(/\s+/);
+
+    if (words.length === 1) {
+      // Single word - take first two characters
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+      // Multiple words - take first letter of each word (max 2)
+      return words
+        .slice(0, 2)
+        .map((word) => word.charAt(0).toUpperCase())
+        .join("");
+    }
+  };
 
   // Handle wishlist updates from cart
   handleWishlistUpdate = (event) => {
@@ -296,6 +337,57 @@ class UserDashboard extends Component {
       const userData = JSON.parse(localStorage.getItem("user"));
       if (!userData || !userData.id) return null;
 
+      console.log("Fetching fresh user data from database...");
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/user/${userData.id}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Fresh user data received:", result);
+
+        // Merge database data with local data, prioritizing database values
+        const updatedUserData = {
+          ...userData, // Start with localStorage data
+          ...result.user, // Override with database data
+          // Ensure VOAT fields are preserved if they exist locally but not in DB
+          voatId:
+            result.user.voatId || userData.voatId || this.generateVoatId(),
+          voatPoints:
+            result.user.voatPoints !== undefined
+              ? result.user.voatPoints
+              : userData.voatPoints || 0,
+          badge: result.user.badge || userData.badge || this.calculateBadge(0),
+          // Always use database profile image if available
+          profileImage: result.user.profileImage || null,
+        };
+
+        // Update localStorage with fresh data
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+        console.log(
+          "User data refreshed successfully, profile image:",
+          updatedUserData.profileImage
+        );
+        return updatedUserData;
+      } else {
+        console.error("Failed to fetch user data from database");
+        return null;
+      }
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+      return null;
+    }
+  };
+
+  refreshProfileImage = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user"));
+      if (!userData || !userData.id) return;
+
+      console.log("Refreshing profile image from database...");
+
       const response = await fetch(
         `${this.state.baseUrl}/api/user/${userData.id}`
       );
@@ -303,36 +395,26 @@ class UserDashboard extends Component {
       if (response.ok) {
         const result = await response.json();
 
-        // Preserve VOAT ID if it exists in local storage but not in database response
+        // Update only the profile image
         const updatedUserData = {
           ...userData,
-          ...result.user,
-          voatId:
-            result.user.voatId || userData.voatId || this.generateVoatId(),
-          voatPoints: result.user.voatPoints || userData.voatPoints || 0,
-          badge: result.user.badge || userData.badge || this.calculateBadge(0),
+          profileImage: result.user.profileImage || null,
         };
 
         localStorage.setItem("user", JSON.stringify(updatedUserData));
 
-        // Update state with refreshed data to ensure UI reflects current data
         this.setState({
           userData: updatedUserData,
-          formData: {
-            name: updatedUserData.name || "",
-            email: updatedUserData.email || "",
-            role: updatedUserData.role || "",
-            profession: updatedUserData.profession || "",
-            phone: updatedUserData.phone || "",
-          },
+          previewImage: result.user.profileImage
+            ? this.getFullImageUrl(result.user.profileImage)
+            : null,
         });
 
-        return updatedUserData;
+        console.log("Profile image refreshed:", result.user.profileImage);
       }
     } catch (error) {
-      console.error("Error refreshing user data:", error);
+      console.error("Error refreshing profile image:", error);
     }
-    return null;
   };
 
   isAdmin = () => {
@@ -840,9 +922,9 @@ class UserDashboard extends Component {
       submitData.append("profession", formData.profession);
       submitData.append("phone", formData.phone);
       submitData.append("userId", userData.id);
-      submitData.append("voatId", userData.voatId); // Preserve VOAT ID
-      submitData.append("voatPoints", userData.voatPoints); // Preserve VOAT points
-      submitData.append("badge", userData.badge); // Preserve badge
+      submitData.append("voatId", userData.voatId);
+      submitData.append("voatPoints", userData.voatPoints);
+      submitData.append("badge", userData.badge);
 
       if (profileImage) {
         submitData.append("profileImage", profileImage);
@@ -859,22 +941,37 @@ class UserDashboard extends Component {
 
       const result = await response.json();
 
-      const updatedUserData = {
-        ...userData,
-        ...formData,
-        profileImage: result.profileImage || userData.profileImage,
-      };
+      // Force refresh user data from database to get the latest profile image
+      const freshUserData = await this.refreshUserFromDatabase();
 
-      localStorage.setItem("user", JSON.stringify(updatedUserData));
+      if (freshUserData) {
+        this.setState({
+          userData: freshUserData,
+          isLoading: false,
+          isEditing: false,
+          previewImage: freshUserData.profileImage
+            ? this.getFullImageUrl(freshUserData.profileImage)
+            : null,
+        });
+      } else {
+        // Fallback to response data
+        const updatedUserData = {
+          ...userData,
+          ...formData,
+          profileImage: result.profileImage || userData.profileImage,
+        };
 
-      this.setState({
-        userData: updatedUserData,
-        isLoading: false,
-        isEditing: false,
-        previewImage:
-          this.getFullImageUrl(result.profileImage) ||
-          this.getFullImageUrl(userData.profileImage),
-      });
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+        this.setState({
+          userData: updatedUserData,
+          isLoading: false,
+          isEditing: false,
+          previewImage:
+            this.getFullImageUrl(result.profileImage) ||
+            this.getFullImageUrl(userData.profileImage),
+        });
+      }
 
       // Add notification for profile update
       this.addNotification({
@@ -915,6 +1012,19 @@ class UserDashboard extends Component {
       // Make sure userId is included properly and is valid
       if (userData && userData.id) {
         formData.append("userId", userData.id);
+      }
+
+      // Add profile image or generate placeholder initials
+      if (userData.profileImage) {
+        // If user has a profile image, include the path
+        formData.append("profileImagePath", userData.profileImage);
+        formData.append("hasProfileImage", "true");
+      } else {
+        // Generate initials from user name
+        const initials = this.generateInitials(userData.name);
+        formData.append("profileInitials", initials);
+        formData.append("userName", userData.name || "User");
+        formData.append("hasProfileImage", "false");
       }
 
       // This indicates it's a new submission that needs admin review
@@ -2000,7 +2110,7 @@ class UserDashboard extends Component {
   }
 
   renderPortfolioForm() {
-    const { portfolioFormData } = this.state;
+    const { portfolioFormData, userData } = this.state;
 
     return (
       <div className="dashboard-main-content">
@@ -2018,6 +2128,25 @@ class UserDashboard extends Component {
           >
             <div className="form-section">
               <h3 className="section-title">Personal Information</h3>
+              <div className="current-profile-preview">
+                <label>Current Profile Image</label>
+                <div className="profile-preview-container">
+                  {userData && userData.profileImage ? (
+                    <img
+                      src={this.getFullImageUrl(userData.profileImage)}
+                      alt="Current Profile"
+                      className="current-profile-image"
+                    />
+                  ) : (
+                    <div className="current-profile-placeholder">
+                      {this.generateInitials(userData?.name)}
+                    </div>
+                  )}
+                  <span className="preview-note">
+                    This will be used for your portfolio
+                  </span>
+                </div>
+              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="portfolio-name">Full Name</label>

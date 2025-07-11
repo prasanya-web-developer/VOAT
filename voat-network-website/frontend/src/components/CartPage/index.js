@@ -3,6 +3,20 @@ import { Link } from "react-router-dom";
 import { X, ShoppingBag, Trash2 } from "lucide-react";
 import "./index.css";
 
+// Dynamic base URL configuration
+const getBaseUrl = () => {
+  // Check if we're in development
+  if (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+  ) {
+    return "http://localhost:5000"; // Your local backend
+  }
+
+  // Production backend URL
+  return "https://voat.onrender.com";
+};
+
 class CartSidebar extends Component {
   state = {
     cartItems: [],
@@ -10,12 +24,14 @@ class CartSidebar extends Component {
     isLoading: false,
     isCheckingOut: false,
     error: null,
-    baseUrl: "https://voat.onrender.com",
     currentUserId: null,
+    isConnected: false,
+    retryCount: 0,
   };
 
   componentDidMount() {
     this.initializeCart();
+    this.testBackendConnection();
   }
 
   componentDidUpdate(prevProps) {
@@ -25,18 +41,56 @@ class CartSidebar extends Component {
     }
   }
 
+  // Test backend connectivity
+  testBackendConnection = async () => {
+    try {
+      console.log("=== TESTING BACKEND CONNECTION ===");
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/health`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Origin: window.location.origin,
+        },
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Backend is reachable:", data);
+        this.setState({ isConnected: true });
+        return true;
+      } else {
+        console.log("Backend returned error status:", response.status);
+        this.setState({ isConnected: false });
+        return false;
+      }
+    } catch (error) {
+      console.error("Backend connection test failed:", error);
+      this.setState({ isConnected: false });
+      return false;
+    }
+  };
+
   initializeCart = () => {
     const userData = localStorage.getItem("user");
     if (userData) {
-      const parsedUserData = JSON.parse(userData);
-      this.setState({ currentUserId: parsedUserData.id }, () => {
-        this.fetchCartItems();
-      });
+      try {
+        const parsedUserData = JSON.parse(userData);
+        this.setState({ currentUserId: parsedUserData.id }, () => {
+          this.fetchCartItems();
+        });
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+        this.setState({ error: "Invalid user data. Please log in again." });
+      }
+    } else {
+      console.log("No user data found in localStorage");
     }
   };
 
   fetchCartItems = async () => {
-    const { currentUserId } = this.state;
+    const { currentUserId, retryCount } = this.state;
 
     if (!currentUserId) {
       console.log("No user ID found, skipping cart fetch");
@@ -45,11 +99,13 @@ class CartSidebar extends Component {
 
     console.log("=== FETCHING CART ITEMS ===");
     console.log("User ID:", currentUserId);
+    console.log("Retry count:", retryCount);
 
     this.setState({ isLoading: true, error: null });
 
     try {
-      const url = `${this.state.baseUrl}/api/cart/${currentUserId}`;
+      const baseUrl = getBaseUrl();
+      const url = `${baseUrl}/api/cart/${currentUserId}`;
       console.log("=== CART FETCH URL ===", url);
 
       const response = await fetch(url, {
@@ -57,11 +113,28 @@ class CartSidebar extends Component {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
+          Origin: window.location.origin,
         },
+        signal: AbortSignal.timeout(10000), // 10 second timeout
       });
 
       console.log("=== CART RESPONSE STATUS ===", response.status);
       console.log("=== RESPONSE HEADERS ===", [...response.headers.entries()]);
+
+      if (!response.ok) {
+        // Handle different HTTP status codes
+        if (response.status === 404) {
+          throw new Error(
+            "Cart service not found. Please check if the server is running."
+          );
+        } else if (response.status === 500) {
+          throw new Error("Server error. Please try again later.");
+        } else if (response.status === 400) {
+          throw new Error("Invalid request. Please check your login status.");
+        } else {
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
+      }
 
       // Check content type first
       const contentType = response.headers.get("content-type");
@@ -77,7 +150,7 @@ class CartSidebar extends Component {
           responseText.includes("<!DOCTYPE")
         ) {
           throw new Error(
-            "Cart API endpoint not found. Server returned HTML error page."
+            "Server returned HTML instead of JSON. Cart API endpoint may not exist."
           );
         } else {
           throw new Error(`Server error: Expected JSON but got ${contentType}`);
@@ -88,20 +161,17 @@ class CartSidebar extends Component {
       const cartResponse = await response.json();
       console.log("=== FETCHED CART RESPONSE ===", cartResponse);
 
-      if (!response.ok) {
-        throw new Error(
-          cartResponse.message || `Failed to fetch cart: ${response.status}`
-        );
-      }
-
-      // Handle the response - backend should return array directly
+      // Handle the response structure
       let cartItems = [];
-      if (Array.isArray(cartResponse)) {
-        cartItems = cartResponse;
-      } else if (cartResponse.success && cartResponse.data) {
+      if (cartResponse.success && cartResponse.data) {
         cartItems = cartResponse.data;
+      } else if (Array.isArray(cartResponse)) {
+        cartItems = cartResponse;
       } else if (cartResponse.items) {
         cartItems = cartResponse.items;
+      } else {
+        console.warn("Unexpected response structure:", cartResponse);
+        cartItems = [];
       }
 
       console.log("=== CART ITEMS TO PROCESS ===", cartItems);
@@ -110,7 +180,7 @@ class CartSidebar extends Component {
       const transformedItems = cartItems.map((item) => ({
         id: item._id,
         name: `${item.serviceName} - ${item.serviceLevel}`,
-        price: item.selectedPaymentAmount,
+        price: item.selectedPaymentAmount || item.basePrice,
         image: this.getProfileImageUrl(item.freelancerProfileImage),
         seller: item.freelancerName,
         category: item.serviceName,
@@ -130,6 +200,8 @@ class CartSidebar extends Component {
         cartItems: transformedItems,
         selectedItems: allItemIds,
         isLoading: false,
+        error: null,
+        retryCount: 0,
       });
     } catch (error) {
       console.error("=== CART FETCH ERROR ===");
@@ -137,13 +209,52 @@ class CartSidebar extends Component {
       console.error("Error message:", error.message);
       console.error("Full error:", error);
 
+      let errorMessage = "Failed to load cart";
+      let canRetry = false;
+
+      if (error.name === "TimeoutError") {
+        errorMessage =
+          "Request timed out. Please check your internet connection.";
+        canRetry = true;
+      } else if (error.message.includes("Failed to fetch")) {
+        errorMessage =
+          "Cannot connect to server. Please check if the server is running.";
+        canRetry = true;
+      } else if (error.message.includes("HTML instead of JSON")) {
+        errorMessage =
+          "Cart service is not available. The API endpoint may be missing.";
+        canRetry = false;
+      } else if (error.message.includes("Cart service not found")) {
+        errorMessage =
+          "Cart service endpoint not found. Please contact support.";
+        canRetry = false;
+      } else {
+        errorMessage = error.message;
+        canRetry = retryCount < 2; // Allow up to 2 retries
+      }
+
       this.setState({
-        error: error.message,
+        error: errorMessage,
         isLoading: false,
         cartItems: [],
         selectedItems: new Set(),
+        canRetry,
       });
     }
+  };
+
+  // Retry fetch with exponential backoff
+  retryFetch = () => {
+    this.setState(
+      (prevState) => ({
+        retryCount: prevState.retryCount + 1,
+      }),
+      () => {
+        setTimeout(() => {
+          this.fetchCartItems();
+        }, Math.pow(2, this.state.retryCount) * 1000); // 1s, 2s, 4s delays
+      }
+    );
   };
 
   getProfileImageUrl = (imagePath) => {
@@ -155,9 +266,8 @@ class CartSidebar extends Component {
       return imagePath;
     }
 
-    return `${this.state.baseUrl}${
-      imagePath.startsWith("/") ? "" : "/"
-    }${imagePath}`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}${imagePath.startsWith("/") ? "" : "/"}${imagePath}`;
   };
 
   // Generate initials from seller name
@@ -168,7 +278,7 @@ class CartSidebar extends Component {
     if (names.length === 1) {
       return names[0].substring(0, 2).toUpperCase();
     } else {
-      return (names[0][0] + names[1][0]).toUpperCase();
+      return (names[0][0] + names[names.length - 1][0]).toUpperCase();
     }
   };
 
@@ -205,7 +315,7 @@ class CartSidebar extends Component {
     const { cartItems, selectedItems } = this.state;
     return cartItems
       .filter((item) => selectedItems.has(item.id))
-      .reduce((total, item) => total + item.price, 0)
+      .reduce((total, item) => total + (item.price || 0), 0)
       .toFixed(2);
   };
 
@@ -228,9 +338,16 @@ class CartSidebar extends Component {
       console.log("=== CHECKING WISHLIST FOR REMOVAL ===");
       console.log("Item to check:", itemToRemove);
 
+      const baseUrl = getBaseUrl();
       // Get current wishlist
       const wishlistResponse = await fetch(
-        `${this.state.baseUrl}/api/wishlist/${userData.id}`
+        `${baseUrl}/api/wishlist/${userData.id}`,
+        {
+          headers: {
+            Accept: "application/json",
+            Origin: window.location.origin,
+          },
+        }
       );
 
       if (wishlistResponse.ok) {
@@ -238,7 +355,6 @@ class CartSidebar extends Component {
         console.log("Current wishlist:", currentWishlist);
 
         // Find matching wishlist item
-        // Match by service name and provider name
         const matchingWishlistItem = currentWishlist.find((wishlistItem) => {
           const serviceMatch = wishlistItem.service === itemToRemove.category;
           const providerMatch = wishlistItem.provider === itemToRemove.seller;
@@ -267,10 +383,11 @@ class CartSidebar extends Component {
           );
 
           // Update server wishlist
-          await fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`, {
+          await fetch(`${baseUrl}/api/wishlist/${userData.id}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              Origin: window.location.origin,
             },
             body: JSON.stringify(updatedWishlist),
           });
@@ -331,44 +448,42 @@ class CartSidebar extends Component {
       );
       console.log("Item to remove:", itemToRemove);
 
-      const response = await fetch(`${this.state.baseUrl}/api/cart/remove`, {
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/cart/remove`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          Origin: window.location.origin,
         },
         body: JSON.stringify({
           userId: currentUserId,
           itemId: itemId,
         }),
+        signal: AbortSignal.timeout(10000),
       });
 
       console.log("=== REMOVE RESPONSE STATUS ===", response.status);
 
-      // Get response text first
-      const responseText = await response.text();
-      console.log("=== REMOVE RAW RESPONSE ===", responseText);
-
-      // Parse JSON
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("=== REMOVE JSON PARSE ERROR ===", parseError);
-
-        if (
-          responseText.includes("<html") ||
-          responseText.includes("<!DOCTYPE")
-        ) {
-          throw new Error("Server returned HTML error page.");
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Item not found in cart");
+        } else if (response.status >= 500) {
+          throw new Error("Server error. Please try again.");
         } else {
-          throw new Error(
-            `Invalid response: ${responseText.substring(0, 100)}...`
-          );
+          throw new Error(`Failed to remove item: HTTP ${response.status}`);
         }
       }
 
-      if (!response.ok) {
+      // Check content type
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned invalid response format");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
         throw new Error(result.message || "Failed to remove item");
       }
 
@@ -396,7 +511,18 @@ class CartSidebar extends Component {
       console.log("Item removed from cart successfully");
     } catch (error) {
       console.error("Error removing item from cart:", error);
-      alert("Error removing item from cart: " + error.message);
+
+      let errorMessage = "Failed to remove item";
+      if (error.name === "TimeoutError") {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (error.message.includes("Failed to fetch")) {
+        errorMessage =
+          "Cannot connect to server. Please check your connection.";
+      } else {
+        errorMessage = error.message;
+      }
+
+      alert("Error removing item from cart: " + errorMessage);
     }
   };
 
@@ -420,42 +546,40 @@ class CartSidebar extends Component {
       // Store current cart items for wishlist sync
       const currentCartItems = [...this.state.cartItems];
 
+      const baseUrl = getBaseUrl();
       const response = await fetch(
-        `${this.state.baseUrl}/api/cart/clear/${currentUserId}`,
+        `${baseUrl}/api/cart/clear/${currentUserId}`,
         {
           method: "DELETE",
           headers: {
             Accept: "application/json",
+            Origin: window.location.origin,
           },
+          signal: AbortSignal.timeout(10000),
         }
       );
 
       console.log("=== CLEAR RESPONSE STATUS ===", response.status);
 
-      // Get response text first
-      const responseText = await response.text();
-      console.log("=== CLEAR RAW RESPONSE ===", responseText);
-
-      // Parse JSON
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("=== CLEAR JSON PARSE ERROR ===", parseError);
-
-        if (
-          responseText.includes("<html") ||
-          responseText.includes("<!DOCTYPE")
-        ) {
-          throw new Error("Server returned HTML error page.");
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Cart not found");
+        } else if (response.status >= 500) {
+          throw new Error("Server error. Please try again.");
         } else {
-          throw new Error(
-            `Invalid response: ${responseText.substring(0, 100)}...`
-          );
+          throw new Error(`Failed to clear cart: HTTP ${response.status}`);
         }
       }
 
-      if (!response.ok) {
+      // Check content type
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned invalid response format");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
         throw new Error(result.message || "Failed to clear cart");
       }
 
@@ -478,7 +602,18 @@ class CartSidebar extends Component {
       console.log("Cart cleared successfully");
     } catch (error) {
       console.error("Error clearing cart:", error);
-      alert("Error clearing cart: " + error.message);
+
+      let errorMessage = "Failed to clear cart";
+      if (error.name === "TimeoutError") {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (error.message.includes("Failed to fetch")) {
+        errorMessage =
+          "Cannot connect to server. Please check your connection.";
+      } else {
+        errorMessage = error.message;
+      }
+
+      alert("Error clearing cart: " + errorMessage);
     }
   };
 
@@ -501,36 +636,68 @@ class CartSidebar extends Component {
       return;
     }
 
-    // Get selected items for checkout
-    const selectedCartItems = cartItems.filter((item) =>
-      selectedItems.has(item.id)
-    );
-
     console.log("=== PROCEEDING TO CHECKOUT ===");
-    console.log("Selected items:", selectedCartItems);
+    console.log("Selected items:", Array.from(selectedItems));
 
     this.setState({ isCheckingOut: true });
 
     try {
-      // Call the new checkout API endpoint
-      const response = await fetch(`${this.state.baseUrl}/api/cart/checkout`, {
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/cart/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
+          Origin: window.location.origin,
         },
         body: JSON.stringify({
           userId: currentUserId,
           selectedItems: Array.from(selectedItems),
         }),
+        signal: AbortSignal.timeout(15000), // 15 second timeout for checkout
       });
 
-      const result = await response.json();
+      console.log("Checkout response status:", response.status);
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to process checkout");
+        if (response.status === 404) {
+          throw new Error(
+            "Checkout service not available. The API endpoint may be missing. Please contact support."
+          );
+        } else if (response.status >= 500) {
+          throw new Error("Server error during checkout. Please try again.");
+        } else if (response.status === 400) {
+          throw new Error(
+            "Invalid checkout request. Please check your cart items."
+          );
+        }
+
+        // Try to get error details from response
+        let errorMessage = `Checkout failed: HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (e) {
+          // Ignore JSON parse errors
+        }
+
+        throw new Error(errorMessage);
       }
 
+      // Check content type
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned invalid response format");
+      }
+
+      const result = await response.json();
       console.log("=== CHECKOUT SUCCESS ===", result);
+
+      if (!result.success) {
+        throw new Error(result.message || "Checkout failed");
+      }
 
       // Remove checked out items from local state
       this.setState((prevState) => ({
@@ -542,8 +709,11 @@ class CartSidebar extends Component {
       }));
 
       // Show success message
+      const orderCount = result.orders
+        ? result.orders.length
+        : selectedItems.size;
       alert(
-        `Checkout successful! ${result.orders.length} orders created. Check your "My Orders" section to track progress.`
+        `Checkout successful! ${orderCount} orders created. Check your "My Orders" section to track progress.`
       );
 
       // Trigger dashboard orders refresh if callback exists
@@ -564,15 +734,37 @@ class CartSidebar extends Component {
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      alert("Checkout failed: " + error.message);
+
+      let errorMessage = "Checkout failed";
+      if (error.name === "TimeoutError") {
+        errorMessage = "Checkout timed out. Please try again.";
+      } else if (error.message.includes("Failed to fetch")) {
+        errorMessage =
+          "Cannot connect to server. Please check your connection.";
+      } else if (error.message.includes("API endpoint may be missing")) {
+        errorMessage =
+          "Checkout service is not available. Please contact support.";
+      } else {
+        errorMessage = error.message;
+      }
+
+      alert(errorMessage);
       this.setState({ isCheckingOut: false });
     }
   };
 
   render() {
     const { isOpen, onClose } = this.props;
-    const { cartItems, selectedItems, isLoading, isCheckingOut, error } =
-      this.state;
+    const {
+      cartItems,
+      selectedItems,
+      isLoading,
+      isCheckingOut,
+      error,
+      isConnected,
+      canRetry,
+    } = this.state;
+
     const totalPrice = this.calculateTotal();
     const totalItems = this.getTotalItemsCount();
     const selectedItemsCount = this.getSelectedItemsCount();
@@ -607,6 +799,14 @@ class CartSidebar extends Component {
               <ShoppingBag size={24} className="cartpage-icon" />
               <h2 className="cartpage-title">Shopping Cart</h2>
               <span className="cartpage-item-count">({totalItems} items)</span>
+              {!isConnected && (
+                <span
+                  className="connection-status offline"
+                  title="Server not reachable"
+                >
+                  ⚠️
+                </span>
+              )}
             </div>
             <button
               className="cartpage-close-btn"
@@ -631,12 +831,20 @@ class CartSidebar extends Component {
                 <div className="error-icon">❌</div>
                 <h3 className="error-title">Error Loading Cart</h3>
                 <p className="error-text">{error}</p>
-                <button
-                  className="cartpage-retry-btn"
-                  onClick={this.fetchCartItems}
-                >
-                  Try Again
-                </button>
+                <div className="error-actions">
+                  <button
+                    className="cartpage-retry-btn"
+                    onClick={canRetry ? this.retryFetch : this.fetchCartItems}
+                  >
+                    {canRetry ? "Retry" : "Try Again"}
+                  </button>
+                  <button
+                    className="cartpage-test-connection-btn"
+                    onClick={this.testBackendConnection}
+                  >
+                    Test Connection
+                  </button>
+                </div>
               </div>
             ) : cartItems.length === 0 ? (
               // Empty Cart State

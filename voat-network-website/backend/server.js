@@ -23,7 +23,14 @@ const corsOptions = {
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+  optionsSuccessStatus: 200, // For legacy browser support
 };
 
 app.use(cors(corsOptions));
@@ -372,6 +379,12 @@ const OrderSchema = new mongoose.Schema(
 
 const Order = mongoose.model("Order", OrderSchema);
 
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log("Headers:", req.headers);
+  next();
+});
+
 // Signup Route
 app.post("/api/signup", async (req, res) => {
   try {
@@ -579,6 +592,7 @@ app.post(
         }
 
         user.profileImage = `/uploads/${req.file.filename}`;
+        console.log("New profile image saved:", user.profileImage);
 
         // Also update any portfolio submissions with this new image
         try {
@@ -596,8 +610,8 @@ app.post(
 
       await user.save();
 
-      // Return full user data with profile image path
-      res.status(200).json({
+      // Return the updated user data with the correct profile image path
+      const responseData = {
         message: "Profile updated successfully",
         user: {
           id: user._id,
@@ -606,12 +620,16 @@ app.post(
           role: user.role,
           profession: user.profession,
           phone: user.phone,
-          profileImage: user.profileImage,
+          profileImage: user.profileImage, // This will be the latest from database
           voatId: user.voatId,
           voatPoints: user.voatPoints,
           badge: user.badge,
         },
-      });
+        profileImage: user.profileImage, // Also return it separately for backward compatibility
+      };
+
+      console.log("Profile update response:", responseData);
+      res.status(200).json(responseData);
     } catch (error) {
       console.error("Profile update error:", error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -1694,21 +1712,39 @@ app.get("/api/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
+    console.log("=== FETCHING USER DATA ===");
+    console.log("User ID:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Fetch user data from database
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    } // Get the user's portfolio submission if it exists
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
+    console.log("User found:", user.name, "Profile Image:", user.profileImage);
+
+    // Get the user's portfolio submission if it exists
     const portfolio = await PortfolioSubmission.findOne({ userId: userId });
 
     if (portfolio && !portfolio.headline && portfolio.profession) {
       portfolio.headline = portfolio.profession;
       await portfolio.save();
-    } // Extract services from portfolio for easier access in frontend
+    }
 
+    // Extract services from portfolio for easier access in frontend
     const services = portfolio?.services || [];
-
     const works = portfolio?.works || [];
+
     const formattedWorks = works.map((work) => ({
       id: work._id,
       url: work.url,
@@ -1717,29 +1753,42 @@ app.get("/api/user/:userId", async (req, res) => {
       type: work.type,
       serviceName: work.serviceName,
       uploadedDate: work.uploadedDate,
-    })); // Return user data with their portfolio information
+    }));
 
+    // Prepare complete user data response
+    const userResponse = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profession: user.profession,
+      phone: user.phone,
+      profileImage: user.profileImage, // This is the key field - always from database
+      voatId: user.voatId,
+      voatPoints: user.voatPoints,
+      badge: user.badge,
+    };
+
+    console.log(
+      "Sending user data with profile image:",
+      userResponse.profileImage
+    );
+
+    // Return user data with their portfolio information
     res.status(200).json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profession: user.profession,
-        phone: user.phone,
-        profileImage: user.profileImage,
-        voatId: user.voatId,
-        voatPoints: user.voatPoints,
-        badge: user.badge,
-      },
+      success: true,
+      user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      // The frontend expects this key to be 'videos', so we send the formatted works here
-      videos: formattedWorks,
+      videos: formattedWorks, // The frontend expects this key to be 'videos'
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      message: error.message,
+    });
   }
 });
 
@@ -1936,7 +1985,11 @@ app.get("/api/cart/:userId", async (req, res) => {
 
     console.log(`Found ${cart.items.length} items in cart for user ${userId}`);
 
-    return res.status(200).json(cart.items || []);
+    return res.status(200).json({
+      success: true,
+      data: cart.items || [],
+      count: cart.items.length,
+    });
   } catch (error) {
     console.error("=== CART FETCH ERROR ===", error);
     return res.status(500).json({
@@ -2433,6 +2486,106 @@ app.get("/api/admin/all-carts", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch all carts",
+      error: error.message,
+    });
+  }
+});
+
+app.post("/api/cart/checkout", async (req, res) => {
+  try {
+    const { userId, selectedItems } = req.body;
+
+    console.log("=== CART CHECKOUT REQUEST ===");
+    console.log("User ID:", userId);
+    console.log("Selected Items:", selectedItems);
+
+    if (!userId || !selectedItems || !Array.isArray(selectedItems)) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID and selected items are required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find the user's cart
+    const cart = await Cart.findOne({ userId });
+    if (!cart || !cart.items.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Cart not found or empty",
+      });
+    }
+
+    // Get selected cart items
+    const itemsToCheckout = cart.items.filter((item) =>
+      selectedItems.includes(item._id.toString())
+    );
+
+    if (itemsToCheckout.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid items selected for checkout",
+      });
+    }
+
+    // Get user data for orders
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Create orders from cart items
+    const orders = [];
+    for (const item of itemsToCheckout) {
+      const newOrder = new Order({
+        userId: userId,
+        userName: user.name,
+        userEmail: user.email,
+        freelancerId: item.freelancerId,
+        freelancerName: item.freelancerName,
+        freelancerEmail: "", // You might want to fetch this
+        freelancerProfileImage: item.freelancerProfileImage,
+        serviceName: item.serviceName,
+        serviceLevel: item.serviceLevel,
+        servicePrice: item.basePrice,
+        paymentStructure: item.paymentStructure,
+        status: "pending",
+        orderDate: new Date(),
+        fromCart: true,
+      });
+
+      const savedOrder = await newOrder.save();
+      orders.push(savedOrder);
+    }
+
+    // Remove checked out items from cart
+    cart.items = cart.items.filter(
+      (item) => !selectedItems.includes(item._id.toString())
+    );
+    await cart.save();
+
+    console.log(`=== CHECKOUT SUCCESS: ${orders.length} orders created ===`);
+
+    res.status(201).json({
+      success: true,
+      message: `Checkout successful! ${orders.length} orders created.`,
+      orders: orders,
+      remainingCartItems: cart.items.length,
+    });
+  } catch (error) {
+    console.error("=== CART CHECKOUT ERROR ===", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process checkout",
       error: error.message,
     });
   }
@@ -3328,6 +3481,28 @@ app.get("/api/user-voat-id/:userId", async (req, res) => {
   }
 });
 
+// Debug endpoint to check VOAT IDs for all users
+app.get("/api/debug/check-voat-ids", async (req, res) => {
+  try {
+    const users = await User.find({}, { name: 1, email: 1, voatId: 1 });
+    const usersWithVoatId = users.filter((user) => user.voatId);
+    const usersWithoutVoatId = users.filter((user) => !user.voatId);
+
+    res.status(200).json({
+      total: users.length,
+      withVoatId: usersWithVoatId.length,
+      withoutVoatId: usersWithoutVoatId.length,
+      usersWithoutVoatId: usersWithoutVoatId.map((u) => ({
+        id: u._id,
+        name: u.name,
+        email: u.email,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Migration endpoint to ensure headline field exists in all portfolios
 app.get("/api/admin/migrate-headlines", async (req, res) => {
   try {
@@ -3384,6 +3559,17 @@ app.get("/api/admin/migrate-headlines", async (req, res) => {
   }
 });
 
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Server is running",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+    mongoConnection:
+      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  });
+});
+
 app.get("/api/debug/routes", (req, res) => {
   const routes = [];
   app._router.stack.forEach((middleware) => {
@@ -3399,27 +3585,41 @@ app.get("/api/debug/routes", (req, res) => {
 
 //Global error handler middleware
 app.use((err, req, res, next) => {
-  console.error("Global error handler:", err);
+  console.error("=== GLOBAL ERROR HANDLER ===");
+  console.error("Error:", err);
+  console.error("Request URL:", req.url);
+  console.error("Request Method:", req.method);
 
-  // Always return JSON, never HTML
+  // Don't send error details in production
+  const isDevelopment = process.env.NODE_ENV === "development";
+
   if (!res.headersSent) {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error:
-        process.env.NODE_ENV === "development"
-          ? err.message
-          : "Something went wrong",
+      error: isDevelopment ? err.message : "Something went wrong",
+      ...(isDevelopment && { stack: err.stack }),
     });
   }
 });
 
-// Handle 404 errors with JSON response
 app.use("*", (req, res) => {
-  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
+  console.log(`=== 404 ERROR ===`);
+  console.log(`Route not found: ${req.method} ${req.originalUrl}`);
+  console.log(`Headers:`, req.headers);
+
   return res.status(404).json({
     success: false,
     message: `Route ${req.method} ${req.originalUrl} not found`,
+    availableRoutes: [
+      "GET /api/health",
+      "GET /api/status",
+      "GET /api/user/:userId",
+      "GET /api/cart/:userId",
+      "POST /api/cart/add",
+      "POST /api/cart/checkout",
+      "DELETE /api/cart/remove",
+    ],
   });
 });
 

@@ -714,23 +714,70 @@ class PortfolioList extends Component {
             const userData = await response.json();
             console.log(`User data received:`, userData);
 
+            // Update profile image
             if (userData.user && userData.user.profileImage) {
               userImages[userId] = userData.user.profileImage;
             }
 
+            // Update VOAT ID - Fix the logic here
             if (userData.user && userData.user.voatId) {
               console.log(`VOAT ID found: ${userData.user.voatId}`);
               updatedPortfolios[i] = {
                 ...updatedPortfolios[i],
                 voatId: userData.user.voatId,
+                uservoatId: userData.user.voatId, // Also set this for consistency
               };
             } else {
-              console.log(`No VOAT ID found for user ${userId}`);
-              updatedPortfolios[i] = {
-                ...updatedPortfolios[i],
-                voatId: null,
-              };
+              console.log(
+                `No VOAT ID found for user ${userId}, trying alternative endpoint`
+              );
+
+              // Try the alternative endpoint
+              try {
+                const voatResponse = await fetch(
+                  `${this.state.baseUrl}/api/user-voat-id/${userId}`
+                );
+
+                if (voatResponse.ok) {
+                  const voatData = await voatResponse.json();
+                  if (voatData.voatId) {
+                    updatedPortfolios[i] = {
+                      ...updatedPortfolios[i],
+                      voatId: voatData.voatId,
+                      uservoatId: voatData.voatId,
+                    };
+                    console.log(
+                      `VOAT ID found via alternative endpoint: ${voatData.voatId}`
+                    );
+                  } else {
+                    updatedPortfolios[i] = {
+                      ...updatedPortfolios[i],
+                      voatId: null,
+                    };
+                  }
+                } else {
+                  updatedPortfolios[i] = {
+                    ...updatedPortfolios[i],
+                    voatId: null,
+                  };
+                }
+              } catch (voatError) {
+                console.log(
+                  `Error fetching VOAT ID via alternative endpoint:`,
+                  voatError
+                );
+                updatedPortfolios[i] = {
+                  ...updatedPortfolios[i],
+                  voatId: null,
+                };
+              }
             }
+          } else {
+            console.log(`User API call failed for ${userId}`);
+            updatedPortfolios[i] = {
+              ...updatedPortfolios[i],
+              voatId: null,
+            };
           }
         } catch (userError) {
           console.log(`Could not fetch user data for ${userId}:`, userError);
@@ -996,7 +1043,6 @@ class PortfolioList extends Component {
     );
   };
 
-  //  function to return only valid, unique professions
   getUniqueOptions = (field) => {
     const { portfolios } = this.state;
 
@@ -1475,7 +1521,9 @@ class PortfolioList extends Component {
                         <div className="voat-id">
                           <span className="voat-label">VOAT ID:</span>
                           <span className="voat-value">
-                            {portfolio.voatId || "Not Available"}
+                            {portfolio.voatId ||
+                              portfolio.uservoatId ||
+                              "Generating..."}
                           </span>
                         </div>
 
