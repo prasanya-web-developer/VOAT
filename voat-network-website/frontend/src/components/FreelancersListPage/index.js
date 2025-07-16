@@ -261,6 +261,8 @@ class PortfolioList extends Component {
         type: "quick_booking",
       };
 
+      console.log("Submitting quick booking data:", quickBookingData);
+
       const response = await fetch(`${this.state.baseUrl}/api/quick-booking`, {
         method: "POST",
         headers: {
@@ -269,13 +271,20 @@ class PortfolioList extends Component {
         body: JSON.stringify(quickBookingData),
       });
 
+      console.log("Quick booking response status:", response.status);
+
       if (response.ok) {
+        const responseData = await response.json();
+        console.log("Quick booking response data:", responseData);
+
         this.showNotification(
-          "Quick booking request submitted successfully! We'll match you with suitable freelancers."
+          "Quick booking request submitted successfully! We'll match you with suitable freelancers.",
+          "success"
         );
         this.closeQuickBookingModal();
       } else {
         const errorData = await response.json();
+        console.error("Quick booking error response:", errorData);
         throw new Error(errorData.message || "Failed to submit quick booking");
       }
     } catch (error) {
@@ -361,7 +370,13 @@ class PortfolioList extends Component {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="modal-header">
-            <h2>Quick Booking Request</h2>
+            <div className="modal-title-section">
+              <h2>
+                <i className="fas fa-rocket"></i>
+                Quick Booking Request
+              </h2>
+              <p>Get matched with the perfect freelancer for your project</p>
+            </div>
             <button
               className="modal-close-btn"
               onClick={this.closeQuickBookingModal}
@@ -385,100 +400,112 @@ class PortfolioList extends Component {
             onSubmit={this.submitQuickBooking}
             className="quick-booking-form"
           >
-            <div className="form-row">
+            <div className="form-section">
+              <h3>
+                <i className="fas fa-user"></i>
+                Personal Information
+              </h3>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="userName">Full Name *</label>
+                  <input
+                    type="text"
+                    id="userName"
+                    name="userName"
+                    value={quickBookingForm.userName}
+                    onChange={this.handleQuickBookingFormChange}
+                    required
+                    readOnly
+                    className="readonly-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="email">Email Address *</label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={quickBookingForm.email}
+                    onChange={this.handleQuickBookingFormChange}
+                    required
+                    readOnly
+                    className="readonly-input"
+                  />
+                </div>
+              </div>
+
               <div className="form-group">
-                <label htmlFor="userName">Full Name *</label>
+                <label htmlFor="contactNumber">Contact Number *</label>
                 <input
-                  type="text"
-                  id="userName"
-                  name="userName"
-                  value={quickBookingForm.userName}
+                  type="tel"
+                  id="contactNumber"
+                  name="contactNumber"
+                  value={quickBookingForm.contactNumber}
                   onChange={this.handleQuickBookingFormChange}
+                  placeholder="Enter your phone number"
                   required
-                  readOnly
-                  className="readonly-input"
                 />
               </div>
+            </div>
+
+            <div className="form-section">
+              <h3>
+                <i className="fas fa-briefcase"></i>
+                Project Details
+              </h3>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="serviceName">Service Required *</label>
+                  <select
+                    id="serviceName"
+                    name="serviceName"
+                    value={quickBookingForm.serviceName}
+                    onChange={this.handleQuickBookingFormChange}
+                    required
+                  >
+                    <option value="">Select a service</option>
+                    {this.predefinedProfessions.map((profession, index) => (
+                      <option key={index} value={profession}>
+                        {profession}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="budget">Budget Range *</label>
+                  <select
+                    id="budget"
+                    name="budget"
+                    value={quickBookingForm.budget}
+                    onChange={this.handleQuickBookingFormChange}
+                    required
+                  >
+                    <option value="">Select budget range</option>
+                    <option value="₹1,000 - ₹5,000">₹1,000 - ₹5,000</option>
+                    <option value="₹5,000 - ₹10,000">₹5,000 - ₹10,000</option>
+                    <option value="₹10,000 - ₹15,000">₹10,000 - ₹15,000</option>
+                    <option value="₹15,000 - ₹20,000">₹15,000 - ₹20,000</option>
+                    <option value="₹20,000 - ₹30,000">₹20,000 - ₹30,000</option>
+                    <option value="₹30,000+">₹30,000+</option>
+                  </select>
+                </div>
+              </div>
 
               <div className="form-group">
-                <label htmlFor="email">Email Address *</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={quickBookingForm.email}
+                <label htmlFor="description">
+                  Project Description (Optional)
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={quickBookingForm.description}
                   onChange={this.handleQuickBookingFormChange}
-                  required
-                  readOnly
-                  className="readonly-input"
+                  placeholder="Describe your project requirements, timeline, and any specific needs..."
+                  rows="4"
                 />
               </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="serviceName">Service Required *</label>
-                <select
-                  id="serviceName"
-                  name="serviceName"
-                  value={quickBookingForm.serviceName}
-                  onChange={this.handleQuickBookingFormChange}
-                  required
-                >
-                  <option value="">Select a service</option>
-                  {this.predefinedProfessions.map((profession, index) => (
-                    <option key={index} value={profession}>
-                      {profession}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="budget">Budget Range *</label>
-                <select
-                  id="budget"
-                  name="budget"
-                  value={quickBookingForm.budget}
-                  onChange={this.handleQuickBookingFormChange}
-                  required
-                >
-                  <option value="">Select budget range</option>
-                  <option value="1000-5000">₹1,000 - ₹5,000</option>
-                  <option value="5000-10000">₹5,000 - ₹10,000</option>
-                  <option value="10000-15000">₹10,000 - ₹15,000</option>
-                  <option value="15000-20000">₹15,000 - ₹20,000</option>
-                  <option value="20000-30000">₹20,000 - ₹30,000</option>
-                  <option value="30000+">₹30,000+</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="contactNumber">Contact Number *</label>
-              <input
-                type="tel"
-                id="contactNumber"
-                name="contactNumber"
-                value={quickBookingForm.contactNumber}
-                onChange={this.handleQuickBookingFormChange}
-                placeholder="Enter your phone number"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="description">
-                Project Description (Optional)
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={quickBookingForm.description}
-                onChange={this.handleQuickBookingFormChange}
-                placeholder="Describe your project requirements, timeline, and any specific needs..."
-                rows="4"
-              />
             </div>
 
             <div className="modal-actions">
@@ -488,6 +515,7 @@ class PortfolioList extends Component {
                 onClick={this.closeQuickBookingModal}
                 disabled={isSubmittingQuickBooking}
               >
+                <i className="fas fa-times"></i>
                 Cancel
               </button>
               <button
@@ -502,17 +530,7 @@ class PortfolioList extends Component {
                   </>
                 ) : (
                   <>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                      <polyline points="22,4 12,14.01 9,11.01"></polyline>
-                    </svg>
+                    <i className="fas fa-paper-plane"></i>
                     Submit Request
                   </>
                 )}
