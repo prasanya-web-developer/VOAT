@@ -345,6 +345,16 @@ class MyPortfolio extends Component {
     }
   };
 
+  formatName = (name) => {
+    if (!name || typeof name !== "string") return name;
+
+    return name
+      .toLowerCase()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   handleAddToCart = async () => {
     const {
       selectedPricing,
@@ -1126,7 +1136,9 @@ class MyPortfolio extends Component {
             </div>
 
             <div className="hero-info">
-              <h1 className="hero-name">{portfolioData.name || "Name"}</h1>
+              <h1 className="hero-name">
+                {this.formatName(portfolioData.name) || "Name"}
+              </h1>
               <p className="hero-profession">
                 {portfolioData.profession || "Professional"}
               </p>
@@ -1135,12 +1147,12 @@ class MyPortfolio extends Component {
               </p>
 
               <div className="hero-meta">
-                <div className="meta-item">
+                {/* <div className="meta-item">
                   <span className="meta-icon">📧</span>
                   <span className="meta-text">
                     {portfolioData.email || "email@example.com"}
                   </span>
-                </div>
+                </div> */}
                 <div className="meta-item">
                   <span className="meta-icon">⭐</span>
                   <span className="meta-text">

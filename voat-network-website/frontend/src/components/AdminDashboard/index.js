@@ -10,21 +10,31 @@ class AdminPanel extends Component {
     password: "",
     loginError: "",
     portfolioSubmissions: [],
+    quickBookings: [],
     viewingSubmission: null,
+    viewingQuickBooking: null,
     isLoading: true,
     baseUrl: "https://voat.onrender.com",
+    activeTab: "portfolios", // New state for tab management
 
+    // Filter states
     searchTerm: "",
     statusFilter: "all",
     sortBy: "newest",
     currentPage: 1,
     itemsPerPage: 10,
+
+    // Quick booking specific states
+    quickBookingSearchTerm: "",
+    quickBookingStatusFilter: "all",
+    quickBookingSortBy: "newest",
   };
 
   componentDidMount() {
     this.checkAuthentication();
     if (this.state.isAuthenticated) {
       this.fetchPortfolioSubmissions();
+      this.fetchQuickBookings();
     }
   }
 
@@ -42,7 +52,6 @@ class AdminPanel extends Component {
     }
   };
 
-  // Helper function to get profile image source
   getProfileImageSrc = (profileImage) => {
     console.log("Processing profile image:", profileImage);
 
@@ -51,16 +60,32 @@ class AdminPanel extends Component {
       return null;
     }
 
-    if (
-      profileImage.startsWith("http") ||
-      profileImage.startsWith("/api/placeholder")
-    ) {
-      console.log("Using direct URL:", profileImage);
+    // Handle data URLs (base64 images)
+    if (profileImage.startsWith("data:")) {
+      console.log("Using data URL:", profileImage.substring(0, 50) + "...");
       return profileImage;
     }
 
-    const constructedUrl = `${this.state.baseUrl}${profileImage}`;
-    console.log("Constructed URL:", constructedUrl);
+    // Handle full HTTP URLs
+    if (profileImage.startsWith("http")) {
+      console.log("Using full HTTP URL:", profileImage);
+      return profileImage;
+    }
+
+    // Handle API placeholder URLs
+    if (profileImage.startsWith("/api/placeholder")) {
+      console.log("Using placeholder URL:", profileImage);
+      return profileImage;
+    }
+
+    // Handle relative paths from database - ensure leading slash
+    let imagePath = profileImage;
+    if (!imagePath.startsWith("/")) {
+      imagePath = "/" + imagePath;
+    }
+
+    const constructedUrl = `${this.state.baseUrl}${imagePath}`;
+    console.log("Constructed URL from database path:", constructedUrl);
     return constructedUrl;
   };
 
@@ -69,6 +94,7 @@ class AdminPanel extends Component {
     if (adminData) {
       this.setState({ isAuthenticated: true, isLoading: false }, () => {
         this.fetchPortfolioSubmissions();
+        this.fetchQuickBookings();
       });
     } else {
       this.setState({ isLoading: false });
@@ -96,6 +122,7 @@ class AdminPanel extends Component {
         },
         () => {
           this.fetchPortfolioSubmissions();
+          this.fetchQuickBookings();
         }
       );
     } else {
@@ -106,6 +133,34 @@ class AdminPanel extends Component {
   handleLogout = () => {
     localStorage.removeItem("adminData");
     this.setState({ isAuthenticated: false });
+  };
+
+  // Fetch Quick Bookings
+  fetchQuickBookings = async () => {
+    try {
+      this.setState({ isLoading: true });
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/quick-bookings`
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Fetched quick bookings:", data);
+
+      this.setState({
+        quickBookings: data.quickBookings || [],
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error("Error fetching quick bookings:", error);
+      this.setState({
+        quickBookings: [],
+        isLoading: false,
+      });
+    }
   };
 
   fetchPortfolioSubmissions = async () => {
@@ -124,120 +179,164 @@ class AdminPanel extends Component {
 
       const uniqueSubmissions = this.removeDuplicateSubmissions(data);
 
+      console.log("=== DEBUG SUBMISSIONS DATA ===");
+      uniqueSubmissions.forEach((submission, index) => {
+        console.log(`Submission ${index + 1}:`, {
+          name: submission.name,
+          userId: submission.userId,
+          userIdType: typeof submission.userId,
+          email: submission.email,
+          profileImage: submission.profileImage,
+        });
+      });
+
+      // Fetch profile images for each submission from user database
+      const submissionsWithImages = await Promise.all(
+        uniqueSubmissions.map(async (submission) => {
+          // Validate userId before making API call
+          let userId = submission.userId;
+
+          // Handle different userId formats
+          if (userId && typeof userId === "object" && userId._id) {
+            userId = userId._id;
+          }
+
+          // Check if userId is valid (not null, undefined, or object)
+          if (userId && typeof userId === "string" && userId.trim() !== "") {
+            try {
+              console.log(
+                `Fetching user data for ${submission.name} with userId: ${userId}`
+              );
+
+              const userResponse = await fetch(
+                `${this.state.baseUrl}/api/user/${userId.trim()}`
+              );
+
+              if (userResponse.ok) {
+                const userData = await userResponse.json();
+                console.log(`User data for ${submission.name}:`, userData);
+
+                // Update submission with fresh profile image from database
+                return {
+                  ...submission,
+                  profileImage:
+                    userData.user?.profileImage || submission.profileImage,
+                  userId: userId, // Store the clean userId
+                };
+              } else {
+                console.warn(
+                  `Failed to fetch user data for ${submission.name}. Status: ${userResponse.status}`
+                );
+              }
+            } catch (error) {
+              console.error(
+                `Error fetching user data for ${submission.name}:`,
+                error
+              );
+            }
+          } else {
+            console.log(
+              `Skipping user data fetch for ${submission.name} - invalid or missing userId:`,
+              submission.userId
+            );
+          }
+
+          // Return original submission if user fetch fails or userId is invalid
+          return submission;
+        })
+      );
+
       this.setState({
-        portfolioSubmissions: uniqueSubmissions,
+        portfolioSubmissions: submissionsWithImages,
         isLoading: false,
       });
     } catch (error) {
       console.error("Error fetching portfolio submissions:", error);
-      this.setState({ isLoading: false });
-
-      // Using dummy data for design purposes
-      const mockSubmissions = [
-        {
-          _id: "1",
-          name: "Sarah Johnson",
-          email: "sarah.johnson@email.com",
-          profession: "UI/UX Designer",
-          workExperience: "5",
-          status: "pending",
-          submittedDate: "2024-03-15T10:30:00Z",
-          about:
-            "Passionate UI/UX designer with 5 years of experience creating user-centered digital experiences.",
-          headline: "Creating intuitive digital experiences",
-          portfolioLink: "https://sarahjohnson.design",
-          services: [
-            {
-              name: "UI Design",
-              description: "Modern and intuitive user interface design",
-              pricing: [
-                { level: "Basic", price: "500", timeFrame: "3 days" },
-                { level: "Premium", price: "1200", timeFrame: "7 days" },
-              ],
-            },
-          ],
-        },
-        {
-          _id: "2",
-          name: "Michael Chen",
-          email: "michael.chen@email.com",
-          profession: "Full Stack Developer",
-          workExperience: "7",
-          status: "approved",
-          submittedDate: "2024-03-14T14:20:00Z",
-          about:
-            "Full-stack developer specializing in React, Node.js, and cloud technologies.",
-          headline: "Building scalable web solutions",
-          portfolioLink: "https://michaelchen.dev",
-          services: [
-            {
-              name: "Web Development",
-              description: "Full-stack web application development",
-              pricing: [
-                { level: "Basic", price: "800", timeFrame: "5 days" },
-                { level: "Premium", price: "2000", timeFrame: "14 days" },
-              ],
-            },
-          ],
-        },
-        {
-          _id: "3",
-          name: "Emily Rodriguez",
-          email: "emily.rodriguez@email.com",
-          profession: "Digital Marketer",
-          workExperience: "4",
-          status: "rejected",
-          submittedDate: "2024-03-13T09:15:00Z",
-          about:
-            "Digital marketing specialist focused on growth hacking and conversion optimization.",
-          headline: "Driving growth through data-driven marketing",
-          portfolioLink: "https://emilyrodriguez.marketing",
-          services: [
-            {
-              name: "SEO Optimization",
-              description: "Complete SEO audit and optimization",
-              pricing: [
-                { level: "Basic", price: "300", timeFrame: "2 days" },
-                { level: "Premium", price: "800", timeFrame: "7 days" },
-              ],
-            },
-          ],
-        },
-        {
-          _id: "4",
-          name: "David Kumar",
-          email: "david.kumar@email.com",
-          profession: "Mobile App Developer",
-          workExperience: "6",
-          status: "pending",
-          submittedDate: "2024-03-12T16:45:00Z",
-          about:
-            "Mobile app developer with expertise in React Native and Flutter.",
-          headline: "Building next-gen mobile experiences",
-          portfolioLink: "https://davidkumar.app",
-          services: [
-            {
-              name: "Mobile App Development",
-              description: "Cross-platform mobile application development",
-              pricing: [
-                { level: "Basic", price: "1500", timeFrame: "14 days" },
-                { level: "Premium", price: "3500", timeFrame: "30 days" },
-              ],
-            },
-          ],
-        },
-      ];
-
-      const uniqueMockSubmissions =
-        this.removeDuplicateSubmissions(mockSubmissions);
-
       this.setState({
-        portfolioSubmissions: uniqueMockSubmissions,
+        portfolioSubmissions: [],
         isLoading: false,
       });
     }
   };
 
+  // Quick Booking Handlers
+  handleViewQuickBooking = async (quickBooking) => {
+    console.log("View quick booking clicked for:", quickBooking);
+
+    try {
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/quick-booking/${
+          quickBooking._id || quickBooking.id
+        }`
+      );
+
+      let detailedQuickBooking = quickBooking;
+
+      if (response.ok) {
+        const data = await response.json();
+        detailedQuickBooking = data.quickBooking;
+        console.log("Detailed quick booking data:", detailedQuickBooking);
+      } else {
+        console.warn(
+          "Failed to fetch detailed quick booking, using original data"
+        );
+      }
+
+      this.setState({ viewingQuickBooking: detailedQuickBooking });
+    } catch (error) {
+      console.error("Error fetching detailed quick booking:", error);
+      this.setState({ viewingQuickBooking: quickBooking });
+    }
+  };
+
+  handleCloseQuickBookingView = () => {
+    this.setState({ viewingQuickBooking: null });
+  };
+
+  handleQuickBookingStatusChange = async (quickBookingId, newStatus) => {
+    try {
+      this.setState({ isLoading: true });
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/quick-booking/${quickBookingId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to update status");
+      const data = await response.json();
+      const updatedQuickBooking = data.quickBooking;
+
+      const updatedQuickBookings = this.state.quickBookings.map((qb) =>
+        qb._id === quickBookingId || qb.id === quickBookingId
+          ? { ...updatedQuickBooking }
+          : qb
+      );
+
+      this.setState({
+        quickBookings: updatedQuickBookings,
+        viewingQuickBooking: updatedQuickBooking,
+        isLoading: false,
+      });
+
+      alert(
+        `Quick booking ${
+          newStatus === "accepted" ? "accepted" : "rejected"
+        } successfully!`
+      );
+    } catch (error) {
+      console.error("Error updating quick booking status:", error);
+      this.setState({ isLoading: false });
+      alert("Failed to update quick booking status. Please try again.");
+    }
+  };
+
+  // Portfolio submission handlers (existing)
   handleViewSubmission = async (submission) => {
     console.log("View submission clicked for:", submission);
 
@@ -248,16 +347,41 @@ class AdminPanel extends Component {
         }`
       );
 
+      let detailedSubmission = submission;
+
       if (response.ok) {
-        const detailedSubmission = await response.json();
+        detailedSubmission = await response.json();
         console.log("Detailed submission data:", detailedSubmission);
-        this.setState({ viewingSubmission: detailedSubmission });
       } else {
         console.warn(
           "Failed to fetch detailed submission, using original data"
         );
-        this.setState({ viewingSubmission: submission });
       }
+
+      // If we have a userId, fetch fresh user data with profile image
+      if (detailedSubmission.userId) {
+        try {
+          const userResponse = await fetch(
+            `${this.state.baseUrl}/api/user/${detailedSubmission.userId}`
+          );
+
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            console.log(`Fresh user data for modal:`, userData);
+
+            // Update submission with fresh profile image
+            detailedSubmission = {
+              ...detailedSubmission,
+              profileImage:
+                userData.user?.profileImage || detailedSubmission.profileImage,
+            };
+          }
+        } catch (error) {
+          console.error("Error fetching fresh user data for modal:", error);
+        }
+      }
+
+      this.setState({ viewingSubmission: detailedSubmission });
     } catch (error) {
       console.error("Error fetching detailed submission:", error);
       this.setState({ viewingSubmission: submission });
@@ -325,7 +449,12 @@ class AdminPanel extends Component {
     }
   };
 
-  // filter and search methods
+  // Tab management
+  handleTabChange = (tab) => {
+    this.setState({ activeTab: tab });
+  };
+
+  // Filter and search methods for portfolios
   handleSearchChange = (e) => {
     this.setState({ searchTerm: e.target.value, currentPage: 1 });
   };
@@ -336,6 +465,19 @@ class AdminPanel extends Component {
 
   handleSortChange = (sortBy) => {
     this.setState({ sortBy, currentPage: 1 });
+  };
+
+  // Filter and search methods for quick bookings
+  handleQuickBookingSearchChange = (e) => {
+    this.setState({ quickBookingSearchTerm: e.target.value, currentPage: 1 });
+  };
+
+  handleQuickBookingStatusFilter = (status) => {
+    this.setState({ quickBookingStatusFilter: status, currentPage: 1 });
+  };
+
+  handleQuickBookingSortChange = (sortBy) => {
+    this.setState({ quickBookingSortBy: sortBy, currentPage: 1 });
   };
 
   getFilteredSubmissions = () => {
@@ -374,6 +516,53 @@ class AdminPanel extends Component {
     return filtered;
   };
 
+  getFilteredQuickBookings = () => {
+    const {
+      quickBookings,
+      quickBookingSearchTerm,
+      quickBookingStatusFilter,
+      quickBookingSortBy,
+    } = this.state;
+
+    let filtered = quickBookings.filter((booking) => {
+      const matchesSearch =
+        booking.clientName
+          .toLowerCase()
+          .includes(quickBookingSearchTerm.toLowerCase()) ||
+        booking.clientEmail
+          .toLowerCase()
+          .includes(quickBookingSearchTerm.toLowerCase()) ||
+        booking.serviceName
+          .toLowerCase()
+          .includes(quickBookingSearchTerm.toLowerCase()) ||
+        booking.budget
+          .toLowerCase()
+          .includes(quickBookingSearchTerm.toLowerCase());
+
+      const matchesStatus =
+        quickBookingStatusFilter === "all" ||
+        booking.status === quickBookingStatusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+
+    // Sort quick bookings
+    filtered.sort((a, b) => {
+      switch (quickBookingSortBy) {
+        case "newest":
+          return new Date(b.requestDate) - new Date(a.requestDate);
+        case "oldest":
+          return new Date(a.requestDate) - new Date(b.requestDate);
+        case "name":
+          return a.clientName.localeCompare(b.clientName);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  };
+
   getStats = () => {
     const { portfolioSubmissions } = this.state;
     return {
@@ -385,6 +574,18 @@ class AdminPanel extends Component {
         .length,
       rejected: portfolioSubmissions.filter((sub) => sub.status === "rejected")
         .length,
+    };
+  };
+
+  getQuickBookingStats = () => {
+    const { quickBookings } = this.state;
+    return {
+      total: quickBookings.length,
+      pending: quickBookings.filter(
+        (qb) => qb.status === "pending" || !qb.status
+      ).length,
+      accepted: quickBookings.filter((qb) => qb.status === "accepted").length,
+      rejected: quickBookings.filter((qb) => qb.status === "rejected").length,
     };
   };
 
@@ -455,54 +656,156 @@ class AdminPanel extends Component {
   }
 
   renderDashboardStats() {
-    const stats = this.getStats();
+    const portfolioStats = this.getStats();
+    const quickBookingStats = this.getQuickBookingStats();
 
     return (
-      <div className="adminpanel-stats-grid">
-        <div className="adminpanel-stat-card adminpanel-stat-total">
-          <div className="adminpanel-stat-content">
-            <div className="adminpanel-stat-number">{stats.total}</div>
-            <div className="adminpanel-stat-label">Total Submissions</div>
-          </div>
-          <div className="adminpanel-stat-icon">
-            <i className="fas fa-users"></i>
+      <div className="adminpanel-stats-container">
+        <div className="adminpanel-stats-section">
+          <h3 className="adminpanel-stats-title">
+            <i className="fas fa-briefcase"></i>
+            Portfolio Submissions
+          </h3>
+          <div className="adminpanel-stats-grid">
+            <div className="adminpanel-stat-card adminpanel-stat-total">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {portfolioStats.total}
+                </div>
+                <div className="adminpanel-stat-label">Total Submissions</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-users"></i>
+              </div>
+            </div>
+
+            <div className="adminpanel-stat-card adminpanel-stat-pending">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {portfolioStats.pending}
+                </div>
+                <div className="adminpanel-stat-label">Pending Review</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-clock"></i>
+              </div>
+            </div>
+
+            <div className="adminpanel-stat-card adminpanel-stat-approved">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {portfolioStats.approved}
+                </div>
+                <div className="adminpanel-stat-label">Approved</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-check-circle"></i>
+              </div>
+            </div>
+
+            <div className="adminpanel-stat-card adminpanel-stat-rejected">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {portfolioStats.rejected}
+                </div>
+                <div className="adminpanel-stat-label">Rejected</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-times-circle"></i>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="adminpanel-stat-card adminpanel-stat-pending">
-          <div className="adminpanel-stat-content">
-            <div className="adminpanel-stat-number">{stats.pending}</div>
-            <div className="adminpanel-stat-label">Pending Review</div>
-          </div>
-          <div className="adminpanel-stat-icon">
-            <i className="fas fa-clock"></i>
-          </div>
-        </div>
+        <div className="adminpanel-stats-section">
+          <h3 className="adminpanel-stats-title">
+            <i className="fas fa-rocket"></i>
+            Quick Bookings
+          </h3>
+          <div className="adminpanel-stats-grid">
+            <div className="adminpanel-stat-card adminpanel-stat-total">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {quickBookingStats.total}
+                </div>
+                <div className="adminpanel-stat-label">Total Requests</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-bolt"></i>
+              </div>
+            </div>
 
-        <div className="adminpanel-stat-card adminpanel-stat-approved">
-          <div className="adminpanel-stat-content">
-            <div className="adminpanel-stat-number">{stats.approved}</div>
-            <div className="adminpanel-stat-label">Approved</div>
-          </div>
-          <div className="adminpanel-stat-icon">
-            <i className="fas fa-check-circle"></i>
-          </div>
-        </div>
+            <div className="adminpanel-stat-card adminpanel-stat-pending">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {quickBookingStats.pending}
+                </div>
+                <div className="adminpanel-stat-label">Pending</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-hourglass-half"></i>
+              </div>
+            </div>
 
-        <div className="adminpanel-stat-card adminpanel-stat-rejected">
-          <div className="adminpanel-stat-content">
-            <div className="adminpanel-stat-number">{stats.rejected}</div>
-            <div className="adminpanel-stat-label">Rejected</div>
-          </div>
-          <div className="adminpanel-stat-icon">
-            <i className="fas fa-times-circle"></i>
+            <div className="adminpanel-stat-card adminpanel-stat-approved">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {quickBookingStats.accepted}
+                </div>
+                <div className="adminpanel-stat-label">Accepted</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-thumbs-up"></i>
+              </div>
+            </div>
+
+            <div className="adminpanel-stat-card adminpanel-stat-rejected">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {quickBookingStats.rejected}
+                </div>
+                <div className="adminpanel-stat-label">Rejected</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-thumbs-down"></i>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  renderControlsSection() {
+  renderTabNavigation() {
+    const { activeTab } = this.state;
+
+    return (
+      <div className="adminpanel-tab-navigation">
+        <button
+          className={`adminpanel-tab-btn ${
+            activeTab === "portfolios" ? "active" : ""
+          }`}
+          onClick={() => this.handleTabChange("portfolios")}
+        >
+          <i className="fas fa-briefcase"></i>
+          <span>Portfolio Submissions</span>
+          <div className="adminpanel-tab-indicator"></div>
+        </button>
+        <button
+          className={`adminpanel-tab-btn ${
+            activeTab === "quickBookings" ? "active" : ""
+          }`}
+          onClick={() => this.handleTabChange("quickBookings")}
+        >
+          <i className="fas fa-rocket"></i>
+          <span>Quick Bookings</span>
+          <div className="adminpanel-tab-indicator"></div>
+        </button>
+      </div>
+    );
+  }
+
+  renderPortfolioControlsSection() {
     const { searchTerm, statusFilter, sortBy } = this.state;
 
     return (
@@ -576,19 +879,233 @@ class AdminPanel extends Component {
     );
   }
 
+  renderQuickBookingControlsSection() {
+    const {
+      quickBookingSearchTerm,
+      quickBookingStatusFilter,
+      quickBookingSortBy,
+    } = this.state;
+
+    return (
+      <div className="adminpanel-controls-panel">
+        <div className="adminpanel-search-section">
+          <div className="adminpanel-search-bar">
+            <i className="fas fa-search adminpanel-search-icon"></i>
+            <input
+              type="text"
+              placeholder="Search by client name, email, or service..."
+              value={quickBookingSearchTerm}
+              onChange={this.handleQuickBookingSearchChange}
+              className="adminpanel-search-input"
+            />
+          </div>
+        </div>
+
+        <div className="adminpanel-filter-section">
+          <div className="adminpanel-filter-group">
+            <span className="adminpanel-filter-label">Status:</span>
+            <div className="adminpanel-filter-tabs">
+              <button
+                className={`adminpanel-filter-tab ${
+                  quickBookingStatusFilter === "all" ? "adminpanel-active" : ""
+                }`}
+                onClick={() => this.handleQuickBookingStatusFilter("all")}
+              >
+                All
+              </button>
+              <button
+                className={`adminpanel-filter-tab ${
+                  quickBookingStatusFilter === "pending"
+                    ? "adminpanel-active"
+                    : ""
+                }`}
+                onClick={() => this.handleQuickBookingStatusFilter("pending")}
+              >
+                Pending
+              </button>
+              <button
+                className={`adminpanel-filter-tab ${
+                  quickBookingStatusFilter === "accepted"
+                    ? "adminpanel-active"
+                    : ""
+                }`}
+                onClick={() => this.handleQuickBookingStatusFilter("accepted")}
+              >
+                Accepted
+              </button>
+              <button
+                className={`adminpanel-filter-tab ${
+                  quickBookingStatusFilter === "rejected"
+                    ? "adminpanel-active"
+                    : ""
+                }`}
+                onClick={() => this.handleQuickBookingStatusFilter("rejected")}
+              >
+                Rejected
+              </button>
+            </div>
+          </div>
+
+          <div className="adminpanel-sort-section">
+            <span className="adminpanel-sort-label">Sort by:</span>
+            <select
+              value={quickBookingSortBy}
+              onChange={(e) =>
+                this.handleQuickBookingSortChange(e.target.value)
+              }
+              className="adminpanel-sort-select"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="name">Name A-Z</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  renderQuickBookingsList() {
+    const { isLoading } = this.state;
+    const filteredQuickBookings = this.getFilteredQuickBookings();
+
+    if (isLoading) {
+      return (
+        <div className="adminpanel-loading-state">
+          <div className="adminpanel-spinner"></div>
+          <p>Loading quick bookings...</p>
+        </div>
+      );
+    }
+
+    if (!filteredQuickBookings || filteredQuickBookings.length === 0) {
+      return (
+        <div className="adminpanel-empty-state">
+          <div className="adminpanel-empty-icon">
+            <i className="fas fa-rocket"></i>
+          </div>
+          <h3>No Quick Bookings Found</h3>
+          <p>
+            There are no quick booking requests matching your current filters.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="adminpanel-quickbookings-grid">
+        {filteredQuickBookings.map((quickBooking) => {
+          const profileImageSrc = this.getProfileImageSrc(
+            quickBooking.clientId?.profileImage
+          );
+
+          return (
+            <div
+              key={quickBooking._id || quickBooking.id}
+              className="adminpanel-quickbooking-card"
+            >
+              <div className="adminpanel-card-header">
+                <div className="adminpanel-profile-section">
+                  <div className="adminpanel-avatar">
+                    {profileImageSrc ? (
+                      <img
+                        src={profileImageSrc}
+                        alt={quickBooking.clientName}
+                        onError={(e) => {
+                          console.log("Image failed to load:", e.target.src);
+                          e.target.onerror = null;
+                          e.target.style.display = "none";
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = "flex";
+                          }
+                        }}
+                        onLoad={(e) => {
+                          console.log(
+                            "Image loaded successfully:",
+                            e.target.src
+                          );
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = "none";
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="adminpanel-avatar-initials"
+                      style={{ display: profileImageSrc ? "none" : "flex" }}
+                    >
+                      {this.getInitials(quickBooking.clientName)}
+                    </div>
+                  </div>
+                  <div className="adminpanel-profile-info">
+                    <h3 className="adminpanel-profile-name">
+                      {quickBooking.clientName}
+                    </h3>
+                    <p className="adminpanel-profile-service">
+                      {quickBooking.serviceName}
+                    </p>
+                    <div className="adminpanel-profile-meta">
+                      <span className="adminpanel-budget">
+                        <i className="fas fa-dollar-sign"></i>
+                        {quickBooking.budget}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className={`adminpanel-status-badge adminpanel-status-${
+                    quickBooking.status || "pending"
+                  }`}
+                >
+                  {quickBooking.status
+                    ? quickBooking.status.charAt(0).toUpperCase() +
+                      quickBooking.status.slice(1)
+                    : "Pending"}
+                </div>
+              </div>
+
+              <div className="adminpanel-card-body">
+                <div className="adminpanel-quickbooking-info">
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-envelope"></i>
+                    <span>{quickBooking.clientEmail}</span>
+                  </div>
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-phone"></i>
+                    <span>{quickBooking.clientPhone}</span>
+                  </div>
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-calendar"></i>
+                    <span>
+                      {quickBooking.requestDate
+                        ? new Date(
+                            quickBooking.requestDate
+                          ).toLocaleDateString()
+                        : "Unknown"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="adminpanel-card-footer">
+                <button
+                  className="adminpanel-view-btn"
+                  onClick={() => this.handleViewQuickBooking(quickBooking)}
+                >
+                  <i className="fas fa-eye"></i>
+                  View Details
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   renderSubmissionsList() {
     const { isLoading } = this.state;
     const filteredSubmissions = this.getFilteredSubmissions();
-
-    //  debug log
-    console.log(
-      "Filtered submissions with profile images:",
-      filteredSubmissions.map((sub) => ({
-        name: sub.name,
-        profileImage: sub.profileImage,
-        processedSrc: this.getProfileImageSrc(sub.profileImage),
-      }))
-    );
 
     if (isLoading) {
       return (
@@ -616,14 +1133,9 @@ class AdminPanel extends Component {
     return (
       <div className="adminpanel-submissions-grid">
         {filteredSubmissions.map((submission) => {
-          let profileImageSrc = submission.profileImage;
-          if (
-            profileImageSrc &&
-            !profileImageSrc.startsWith("http") &&
-            !profileImageSrc.startsWith("/api/placeholder")
-          ) {
-            profileImageSrc = `${this.state.baseUrl}${profileImageSrc}`;
-          }
+          const profileImageSrc = this.getProfileImageSrc(
+            submission.profileImage
+          );
 
           return (
             <div
@@ -641,13 +1153,18 @@ class AdminPanel extends Component {
                           console.log("Image failed to load:", e.target.src);
                           e.target.onerror = null;
                           e.target.style.display = "none";
-                          e.target.nextSibling.style.display = "flex";
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = "flex";
+                          }
                         }}
                         onLoad={(e) => {
                           console.log(
                             "Image loaded successfully:",
                             e.target.src
                           );
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = "none";
+                          }
                         }}
                       />
                     ) : null}
@@ -722,6 +1239,204 @@ class AdminPanel extends Component {
     );
   }
 
+  renderQuickBookingDetails() {
+    const { viewingQuickBooking } = this.state;
+    if (!viewingQuickBooking) return null;
+
+    const profileImageSrc = this.getProfileImageSrc(
+      viewingQuickBooking.clientId?.profileImage
+    );
+
+    return (
+      <div className="adminpanel-modal-overlay">
+        <div className="adminpanel-modal-container">
+          <div className="adminpanel-modal-header">
+            <h2>Quick Booking Request Details</h2>
+            <button
+              className="adminpanel-modal-close"
+              onClick={this.handleCloseQuickBookingView}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+
+          <div className="adminpanel-modal-content">
+            <div className="adminpanel-profile-header">
+              <div className="adminpanel-large-avatar">
+                {profileImageSrc ? (
+                  <img
+                    src={profileImageSrc}
+                    alt={viewingQuickBooking.clientName}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = "none";
+                      e.target.nextSibling.style.display = "flex";
+                    }}
+                  />
+                ) : null}
+                <div
+                  className="adminpanel-large-avatar-initials"
+                  style={{ display: profileImageSrc ? "none" : "flex" }}
+                >
+                  {this.getInitials(viewingQuickBooking.clientName)}
+                </div>
+              </div>
+
+              <div className="adminpanel-profile-details">
+                <h1>{viewingQuickBooking.clientName || "Unknown Client"}</h1>
+                <p className="adminpanel-profession">
+                  {viewingQuickBooking.serviceName || "No service specified"}
+                </p>
+                <p className="adminpanel-headline">
+                  Budget: {viewingQuickBooking.budget || "Not specified"}
+                </p>
+                <div
+                  className={`adminpanel-status-indicator adminpanel-status-${
+                    viewingQuickBooking.status || "pending"
+                  }`}
+                >
+                  <i className="fas fa-circle"></i>
+                  Status:{" "}
+                  {viewingQuickBooking.status
+                    ? viewingQuickBooking.status.charAt(0).toUpperCase() +
+                      viewingQuickBooking.status.slice(1)
+                    : "Pending"}
+                </div>
+              </div>
+            </div>
+
+            <div className="adminpanel-details-grid">
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-envelope"></i>
+                  Email Address
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingQuickBooking.clientEmail || "No email provided"}
+                </div>
+              </div>
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-phone"></i>
+                  Phone Number
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingQuickBooking.clientPhone || "No phone provided"}
+                </div>
+              </div>
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-cogs"></i>
+                  Requested Service
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingQuickBooking.serviceName || "Not specified"}
+                </div>
+              </div>
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-dollar-sign"></i>
+                  Budget Range
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingQuickBooking.budget || "Not specified"}
+                </div>
+              </div>
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-calendar"></i>
+                  Request Date
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingQuickBooking.requestDate
+                    ? new Date(
+                        viewingQuickBooking.requestDate
+                      ).toLocaleDateString()
+                    : "Unknown date"}
+                </div>
+              </div>
+
+              {viewingQuickBooking.responseDate && (
+                <div className="adminpanel-detail-card">
+                  <div className="adminpanel-detail-label">
+                    <i className="fas fa-reply"></i>
+                    Response Date
+                  </div>
+                  <div className="adminpanel-detail-value">
+                    {new Date(
+                      viewingQuickBooking.responseDate
+                    ).toLocaleDateString()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {viewingQuickBooking.description && (
+              <div className="adminpanel-about-section">
+                <h3>
+                  <i className="fas fa-comment"></i>
+                  Project Description
+                </h3>
+                <p>{viewingQuickBooking.description}</p>
+              </div>
+            )}
+
+            {viewingQuickBooking.adminNotes && (
+              <div className="adminpanel-about-section">
+                <h3>
+                  <i className="fas fa-sticky-note"></i>
+                  Admin Notes
+                </h3>
+                <p>{viewingQuickBooking.adminNotes}</p>
+              </div>
+            )}
+
+            <div className="adminpanel-modal-actions">
+              {viewingQuickBooking.status === "pending" && (
+                <>
+                  <button
+                    className="adminpanel-approve-btn"
+                    onClick={() =>
+                      this.handleQuickBookingStatusChange(
+                        viewingQuickBooking._id || viewingQuickBooking.id,
+                        "accepted"
+                      )
+                    }
+                  >
+                    <i className="fas fa-check"></i>
+                    Accept Request
+                  </button>
+                  <button
+                    className="adminpanel-reject-btn"
+                    onClick={() =>
+                      this.handleQuickBookingStatusChange(
+                        viewingQuickBooking._id || viewingQuickBooking.id,
+                        "rejected"
+                      )
+                    }
+                  >
+                    <i className="fas fa-times"></i>
+                    Reject Request
+                  </button>
+                </>
+              )}
+              {viewingQuickBooking.status !== "pending" && (
+                <div className="adminpanel-status-message">
+                  <i className="fas fa-info-circle"></i>
+                  This request has been {viewingQuickBooking.status}.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   renderSubmissionDetails() {
     const { viewingSubmission } = this.state;
     if (!viewingSubmission) return null;
@@ -729,7 +1444,6 @@ class AdminPanel extends Component {
     const profileImageSrc = this.getProfileImageSrc(
       viewingSubmission.profileImage
     );
-    const initials = this.getInitials(viewingSubmission.name);
 
     let services = [];
     if (viewingSubmission.services) {
@@ -903,7 +1617,7 @@ class AdminPanel extends Component {
                                   {price.level || `Package ${idx + 1}`}
                                 </div>
                                 <div className="adminpanel-package-price">
-                                  ${price.price || "N/A"}
+                                  ₹{price.price || "N/A"}
                                 </div>
                                 <div className="adminpanel-package-time">
                                   {price.timeFrame || "N/A"}
@@ -991,7 +1705,7 @@ class AdminPanel extends Component {
   };
 
   renderAdminDashboard() {
-    const { viewingSubmission } = this.state;
+    const { viewingSubmission, viewingQuickBooking, activeTab } = this.state;
 
     return (
       <div className="adminpanel-dashboard">
@@ -1003,7 +1717,7 @@ class AdminPanel extends Component {
               </div>
               <div className="adminpanel-title-section">
                 <h1>VOAT Admin Dashboard</h1>
-                <p>Manage portfolio submissions and freelancer applications</p>
+                <p>Manage portfolio submissions and quick booking requests</p>
               </div>
             </div>
 
@@ -1032,17 +1746,32 @@ class AdminPanel extends Component {
         <div className="adminpanel-content">
           <div className="adminpanel-content-wrapper">
             {this.renderDashboardStats()}
-            {this.renderControlsSection()}
+            {this.renderTabNavigation()}
 
-            <div className="adminpanel-submissions-section">
-              <div className="adminpanel-section-header">
-                <h2>Portfolio Submissions</h2>
-                <p>Review and manage freelancer applications</p>
+            {activeTab === "portfolios" && (
+              <div className="adminpanel-section">
+                <div className="adminpanel-section-header">
+                  <h2>Portfolio Submissions</h2>
+                  <p>Review and manage freelancer portfolio applications</p>
+                </div>
+                {this.renderPortfolioControlsSection()}
+                {this.renderSubmissionsList()}
               </div>
-              {this.renderSubmissionsList()}
-            </div>
+            )}
+
+            {activeTab === "quickBookings" && (
+              <div className="adminpanel-section">
+                <div className="adminpanel-section-header">
+                  <h2>Quick Booking Requests</h2>
+                  <p>Review and manage quick booking requests from clients</p>
+                </div>
+                {this.renderQuickBookingControlsSection()}
+                {this.renderQuickBookingsList()}
+              </div>
+            )}
 
             {viewingSubmission && this.renderSubmissionDetails()}
+            {viewingQuickBooking && this.renderQuickBookingDetails()}
           </div>
         </div>
       </div>

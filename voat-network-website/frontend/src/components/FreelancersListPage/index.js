@@ -524,6 +524,16 @@ class PortfolioList extends Component {
     );
   };
 
+  formatName = (name) => {
+    if (!name || typeof name !== "string") return name;
+
+    return name
+      .toLowerCase()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   loadUserImages = () => {
     try {
       const users = JSON.parse(localStorage.getItem("users") || "[]");
@@ -1514,7 +1524,9 @@ class PortfolioList extends Component {
 
                       {/* Card Content */}
                       <div className="card-content">
-                        <h3 className="freelancer-name">{portfolio.name}</h3>
+                        <h3 className="freelancer-name">
+                          {this.formatName(portfolio.name)}
+                        </h3>
                         <p className="profession">{portfolio.profession}</p>
 
                         {/* VOAT ID */}

@@ -168,31 +168,27 @@ class UserDashboard extends Component {
         // For new users, ensure VOAT ID exists before proceeding
         if (!userData.voatId) {
           console.log("New user detected, generating VOAT ID");
-          // Generate a new VOAT ID
           const randomPart = uuidv4().substring(0, 9).toUpperCase();
           const voatId = `VOAT-${randomPart.substring(
             0,
             4
           )}-${randomPart.substring(4, 8)}`;
 
-          // Update the user data with the new VOAT ID
           userData.voatId = voatId;
           userData.voatPoints = userData.voatPoints || 0;
           userData.badge = userData.badge || this.calculateBadge(0);
 
-          // Save the updated user data to localStorage immediately
           localStorage.setItem("user", JSON.stringify(userData));
 
-          // Ensure database is updated with new VOAT ID if user ID exists
           if (userData.id) {
             await this.updateUserDataInDatabase(userData);
           }
         }
 
-        // Set initial state with localStorage data (without profile image)
+        // Set initial state with localStorage data (WITHOUT profile image)
         this.setState({
           userData: userData,
-          isLoading: true, // Keep loading true until we fetch from database
+          isLoading: true,
           formData: {
             name: userData.name || "",
             email: userData.email || "",
@@ -200,7 +196,8 @@ class UserDashboard extends Component {
             profession: userData.profession || "",
             phone: userData.phone || "",
           },
-          // Don't set previewImage here - wait for database fetch
+          // Don't set previewImage from localStorage - wait for database
+          previewImage: null,
         });
 
         // Always fetch fresh data from database, especially profile image
@@ -218,6 +215,7 @@ class UserDashboard extends Component {
               profession: freshUserData.profession || "",
               phone: freshUserData.phone || "",
             },
+            // Set profile image from database or null
             previewImage: freshUserData.profileImage
               ? this.getFullImageUrl(freshUserData.profileImage)
               : null,
@@ -226,9 +224,8 @@ class UserDashboard extends Component {
           // Fallback to localStorage data if database fetch fails
           this.setState({
             isLoading: false,
-            previewImage: userData.profileImage
-              ? this.getFullImageUrl(userData.profileImage)
-              : null,
+            // Don't set profile image from localStorage
+            previewImage: null,
           });
         }
       } catch (error) {
@@ -260,15 +257,24 @@ class UserDashboard extends Component {
   }
 
   generateInitials = (name) => {
-    if (!name) return "U";
+    if (!name || typeof name !== "string") return "U";
 
-    const words = name.trim().split(/\s+/);
+    // Clean the name and split by spaces
+    const cleanName = name.trim();
+    const words = cleanName.split(/\s+/).filter((word) => word.length > 0);
+
+    if (words.length === 0) return "U";
 
     if (words.length === 1) {
-      // Single word - take first two characters
-      return words[0].substring(0, 2).toUpperCase();
+      // Single word - take first two characters if available
+      const word = words[0];
+      if (word.length >= 2) {
+        return word.substring(0, 2).toUpperCase();
+      } else {
+        return word.charAt(0).toUpperCase();
+      }
     } else {
-      // Multiple words - take first letter of each word (max 2)
+      // Multiple words - take first letter of first two words
       return words
         .slice(0, 2)
         .map((word) => word.charAt(0).toUpperCase())
@@ -359,8 +365,8 @@ class UserDashboard extends Component {
               ? result.user.voatPoints
               : userData.voatPoints || 0,
           badge: result.user.badge || userData.badge || this.calculateBadge(0),
-          // Always use database profile image if available
-          profileImage: result.user.profileImage || null,
+          // ALWAYS use database profile image (could be null)
+          profileImage: result.user.profileImage,
         };
 
         // Update localStorage with fresh data
@@ -763,8 +769,11 @@ class UserDashboard extends Component {
             phone: this.state.userData.phone || "",
           }
         : prevState.formData,
+      // Only set previewImage from database profile image, not localStorage
       previewImage: !prevState.isEditing
-        ? this.getFullImageUrl(this.state.userData.profileImage)
+        ? this.state.userData.profileImage
+          ? this.getFullImageUrl(this.state.userData.profileImage)
+          : null
         : this.state.previewImage,
       profileImage: !prevState.isEditing ? null : this.state.profileImage,
     }));
@@ -1296,9 +1305,7 @@ class UserDashboard extends Component {
                   <img src={profileImageUrl} alt={userData.name} />
                 ) : (
                   <div className="avatar-placeholder">
-                    {userData.name
-                      ? userData.name.charAt(0).toUpperCase()
-                      : "U"}
+                    {this.generateInitials(userData.name)}
                   </div>
                 )}
               </div>
@@ -1319,9 +1326,7 @@ class UserDashboard extends Component {
                   />
                 ) : (
                   <div className="dashboard-profile-placeholder">
-                    {userData.name
-                      ? userData.name.charAt(0).toUpperCase()
-                      : "U"}
+                    {this.generateInitials(userData.name)}
                   </div>
                 )}
                 <div
@@ -2142,9 +2147,9 @@ class UserDashboard extends Component {
                       {this.generateInitials(userData?.name)}
                     </div>
                   )}
-                  <span className="preview-note">
+                  {/* <span className="preview-note">
                     This will be used for your portfolio
-                  </span>
+                  </span>  */}
                 </div>
               </div>
               <div className="form-row">
@@ -2307,7 +2312,7 @@ class UserDashboard extends Component {
                     </div>
                     <div className="package-inputs">
                       <div className="form-group">
-                        <label htmlFor={`price-${index}`}>Price ($)</label>
+                        <label htmlFor={`price-${index}`}>Price (₹)</label>
                         <div className="input-container">
                           <input
                             type="number"
