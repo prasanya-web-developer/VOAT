@@ -4041,30 +4041,10 @@ app.use((err, req, res, next) => {
   }
 });
 
-app.use("*", (req, res) => {
-  console.log(`=== 404 ERROR ===`);
-  console.log(`Route not found: ${req.method} ${req.originalUrl}`);
-  console.log(`Headers:`, req.headers);
-
-  return res.status(404).json({
-    success: false,
-    message: `Route ${req.method} ${req.originalUrl} not found`,
-    availableRoutes: [
-      "GET /api/health",
-      "GET /api/status",
-      "GET /api/user/:userId",
-      "GET /api/cart/:userId",
-      "POST /api/cart/add",
-      "POST /api/cart/checkout",
-      "DELETE /api/cart/remove",
-    ],
-  });
-});
-
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
+// app.use((req, res, next) => {
+//   console.log(`${req.method} ${req.url}`);
+//   next();
+// });
 
 console.log("=== REGISTERED ROUTES ===");
 app._router.stack.forEach((middleware) => {
@@ -4085,6 +4065,26 @@ app._router.stack.forEach((middleware) => {
       }
     });
   }
+});
+
+app.use("*", (req, res) => {
+  console.log(`=== 404 ERROR ===`);
+  console.log(`Route not found: ${req.method} ${req.originalUrl}`);
+  console.log(`Headers:`, req.headers);
+
+  return res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+    availableRoutes: [
+      "GET /api/health",
+      "GET /api/status",
+      "GET /api/user/:userId",
+      "GET /api/cart/:userId",
+      "POST /api/cart/add",
+      "POST /api/cart/checkout",
+      "DELETE /api/cart/remove",
+    ],
+  });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
