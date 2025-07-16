@@ -139,19 +139,41 @@ class AdminPanel extends Component {
   fetchQuickBookings = async () => {
     try {
       this.setState({ isLoading: true });
-      const response = await fetch(
+
+      console.log(
+        "Fetching quick bookings from:",
         `${this.state.baseUrl}/api/admin/quick-bookings`
       );
 
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/quick-bookings`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        }
+      );
+
+      console.log("Quick bookings response status:", response.status);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error("Quick bookings fetch error:", errorText);
+        throw new Error(
+          `HTTP error! status: ${response.status} - ${errorText}`
+        );
       }
 
       const data = await response.json();
       console.log("Fetched quick bookings:", data);
 
+      // Handle both possible response formats
+      const quickBookings = data.quickBookings || data || [];
+
       this.setState({
-        quickBookings: data.quickBookings || [],
+        quickBookings: Array.isArray(quickBookings) ? quickBookings : [],
         isLoading: false,
       });
     } catch (error) {
@@ -160,6 +182,9 @@ class AdminPanel extends Component {
         quickBookings: [],
         isLoading: false,
       });
+
+      // Optional: Show error notification
+      alert(`Failed to fetch quick bookings: ${error.message}`);
     }
   };
 

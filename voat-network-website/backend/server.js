@@ -3597,9 +3597,27 @@ app.get("/api/admin/migrate-headlines", async (req, res) => {
 
 // Quick Booking Routes
 
+app.use("/api/quick-booking*", (req, res, next) => {
+  console.log(`=== QUICK BOOKING ROUTE HIT ===`);
+  console.log(`Method: ${req.method}`);
+  console.log(`URL: ${req.originalUrl}`);
+  console.log(`Base URL: ${req.baseUrl}`);
+  console.log(`Path: ${req.path}`);
+  console.log(`Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  if (req.method !== "GET") {
+    console.log(`Body: ${JSON.stringify(req.body, null, 2)}`);
+  }
+  next();
+});
+
 // POST - Create Quick Booking
+
 app.post("/api/quick-booking", async (req, res) => {
   try {
+    console.log("=== QUICK BOOKING REQUEST ===");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+
     const {
       clientId,
       clientName,
@@ -3610,7 +3628,15 @@ app.post("/api/quick-booking", async (req, res) => {
       description,
     } = req.body;
 
-    console.log("Creating quick booking with data:", req.body);
+    console.log("Creating quick booking with data:", {
+      clientId,
+      clientName,
+      clientEmail,
+      clientPhone,
+      serviceName,
+      budget,
+      description,
+    });
 
     // Validate required fields
     if (
@@ -3621,13 +3647,31 @@ app.post("/api/quick-booking", async (req, res) => {
       !serviceName ||
       !budget
     ) {
+      const missingFields = [];
+      if (!clientId) missingFields.push("clientId");
+      if (!clientName) missingFields.push("clientName");
+      if (!clientEmail) missingFields.push("clientEmail");
+      if (!clientPhone) missingFields.push("clientPhone");
+      if (!serviceName) missingFields.push("serviceName");
+      if (!budget) missingFields.push("budget");
+
+      console.log("Missing required fields:", missingFields);
+
       return res.status(400).json({
         success: false,
-        message: "All required fields must be provided",
+        message: `Missing required fields: ${missingFields.join(", ")}`,
+        missingFields: missingFields,
       });
     }
 
     // Validate user exists
+    if (!mongoose.Types.ObjectId.isValid(clientId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID format",
+      });
+    }
+
     const client = await User.findById(clientId);
     if (!client) {
       return res.status(404).json({
@@ -3644,7 +3688,7 @@ app.post("/api/quick-booking", async (req, res) => {
       clientPhone,
       serviceName,
       budget,
-      description,
+      description: description || "",
       status: "pending",
       requestDate: new Date(),
       type: "quick_booking",
@@ -3660,11 +3704,14 @@ app.post("/api/quick-booking", async (req, res) => {
       quickBooking: savedQuickBooking,
     });
   } catch (error) {
-    console.error("Error creating quick booking:", error);
+    console.error("=== QUICK BOOKING ERROR ===", error);
+    console.error("Error stack:", error.stack);
+
     res.status(500).json({
       success: false,
       message: "Failed to create quick booking request",
       error: error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 });
@@ -3877,6 +3924,23 @@ app.get("/api/admin/quick-booking-stats", async (req, res) => {
       success: false,
       message: "Failed to fetch quick booking statistics",
       error: error.message,
+    });
+  }
+});
+
+// Add this test route to your backend
+app.get("/api/test-quick-booking", async (req, res) => {
+  try {
+    const count = await QuickBooking.countDocuments();
+    res.json({
+      message: "Quick booking model is working",
+      count: count,
+      modelExists: !!QuickBooking,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      modelExists: !!QuickBooking,
     });
   }
 });

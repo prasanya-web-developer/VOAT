@@ -252,10 +252,10 @@ class PortfolioList extends Component {
         clientId: currentUser.id,
         clientName: quickBookingForm.userName,
         clientEmail: quickBookingForm.email,
-        clientPhone: quickBookingForm.contactNumber,
+        clientPhone: quickBookingForm.contactNumber, // Make sure this matches backend expectation
         serviceName: quickBookingForm.serviceName,
         budget: quickBookingForm.budget,
-        description: quickBookingForm.description,
+        description: quickBookingForm.description || "",
         status: "pending",
         requestDate: new Date().toISOString(),
         type: "quick_booking",
@@ -267,11 +267,13 @@ class PortfolioList extends Component {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify(quickBookingData),
       });
 
       console.log("Quick booking response status:", response.status);
+      console.log("Quick booking response:", response);
 
       if (response.ok) {
         const responseData = await response.json();
@@ -283,9 +285,19 @@ class PortfolioList extends Component {
         );
         this.closeQuickBookingModal();
       } else {
-        const errorData = await response.json();
-        console.error("Quick booking error response:", errorData);
-        throw new Error(errorData.message || "Failed to submit quick booking");
+        // Get detailed error information
+        const errorText = await response.text();
+        console.error("Quick booking error response:", errorText);
+
+        let errorMessage = "Failed to submit quick booking";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorMessage;
+        } catch (parseError) {
+          errorMessage = `Server error (${response.status}): ${errorText}`;
+        }
+
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error("Quick booking error:", error);
@@ -540,6 +552,30 @@ class PortfolioList extends Component {
         </div>
       </div>
     );
+  };
+
+  // Add this method to your PortfolioList component for testing
+  testQuickBookingEndpoint = async () => {
+    try {
+      console.log("Testing quick booking endpoint...");
+      const response = await fetch(`${this.state.baseUrl}/api/health`);
+      console.log("Health check response:", response.status);
+
+      // Test if quick booking endpoint exists
+      const testResponse = await fetch(
+        `${this.state.baseUrl}/api/admin/quick-bookings`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("Quick booking endpoint test:", testResponse.status);
+    } catch (error) {
+      console.error("Endpoint test error:", error);
+    }
   };
 
   formatName = (name) => {
