@@ -252,32 +252,53 @@ class PortfolioList extends Component {
         clientId: currentUser.id,
         clientName: quickBookingForm.userName,
         clientEmail: quickBookingForm.email,
-        clientPhone: quickBookingForm.contactNumber, // Make sure this matches backend expectation
+        clientPhone: quickBookingForm.contactNumber,
         serviceName: quickBookingForm.serviceName,
         budget: quickBookingForm.budget,
         description: quickBookingForm.description || "",
-        status: "pending",
-        requestDate: new Date().toISOString(),
-        type: "quick_booking",
       };
 
-      console.log("Submitting quick booking data:", quickBookingData);
+      console.log("=== FRONTEND QUICK BOOKING SUBMISSION ===");
+      console.log("Base URL:", this.state.baseUrl);
+      console.log("Full URL:", `${this.state.baseUrl}/api/quick-booking`);
+      console.log("Data being sent:", quickBookingData);
+
+      // First test if the server is reachable
+      try {
+        const healthCheck = await fetch(`${this.state.baseUrl}/api/health`);
+        console.log("Health check status:", healthCheck.status);
+      } catch (healthError) {
+        console.error("Server not reachable:", healthError);
+        throw new Error(
+          "Cannot connect to server. Please check your connection."
+        );
+      }
 
       const response = await fetch(`${this.state.baseUrl}/api/quick-booking`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          Origin: window.location.origin,
         },
         body: JSON.stringify(quickBookingData),
       });
 
-      console.log("Quick booking response status:", response.status);
-      console.log("Quick booking response:", response);
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
+
+      const responseText = await response.text();
+      console.log("Raw response text:", responseText);
 
       if (response.ok) {
-        const responseData = await response.json();
-        console.log("Quick booking response data:", responseData);
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (parseError) {
+          throw new Error("Server returned invalid JSON");
+        }
+
+        console.log("Parsed response data:", responseData);
 
         this.showNotification(
           "Quick booking request submitted successfully! We'll match you with suitable freelancers.",
@@ -285,22 +306,29 @@ class PortfolioList extends Component {
         );
         this.closeQuickBookingModal();
       } else {
-        // Get detailed error information
-        const errorText = await response.text();
-        console.error("Quick booking error response:", errorText);
+        let errorMessage = `Server error (${response.status})`;
 
-        let errorMessage = "Failed to submit quick booking";
         try {
-          const errorData = JSON.parse(errorText);
+          const errorData = JSON.parse(responseText);
           errorMessage = errorData.message || errorMessage;
         } catch (parseError) {
-          errorMessage = `Server error (${response.status}): ${errorText}`;
+          errorMessage = responseText || errorMessage;
         }
+
+        console.error("Server error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: responseText,
+        });
 
         throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error("Quick booking error:", error);
+      console.error("=== QUICK BOOKING SUBMISSION ERROR ===");
+      console.error("Error type:", error.constructor.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+
       this.showNotification(
         `Failed to submit quick booking: ${error.message}`,
         "error"

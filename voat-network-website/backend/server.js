@@ -39,6 +39,21 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(bodyParser.json());
 
+// Add this debugging middleware after CORS setup
+app.use((req, res, next) => {
+  if (req.url.includes("quick-booking")) {
+    console.log(`=== QUICK BOOKING ROUTE DEBUG ===`);
+    console.log(
+      `${new Date().toISOString()} - ${req.method} ${req.originalUrl}`
+    );
+    console.log(`Headers:`, req.headers);
+    if (req.method === "POST") {
+      console.log(`Body:`, req.body);
+    }
+  }
+  next();
+});
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -1262,6 +1277,393 @@ app.get("/api/portfolios-with-users", async (req, res) => {
     console.error("Error fetching portfolios with user data:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
+});
+
+// Quick Booking Routes
+
+app.use("/api/quick-booking*", (req, res, next) => {
+  console.log(`=== QUICK BOOKING ROUTE HIT ===`);
+  console.log(`Method: ${req.method}`);
+  console.log(`URL: ${req.originalUrl}`);
+  console.log(`Base URL: ${req.baseUrl}`);
+  console.log(`Path: ${req.path}`);
+  console.log(`Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  if (req.method !== "GET") {
+    console.log(`Body: ${JSON.stringify(req.body, null, 2)}`);
+  }
+  next();
+});
+
+// POST - Create Quick Booking
+
+app.post("/api/quick-booking", async (req, res) => {
+  try {
+    console.log("=== QUICK BOOKING REQUEST ===");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+    console.log("URL:", req.originalUrl);
+    console.log("Method:", req.method);
+
+    const {
+      clientId,
+      clientName,
+      clientEmail,
+      clientPhone,
+      serviceName,
+      budget,
+      description,
+    } = req.body;
+
+    console.log("Creating quick booking with parsed data:", {
+      clientId,
+      clientName,
+      clientEmail,
+      clientPhone,
+      serviceName,
+      budget,
+      description,
+    });
+
+    // Validate required fields
+    if (
+      !clientId ||
+      !clientName ||
+      !clientEmail ||
+      !clientPhone ||
+      !serviceName ||
+      !budget
+    ) {
+      const missingFields = [];
+      if (!clientId) missingFields.push("clientId");
+      if (!clientName) missingFields.push("clientName");
+      if (!clientEmail) missingFields.push("clientEmail");
+      if (!clientPhone) missingFields.push("clientPhone");
+      if (!serviceName) missingFields.push("serviceName");
+      if (!budget) missingFields.push("budget");
+
+      console.log("Validation failed - missing fields:", missingFields);
+
+      return res.status(400).json({
+        success: false,
+        message: `Missing required fields: ${missingFields.join(", ")}`,
+        received: {
+          clientId,
+          clientName,
+          clientEmail,
+          clientPhone,
+          serviceName,
+          budget,
+        },
+        missingFields: missingFields,
+      });
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(clientId)) {
+      console.log("Invalid ObjectId format:", clientId);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID format",
+      });
+    }
+
+    // Validate user exists
+    const client = await User.findById(clientId);
+    if (!client) {
+      console.log("Client not found:", clientId);
+      return res.status(404).json({
+        success: false,
+        message: "Client not found",
+      });
+    }
+
+    console.log("Client validated successfully:", client.name);
+
+    // Create new quick booking
+    const newQuickBooking = new QuickBooking({
+      clientId,
+      clientName,
+      clientEmail,
+      clientPhone,
+      serviceName,
+      budget,
+      description: description || "",
+      status: "pending",
+      requestDate: new Date(),
+      type: "quick_booking",
+    });
+
+    console.log("Attempting to save quick booking...");
+    const savedQuickBooking = await newQuickBooking.save();
+    console.log("Quick booking saved successfully:", savedQuickBooking._id);
+
+    res.status(201).json({
+      success: true,
+      message: "Quick booking request submitted successfully",
+      quickBooking: savedQuickBooking,
+    });
+  } catch (error) {
+    console.error("=== QUICK BOOKING CREATION ERROR ===");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create quick booking request",
+      error: error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+  }
+});
+
+console.log("Quick booking POST route registered successfully");
+
+// GET - Get all quick bookings for admin
+app.get("/api/admin/quick-bookings", async (req, res) => {
+  try {
+    console.log("Fetching all quick bookings for admin");
+
+    const quickBookings = await QuickBooking.find({})
+      .sort({ requestDate: -1 })
+      .populate("clientId", "name email profileImage voatId");
+
+    console.log(`Found ${quickBookings.length} quick bookings`);
+
+    // Calculate stats
+    const stats = {
+      total: quickBookings.length,
+      pending: quickBookings.filter((qb) => qb.status === "pending").length,
+      accepted: quickBookings.filter((qb) => qb.status === "accepted").length,
+      rejected: quickBookings.filter((qb) => qb.status === "rejected").length,
+    };
+
+    res.status(200).json({
+      success: true,
+      quickBookings: quickBookings,
+      stats: stats,
+    });
+  } catch (error) {
+    console.error("Error fetching quick bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch quick bookings",
+      error: error.message,
+    });
+  }
+});
+
+// PUT - Update quick booking status
+app.put("/api/admin/quick-booking/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNotes } = req.body;
+
+    console.log(`Updating quick booking ${id} status to ${status}`);
+
+    if (!["pending", "accepted", "rejected"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+
+    const quickBooking = await QuickBooking.findById(id);
+
+    if (!quickBooking) {
+      return res.status(404).json({
+        success: false,
+        message: "Quick booking not found",
+      });
+    }
+
+    // Update status and notes
+    quickBooking.status = status;
+    quickBooking.responseDate = new Date();
+    if (adminNotes) {
+      quickBooking.adminNotes = adminNotes;
+    }
+
+    const updatedQuickBooking = await quickBooking.save();
+
+    console.log(`Quick booking ${id} status updated to ${status}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Quick booking status updated successfully",
+      quickBooking: updatedQuickBooking,
+    });
+  } catch (error) {
+    console.error("Error updating quick booking status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update quick booking status",
+      error: error.message,
+    });
+  }
+});
+
+// GET - Get quick booking details
+app.get("/api/admin/quick-booking/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log("Fetching quick booking details:", id);
+
+    const quickBooking = await QuickBooking.findById(id).populate(
+      "clientId",
+      "name email profileImage voatId phone"
+    );
+
+    if (!quickBooking) {
+      return res.status(404).json({
+        success: false,
+        message: "Quick booking not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      quickBooking: quickBooking,
+    });
+  } catch (error) {
+    console.error("Error fetching quick booking details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch quick booking details",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE - Delete quick booking
+app.delete("/api/admin/quick-booking/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log("Deleting quick booking:", id);
+
+    const quickBooking = await QuickBooking.findById(id);
+
+    if (!quickBooking) {
+      return res.status(404).json({
+        success: false,
+        message: "Quick booking not found",
+      });
+    }
+
+    await QuickBooking.findByIdAndDelete(id);
+
+    console.log(`Quick booking ${id} deleted successfully`);
+
+    res.status(200).json({
+      success: true,
+      message: "Quick booking deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting quick booking:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete quick booking",
+      error: error.message,
+    });
+  }
+});
+
+// GET - Get quick booking statistics
+app.get("/api/admin/quick-booking-stats", async (req, res) => {
+  try {
+    console.log("Fetching quick booking statistics");
+
+    const totalCount = await QuickBooking.countDocuments();
+    const pendingCount = await QuickBooking.countDocuments({
+      status: "pending",
+    });
+    const acceptedCount = await QuickBooking.countDocuments({
+      status: "accepted",
+    });
+    const rejectedCount = await QuickBooking.countDocuments({
+      status: "rejected",
+    });
+
+    // Get recent quick bookings
+    const recentBookings = await QuickBooking.find({})
+      .sort({ requestDate: -1 })
+      .limit(5)
+      .populate("clientId", "name email profileImage");
+
+    // Get service distribution
+    const serviceDistribution = await QuickBooking.aggregate([
+      {
+        $group: {
+          _id: "$serviceName",
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+
+    const stats = {
+      total: totalCount,
+      pending: pendingCount,
+      accepted: acceptedCount,
+      rejected: rejectedCount,
+      recentBookings: recentBookings,
+      serviceDistribution: serviceDistribution,
+      acceptanceRate:
+        totalCount > 0 ? Math.round((acceptedCount / totalCount) * 100) : 0,
+    };
+
+    console.log("Quick booking stats:", stats);
+
+    res.status(200).json({
+      success: true,
+      stats: stats,
+    });
+  } catch (error) {
+    console.error("Error fetching quick booking statistics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch quick booking statistics",
+      error: error.message,
+    });
+  }
+});
+
+// Add this test route to your backend
+app.get("/api/test-quick-booking", async (req, res) => {
+  try {
+    const count = await QuickBooking.countDocuments();
+    res.json({
+      message: "Quick booking model is working",
+      count: count,
+      modelExists: !!QuickBooking,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      modelExists: !!QuickBooking,
+    });
+  }
+});
+
+console.log("✅ Quick Booking API endpoints loaded successfully");
+
+app.get("/api/quick-booking-test", (req, res) => {
+  res.json({
+    message: "Quick booking routes are accessible",
+    timestamp: new Date().toISOString(),
+    method: "GET",
+  });
+});
+
+// Also add a test POST route
+app.post("/api/quick-booking-test", (req, res) => {
+  res.json({
+    message: "Quick booking POST route is working",
+    body: req.body,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.post("/api/add-service", async (req, res) => {
@@ -3594,358 +3996,6 @@ app.get("/api/admin/migrate-headlines", async (req, res) => {
     res.status(500).json({ error: "Failed to migrate portfolios" });
   }
 });
-
-// Quick Booking Routes
-
-app.use("/api/quick-booking*", (req, res, next) => {
-  console.log(`=== QUICK BOOKING ROUTE HIT ===`);
-  console.log(`Method: ${req.method}`);
-  console.log(`URL: ${req.originalUrl}`);
-  console.log(`Base URL: ${req.baseUrl}`);
-  console.log(`Path: ${req.path}`);
-  console.log(`Headers: ${JSON.stringify(req.headers, null, 2)}`);
-  if (req.method !== "GET") {
-    console.log(`Body: ${JSON.stringify(req.body, null, 2)}`);
-  }
-  next();
-});
-
-// POST - Create Quick Booking
-
-app.post("/api/quick-booking", async (req, res) => {
-  try {
-    console.log("=== QUICK BOOKING REQUEST ===");
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-
-    const {
-      clientId,
-      clientName,
-      clientEmail,
-      clientPhone,
-      serviceName,
-      budget,
-      description,
-    } = req.body;
-
-    console.log("Creating quick booking with data:", {
-      clientId,
-      clientName,
-      clientEmail,
-      clientPhone,
-      serviceName,
-      budget,
-      description,
-    });
-
-    // Validate required fields
-    if (
-      !clientId ||
-      !clientName ||
-      !clientEmail ||
-      !clientPhone ||
-      !serviceName ||
-      !budget
-    ) {
-      const missingFields = [];
-      if (!clientId) missingFields.push("clientId");
-      if (!clientName) missingFields.push("clientName");
-      if (!clientEmail) missingFields.push("clientEmail");
-      if (!clientPhone) missingFields.push("clientPhone");
-      if (!serviceName) missingFields.push("serviceName");
-      if (!budget) missingFields.push("budget");
-
-      console.log("Missing required fields:", missingFields);
-
-      return res.status(400).json({
-        success: false,
-        message: `Missing required fields: ${missingFields.join(", ")}`,
-        missingFields: missingFields,
-      });
-    }
-
-    // Validate user exists
-    if (!mongoose.Types.ObjectId.isValid(clientId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid client ID format",
-      });
-    }
-
-    const client = await User.findById(clientId);
-    if (!client) {
-      return res.status(404).json({
-        success: false,
-        message: "Client not found",
-      });
-    }
-
-    // Create new quick booking
-    const newQuickBooking = new QuickBooking({
-      clientId,
-      clientName,
-      clientEmail,
-      clientPhone,
-      serviceName,
-      budget,
-      description: description || "",
-      status: "pending",
-      requestDate: new Date(),
-      type: "quick_booking",
-    });
-
-    const savedQuickBooking = await newQuickBooking.save();
-
-    console.log("Quick booking created successfully:", savedQuickBooking._id);
-
-    res.status(201).json({
-      success: true,
-      message: "Quick booking request submitted successfully",
-      quickBooking: savedQuickBooking,
-    });
-  } catch (error) {
-    console.error("=== QUICK BOOKING ERROR ===", error);
-    console.error("Error stack:", error.stack);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to create quick booking request",
-      error: error.message,
-      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
-    });
-  }
-});
-
-// GET - Get all quick bookings for admin
-app.get("/api/admin/quick-bookings", async (req, res) => {
-  try {
-    console.log("Fetching all quick bookings for admin");
-
-    const quickBookings = await QuickBooking.find({})
-      .sort({ requestDate: -1 })
-      .populate("clientId", "name email profileImage voatId");
-
-    console.log(`Found ${quickBookings.length} quick bookings`);
-
-    // Calculate stats
-    const stats = {
-      total: quickBookings.length,
-      pending: quickBookings.filter((qb) => qb.status === "pending").length,
-      accepted: quickBookings.filter((qb) => qb.status === "accepted").length,
-      rejected: quickBookings.filter((qb) => qb.status === "rejected").length,
-    };
-
-    res.status(200).json({
-      success: true,
-      quickBookings: quickBookings,
-      stats: stats,
-    });
-  } catch (error) {
-    console.error("Error fetching quick bookings:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch quick bookings",
-      error: error.message,
-    });
-  }
-});
-
-// PUT - Update quick booking status
-app.put("/api/admin/quick-booking/:id/status", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, adminNotes } = req.body;
-
-    console.log(`Updating quick booking ${id} status to ${status}`);
-
-    if (!["pending", "accepted", "rejected"].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid status",
-      });
-    }
-
-    const quickBooking = await QuickBooking.findById(id);
-
-    if (!quickBooking) {
-      return res.status(404).json({
-        success: false,
-        message: "Quick booking not found",
-      });
-    }
-
-    // Update status and notes
-    quickBooking.status = status;
-    quickBooking.responseDate = new Date();
-    if (adminNotes) {
-      quickBooking.adminNotes = adminNotes;
-    }
-
-    const updatedQuickBooking = await quickBooking.save();
-
-    console.log(`Quick booking ${id} status updated to ${status}`);
-
-    res.status(200).json({
-      success: true,
-      message: "Quick booking status updated successfully",
-      quickBooking: updatedQuickBooking,
-    });
-  } catch (error) {
-    console.error("Error updating quick booking status:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update quick booking status",
-      error: error.message,
-    });
-  }
-});
-
-// GET - Get quick booking details
-app.get("/api/admin/quick-booking/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    console.log("Fetching quick booking details:", id);
-
-    const quickBooking = await QuickBooking.findById(id).populate(
-      "clientId",
-      "name email profileImage voatId phone"
-    );
-
-    if (!quickBooking) {
-      return res.status(404).json({
-        success: false,
-        message: "Quick booking not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      quickBooking: quickBooking,
-    });
-  } catch (error) {
-    console.error("Error fetching quick booking details:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch quick booking details",
-      error: error.message,
-    });
-  }
-});
-
-// DELETE - Delete quick booking
-app.delete("/api/admin/quick-booking/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    console.log("Deleting quick booking:", id);
-
-    const quickBooking = await QuickBooking.findById(id);
-
-    if (!quickBooking) {
-      return res.status(404).json({
-        success: false,
-        message: "Quick booking not found",
-      });
-    }
-
-    await QuickBooking.findByIdAndDelete(id);
-
-    console.log(`Quick booking ${id} deleted successfully`);
-
-    res.status(200).json({
-      success: true,
-      message: "Quick booking deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting quick booking:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete quick booking",
-      error: error.message,
-    });
-  }
-});
-
-// GET - Get quick booking statistics
-app.get("/api/admin/quick-booking-stats", async (req, res) => {
-  try {
-    console.log("Fetching quick booking statistics");
-
-    const totalCount = await QuickBooking.countDocuments();
-    const pendingCount = await QuickBooking.countDocuments({
-      status: "pending",
-    });
-    const acceptedCount = await QuickBooking.countDocuments({
-      status: "accepted",
-    });
-    const rejectedCount = await QuickBooking.countDocuments({
-      status: "rejected",
-    });
-
-    // Get recent quick bookings
-    const recentBookings = await QuickBooking.find({})
-      .sort({ requestDate: -1 })
-      .limit(5)
-      .populate("clientId", "name email profileImage");
-
-    // Get service distribution
-    const serviceDistribution = await QuickBooking.aggregate([
-      {
-        $group: {
-          _id: "$serviceName",
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { count: -1 } },
-      { $limit: 10 },
-    ]);
-
-    const stats = {
-      total: totalCount,
-      pending: pendingCount,
-      accepted: acceptedCount,
-      rejected: rejectedCount,
-      recentBookings: recentBookings,
-      serviceDistribution: serviceDistribution,
-      acceptanceRate:
-        totalCount > 0 ? Math.round((acceptedCount / totalCount) * 100) : 0,
-    };
-
-    console.log("Quick booking stats:", stats);
-
-    res.status(200).json({
-      success: true,
-      stats: stats,
-    });
-  } catch (error) {
-    console.error("Error fetching quick booking statistics:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch quick booking statistics",
-      error: error.message,
-    });
-  }
-});
-
-// Add this test route to your backend
-app.get("/api/test-quick-booking", async (req, res) => {
-  try {
-    const count = await QuickBooking.countDocuments();
-    res.json({
-      message: "Quick booking model is working",
-      count: count,
-      modelExists: !!QuickBooking,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      modelExists: !!QuickBooking,
-    });
-  }
-});
-
-console.log("✅ Quick Booking API endpoints loaded successfully");
 
 app.get("/api/health", (req, res) => {
   res.status(200).json({
