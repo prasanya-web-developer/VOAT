@@ -317,7 +317,7 @@ class SignupPage extends Component {
 
     // Redirect to login page if registration was successful
     if (redirectToLogin) {
-      return <Navigate to="/login" />;
+      return <Navigate to="/privacy-policy" />;
     }
 
     return (

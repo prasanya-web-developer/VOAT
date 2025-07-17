@@ -284,6 +284,144 @@ class AdminPanel extends Component {
     }
   };
 
+  // Delete portfolio submission
+  handleDeleteSubmission = async (submissionId) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this portfolio submission? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      this.setState({ isLoading: true });
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/portfolio-submission/${submissionId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete submission");
+
+      // Remove the submission from the state
+      const updatedSubmissions = this.state.portfolioSubmissions.filter(
+        (sub) => sub._id !== submissionId && sub.id !== submissionId
+      );
+
+      this.setState({
+        portfolioSubmissions: updatedSubmissions,
+        viewingSubmission: null,
+        isLoading: false,
+      });
+
+      alert("Portfolio submission deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting submission:", error);
+      this.setState({ isLoading: false });
+      alert("Failed to delete submission. Please try again.");
+    }
+  };
+
+  // Hold/Unhold portfolio submission
+  handleHoldSubmission = async (submissionId, isHold) => {
+    const action = isHold ? "hold" : "unhold";
+    if (
+      !window.confirm(
+        `Are you sure you want to ${action} this portfolio submission?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      this.setState({ isLoading: true });
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/portfolio-submission/${submissionId}/hold`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ isHold }),
+        }
+      );
+
+      if (!response.ok) throw new Error(`Failed to ${action} submission`);
+      const data = await response.json();
+      const updatedSubmission = data.submission;
+
+      // Update the submission in the state
+      const updatedSubmissions = this.state.portfolioSubmissions.map((sub) =>
+        sub._id === submissionId || sub.id === submissionId
+          ? { ...updatedSubmission }
+          : sub
+      );
+
+      this.setState({
+        portfolioSubmissions: updatedSubmissions,
+        viewingSubmission: updatedSubmission,
+        isLoading: false,
+      });
+
+      alert(`Portfolio submission ${action}ed successfully!`);
+    } catch (error) {
+      console.error(`Error ${action}ing submission:`, error);
+      this.setState({ isLoading: false });
+      alert(`Failed to ${action} submission. Please try again.`);
+    }
+  };
+
+  // Delete quick booking
+  handleDeleteQuickBooking = async (quickBookingId) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this quick booking? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      this.setState({ isLoading: true });
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/quick-booking/${quickBookingId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete quick booking");
+
+      // Remove the quick booking from the state
+      const updatedQuickBookings = this.state.quickBookings.filter(
+        (qb) => qb._id !== quickBookingId && qb.id !== quickBookingId
+      );
+
+      this.setState({
+        quickBookings: updatedQuickBookings,
+        viewingQuickBooking: null,
+        isLoading: false,
+      });
+
+      alert("Quick booking deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting quick booking:", error);
+      this.setState({ isLoading: false });
+      alert("Failed to delete quick booking. Please try again.");
+    }
+  };
+
   // Quick Booking Handlers
   handleViewQuickBooking = async (quickBooking) => {
     console.log("View quick booking clicked for:", quickBooking);
@@ -1449,11 +1587,53 @@ class AdminPanel extends Component {
                   </button>
                 </>
               )}
-              {viewingQuickBooking.status !== "pending" && (
-                <div className="adminpanel-status-message">
-                  <i className="fas fa-info-circle"></i>
-                  This request has been {viewingQuickBooking.status}.
-                </div>
+
+              {viewingQuickBooking.status === "accepted" && (
+                <>
+                  <button
+                    className="adminpanel-reject-btn"
+                    onClick={() =>
+                      this.handleQuickBookingStatusChange(
+                        viewingQuickBooking._id || viewingQuickBooking.id,
+                        "rejected"
+                      )
+                    }
+                  >
+                    <i className="fas fa-times"></i>
+                    Reject Request
+                  </button>
+                  <button
+                    className="adminpanel-delete-btn"
+                    onClick={() =>
+                      this.handleDeleteQuickBooking(
+                        viewingQuickBooking._id || viewingQuickBooking.id
+                      )
+                    }
+                  >
+                    <i className="fas fa-trash"></i>
+                    Delete
+                  </button>
+                </>
+              )}
+
+              {viewingQuickBooking.status === "rejected" && (
+                <>
+                  <button
+                    className="adminpanel-delete-btn"
+                    onClick={() =>
+                      this.handleDeleteQuickBooking(
+                        viewingQuickBooking._id || viewingQuickBooking.id
+                      )
+                    }
+                  >
+                    <i className="fas fa-trash"></i>
+                    Delete
+                  </button>
+                  <div className="adminpanel-status-message">
+                    <i className="fas fa-info-circle"></i>
+                    This request has been rejected.
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1547,6 +1727,12 @@ class AdminPanel extends Component {
                       viewingSubmission.status.slice(1)
                     : "Pending"}
                 </div>
+                {viewingSubmission.isHold && (
+                  <div className="adminpanel-status-indicator adminpanel-status-held">
+                    <i className="fas fa-eye-slash"></i>
+                    Status: Held (Hidden from public)
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1692,11 +1878,59 @@ class AdminPanel extends Component {
                   </button>
                 </>
               )}
-              {viewingSubmission.status !== "pending" && (
-                <div className="adminpanel-status-message">
-                  <i className="fas fa-info-circle"></i>
-                  This submission has been {viewingSubmission.status}.
-                </div>
+
+              {viewingSubmission.status === "approved" && (
+                <>
+                  <button
+                    className="adminpanel-delete-btn"
+                    onClick={() =>
+                      this.handleDeleteSubmission(
+                        viewingSubmission._id || viewingSubmission.id
+                      )
+                    }
+                  >
+                    <i className="fas fa-trash"></i>
+                    Delete
+                  </button>
+                  <button
+                    className={`adminpanel-hold-btn ${
+                      viewingSubmission.isHold ? "unheld" : "held"
+                    }`}
+                    onClick={() =>
+                      this.handleHoldSubmission(
+                        viewingSubmission._id || viewingSubmission.id,
+                        !viewingSubmission.isHold
+                      )
+                    }
+                  >
+                    <i
+                      className={`fas ${
+                        viewingSubmission.isHold ? "fa-eye" : "fa-eye-slash"
+                      }`}
+                    ></i>
+                    {viewingSubmission.isHold ? "Unhold" : "Hold"}
+                  </button>
+                </>
+              )}
+
+              {viewingSubmission.status === "rejected" && (
+                <>
+                  <button
+                    className="adminpanel-delete-btn"
+                    onClick={() =>
+                      this.handleDeleteSubmission(
+                        viewingSubmission._id || viewingSubmission.id
+                      )
+                    }
+                  >
+                    <i className="fas fa-trash"></i>
+                    Delete
+                  </button>
+                  <div className="adminpanel-status-message">
+                    <i className="fas fa-info-circle"></i>
+                    This submission has been rejected.
+                  </div>
+                </>
               )}
             </div>
           </div>

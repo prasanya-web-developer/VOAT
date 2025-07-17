@@ -1,0 +1,313 @@
+/* Privacy Policy Page Styles */
+.privacypolicy-screen {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.privacypolicy-home-button {
+  position: fixed;
+  top: 2rem;
+  left: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.privacypolicy-home-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.privacypolicy-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8rem 2rem 4rem;
+  width: 100%;
+}
+
+.privacypolicy-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.privacypolicy-header-icon {
+  width: 4rem;
+  height: 4rem;
+  color: #ffd700;
+  margin-bottom: 1rem;
+}
+
+.privacypolicy-title {
+  font-size: 3rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.privacypolicy-subtitle {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.privacypolicy-error-alert {
+  background: rgba(239, 68, 68, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  font-weight: 500;
+}
+
+.privacypolicy-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  padding: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.privacypolicy-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.privacypolicy-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.privacypolicy-section:hover {
+  box-shadow: 0 8px 25px -8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.privacypolicy-section-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.privacypolicy-section-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #4f46e5;
+}
+
+.privacypolicy-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.privacypolicy-section-content {
+  margin-left: 2.5rem;
+}
+
+.privacypolicy-section-content p {
+  color: #4b5563;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.privacypolicy-checkbox-container {
+  margin-top: 1rem;
+}
+
+.privacypolicy-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.privacypolicy-checkbox-label:hover {
+  background: rgba(79, 70, 229, 0.05);
+  border-color: rgba(79, 70, 229, 0.1);
+}
+
+.privacypolicy-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.privacypolicy-checkbox:checked {
+  background: #4f46e5;
+  border-color: #4f46e5;
+}
+
+.privacypolicy-checkbox:checked::after {
+  content: "✓";
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.privacypolicy-checkbox-text {
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.privacypolicy-submit-container {
+  text-align: center;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.privacypolicy-submit-button {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 1.125rem;
+  padding: 1rem 2.5rem;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 280px;
+  box-shadow: 0 4px 15px -3px rgba(79, 70, 229, 0.4);
+}
+
+.privacypolicy-submit-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -8px rgba(79, 70, 229, 0.5);
+}
+
+.privacypolicy-submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.privacypolicy-submit-disabled {
+  background: #9ca3af !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.privacypolicy-submit-note {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 0.75rem;
+  font-weight: 500;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .privacypolicy-container {
+    padding: 6rem 1rem 2rem;
+  }
+
+  .privacypolicy-title {
+    font-size: 2rem;
+  }
+
+  .privacypolicy-subtitle {
+    font-size: 1rem;
+  }
+
+  .privacypolicy-content {
+    padding: 1.5rem;
+  }
+
+  .privacypolicy-section {
+    padding: 1rem;
+  }
+
+  .privacypolicy-section-content {
+    margin-left: 0;
+    margin-top: 1rem;
+  }
+
+  .privacypolicy-home-button {
+    top: 1rem;
+    left: 1rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .privacypolicy-submit-button {
+    min-width: 100%;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .privacypolicy-title {
+    font-size: 1.75rem;
+  }
+
+  .privacypolicy-header-icon {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .privacypolicy-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .privacypolicy-section-title {
+    font-size: 1.125rem;
+  }
+}

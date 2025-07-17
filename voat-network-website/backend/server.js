@@ -200,6 +200,7 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
     portfolioLink: { type: String },
     resumePath: { type: String },
     services: [ServiceSchema],
+    isHold: { type: Boolean, default: false },
     // Portfolio work samples
     works: [
       {
@@ -1172,9 +1173,12 @@ app.get("/api/portfolios", async (req, res) => {
     console.log("in /api/portfolios");
 
     const portfolios = await PortfolioSubmission.aggregate([
-      // Step 1: Find only the approved portfolios
+      // Step 1: Find only the approved portfolios that are not held
       {
-        $match: { status: "approved" },
+        $match: {
+          status: "approved",
+          $or: [{ isHold: { $exists: false } }, { isHold: false }],
+        },
       },
       // Step 2: Sort by date, newest first
       {
@@ -1216,6 +1220,7 @@ app.get("/api/portfolios", async (req, res) => {
           submittedDate: 1,
           updatedDate: 1,
           services: 1,
+          isHold: 1,
         },
       },
     ]);
@@ -1276,6 +1281,142 @@ app.get("/api/portfolios-with-users", async (req, res) => {
   } catch (error) {
     console.error("Error fetching portfolios with user data:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// DELETE - Delete portfolio submission
+app.delete("/api/admin/portfolio-submission/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log("Deleting portfolio submission:", id);
+
+    const submission = await PortfolioSubmission.findById(id);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio submission not found",
+      });
+    }
+
+    // Clean up uploaded files if they exist
+    const filesToDelete = [];
+    if (
+      submission.profileImage &&
+      submission.profileImage.startsWith("/uploads/")
+    ) {
+      filesToDelete.push(submission.profileImage);
+    }
+    if (
+      submission.coverImage &&
+      submission.coverImage.startsWith("/uploads/")
+    ) {
+      filesToDelete.push(submission.coverImage);
+    }
+    if (
+      submission.resumePath &&
+      submission.resumePath.startsWith("/uploads/")
+    ) {
+      filesToDelete.push(submission.resumePath);
+    }
+
+    // Delete work files
+    if (submission.works && submission.works.length > 0) {
+      submission.works.forEach((work) => {
+        if (work.url && work.url.startsWith("/uploads/")) {
+          filesToDelete.push(work.url);
+        }
+      });
+    }
+
+    // Delete service video files
+    if (submission.services && submission.services.length > 0) {
+      submission.services.forEach((service) => {
+        if (service.videos && service.videos.length > 0) {
+          service.videos.forEach((video) => {
+            if (video.url && video.url.startsWith("/uploads/")) {
+              filesToDelete.push(video.url);
+            }
+          });
+        }
+      });
+    }
+
+    // Clean up files from filesystem
+    filesToDelete.forEach((filePath) => {
+      try {
+        const fullPath = path.join(__dirname, filePath.replace(/^\/+/, ""));
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          console.log(`Deleted file: ${fullPath}`);
+        }
+      } catch (err) {
+        console.error(`Error deleting file ${filePath}:`, err);
+      }
+    });
+
+    // Delete the portfolio submission from database
+    await PortfolioSubmission.findByIdAndDelete(id);
+
+    console.log(`Portfolio submission ${id} deleted successfully`);
+
+    res.status(200).json({
+      success: true,
+      message: "Portfolio submission deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting portfolio submission:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete portfolio submission",
+      error: error.message,
+    });
+  }
+});
+
+// PUT - Hold/Unhold portfolio submission
+app.put("/api/admin/portfolio-submission/:id/hold", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isHold } = req.body;
+
+    console.log(
+      `${isHold ? "Holding" : "Unholding"} portfolio submission:`,
+      id
+    );
+
+    const submission = await PortfolioSubmission.findById(id);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio submission not found",
+      });
+    }
+
+    // Add isHold field to the submission
+    submission.isHold = isHold;
+    submission.updatedDate = new Date();
+
+    await submission.save();
+
+    console.log(
+      `Portfolio submission ${id} ${isHold ? "held" : "unheld"} successfully`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Portfolio submission ${
+        isHold ? "held" : "unheld"
+      } successfully`,
+      submission: submission,
+    });
+  } catch (error) {
+    console.error("Error updating hold status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update hold status",
+      error: error.message,
+    });
   }
 });
 
