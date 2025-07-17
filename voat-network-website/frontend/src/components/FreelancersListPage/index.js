@@ -702,6 +702,7 @@ class PortfolioList extends Component {
 
       if (response.ok) {
         portfolioData = await response.json();
+        console.log("API Response - Raw portfolio data:", portfolioData);
 
         portfolioData = portfolioData.map((portfolio) => {
           // Normalize profession using the new robust function
@@ -715,7 +716,13 @@ class PortfolioList extends Component {
             originalProfession: portfolio.profession || portfolio.headline, // Keep original for reference
           };
         });
+
+        console.log(
+          "API Response - After profession normalization:",
+          portfolioData.length
+        );
       } else {
+        console.log("API call failed, falling back to localStorage");
         let approvedPortfolios = JSON.parse(
           localStorage.getItem("approvedSubmissions") || "[]"
         );
@@ -735,28 +742,53 @@ class PortfolioList extends Component {
             originalProfession: portfolio.profession || portfolio.headline,
           };
         });
+
+        console.log("LocalStorage - Raw portfolio data:", portfolioData.length);
       }
 
-      // Filter out portfolios with null profession (unmatched/invalid professions)
-      portfolioData = portfolioData.filter(
-        (portfolio) => portfolio.profession !== null
-      );
+      // CRITICAL: Filter out portfolios with null profession AND held portfolios
+      portfolioData = portfolioData.filter((portfolio) => {
+        // Check if profession is valid
+        if (portfolio.profession === null) {
+          console.log(
+            `Filtering out portfolio with invalid profession: ${portfolio.name}`
+          );
+          return false;
+        }
+
+        // Check if portfolio is held (should be hidden from public view)
+        if (portfolio.isHold === true) {
+          console.log(`Filtering out held portfolio: ${portfolio.name}`);
+          return false;
+        }
+
+        return true;
+      });
+
+      console.log("After filtering (profession + hold):", portfolioData.length);
 
       const uniquePortfolios = this.removeDuplicatePortfolios(portfolioData);
+      console.log("After removing duplicates:", uniquePortfolios.length);
+
       await this.fetchUserData(uniquePortfolios);
 
       this.setState({
         portfolios: uniquePortfolios,
         isLoading: false,
       });
+
+      console.log("Final portfolios set in state:", uniquePortfolios.length);
     } catch (error) {
       console.error("Error fetching portfolios:", error);
 
+      // FALLBACK: Apply the same filtering logic to localStorage data
       const approvedPortfolios = JSON.parse(
         localStorage.getItem("approvedSubmissions") || "[]"
       );
 
       if (approvedPortfolios.length > 0) {
+        console.log("Error fallback - Processing localStorage data");
+
         const portfolioData = approvedPortfolios
           .map((portfolio) => {
             const normalizedProfession = this.normalizeProfession(
@@ -769,7 +801,26 @@ class PortfolioList extends Component {
               originalProfession: portfolio.profession || portfolio.headline,
             };
           })
-          .filter((portfolio) => portfolio.profession !== null);
+          .filter((portfolio) => {
+            // CRITICAL: Apply the same filtering logic in error fallback
+            if (portfolio.profession === null) {
+              console.log(
+                `Error fallback - Filtering out portfolio with invalid profession: ${portfolio.name}`
+              );
+              return false;
+            }
+
+            if (portfolio.isHold === true) {
+              console.log(
+                `Error fallback - Filtering out held portfolio: ${portfolio.name}`
+              );
+              return false;
+            }
+
+            return true;
+          });
+
+        console.log("Error fallback - After filtering:", portfolioData.length);
 
         const uniquePortfolios = this.removeDuplicatePortfolios(portfolioData);
 
@@ -777,6 +828,11 @@ class PortfolioList extends Component {
           portfolios: uniquePortfolios,
           isLoading: false,
         });
+
+        console.log(
+          "Error fallback - Final portfolios:",
+          uniquePortfolios.length
+        );
       } else {
         this.setState({
           error: "Failed to load portfolios. Please try again later.",

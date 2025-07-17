@@ -1420,6 +1420,43 @@ app.put("/api/admin/portfolio-submission/:id/hold", async (req, res) => {
   }
 });
 
+app.get("/api/admin/migrate-hold-field", async (req, res) => {
+  try {
+    console.log("Starting migration to add isHold field...");
+
+    // Add isHold field to existing portfolio submissions that don't have it
+    const result = await PortfolioSubmission.updateMany(
+      { isHold: { $exists: false } },
+      { $set: { isHold: false } }
+    );
+
+    console.log(
+      `Migration completed. Modified ${result.modifiedCount} documents.`
+    );
+
+    // Also log some sample documents to verify
+    const sampleDocs = await PortfolioSubmission.find(
+      {},
+      { name: 1, isHold: 1, status: 1 }
+    ).limit(5);
+    console.log("Sample documents after migration:", sampleDocs);
+
+    res.status(200).json({
+      success: true,
+      message: "Migration completed successfully",
+      modifiedCount: result.modifiedCount,
+      sampleDocs: sampleDocs,
+    });
+  } catch (error) {
+    console.error("Migration error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Migration failed",
+      details: error.message,
+    });
+  }
+});
+
 // Quick Booking Routes
 
 app.use("/api/quick-booking*", (req, res, next) => {
