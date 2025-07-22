@@ -35,11 +35,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// andler for OPTIONS requests
+// Handler for OPTIONS requests
 app.options("*", cors(corsOptions));
 app.use(bodyParser.json());
 
-// Add this debugging middleware after CORS setup
+//debugging middleware
 app.use((req, res, next) => {
   if (req.url.includes("quick-booking")) {
     console.log(`=== QUICK BOOKING ROUTE DEBUG ===`);

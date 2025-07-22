@@ -143,7 +143,7 @@ class Footer extends Component {
                 <div className="icon-circle">
                   <FaMapMarkerAlt />
                 </div>
-                <p>Vishakapatnam, Andhra Pradesh, 531019</p>
+                <p>Vishakapatnam, Andhra Pradesh, 531019</p>
               </div>
             </a>
           </div>
@@ -228,6 +228,15 @@ class Footer extends Component {
         <hr className="footer-hr" />
 
         <div className="copy-right-container">
+          <div className="footer-links-container">
+            <Link to="/privacy-policy" className="footer-bottom-link">
+              Privacy Policy
+            </Link>
+            <span className="link-separator"> | </span>
+            <Link to="/terms" className="footer-bottom-link">
+              Terms and Conditions
+            </Link>
+          </div>
           <p>© 2024 VOAT Network. All rights reserved.</p>
         </div>
       </div>

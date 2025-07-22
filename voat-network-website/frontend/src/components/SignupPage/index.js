@@ -85,6 +85,7 @@ class SignupPage extends Component {
     isSubmitting: false,
     redirectToLogin: false,
     showWelcomeCard: false,
+    agreeToTerms: false,
   };
 
   // Backend URLs
@@ -149,8 +150,10 @@ class SignupPage extends Component {
   };
 
   handleInputChange = (e) => {
-    const { name, value } = e.target;
-    this.setState({ [name]: value });
+    const { name, value, type, checked } = e.target;
+    this.setState({
+      [name]: type === "checkbox" ? checked : value,
+    });
   };
 
   togglePasswordVisibility = (field) => {
@@ -195,7 +198,13 @@ class SignupPage extends Component {
       errors.confirmPassword = "Passwords don't match";
     }
 
+    if (!this.state.agreeToTerms) {
+      errors.agreeToTerms =
+        "Please agree to the Terms & Conditions and Privacy Policy";
+    }
+
     this.setState({ errors });
+
     return Object.keys(errors).length === 0;
   };
 
@@ -204,6 +213,23 @@ class SignupPage extends Component {
 
     if (this.validateForm()) {
       this.setState({ isSubmitting: true });
+
+      this.setState({
+        errors: {
+          ...this.state.errors,
+          general: "Registration failed. Please try again.",
+        },
+        isSubmitting: false,
+      });
+
+      setTimeout(() => {
+        this.setState((prevState) => ({
+          errors: {
+            ...prevState.errors,
+            general: null,
+          },
+        }));
+      }, 10000);
 
       try {
         // Get the current backend URL
@@ -317,7 +343,7 @@ class SignupPage extends Component {
 
     // Redirect to login page if registration was successful
     if (redirectToLogin) {
-      return <Navigate to="/privacy-policy" />;
+      return <Navigate to="/login" />;
     }
 
     return (
@@ -329,10 +355,6 @@ class SignupPage extends Component {
 
         <div className="register-container">
           <h2 className="register-title">Create your account</h2>
-
-          {errors.general && (
-            <div className="register-error-alert">{errors.general}</div>
-          )}
 
           <div className="register-form-wrapper">
             <form className="register-form" onSubmit={this.handleSubmit}>
@@ -513,6 +535,33 @@ class SignupPage extends Component {
                 </div>
               </div>
 
+              {/* Terms & Conditions Checkbox */}
+
+              <div className="register-input-group">
+                <label className="register-checkbox-label">
+                  <input
+                    type="checkbox"
+                    name="agreeToTerms"
+                    checked={this.state.agreeToTerms}
+                    onChange={this.handleInputChange}
+                    className="register-checkbox"
+                  />
+                  <span className="register-checkbox-text">
+                    I agree to the{" "}
+                    <Link to="/terms" className="register-link">
+                      Terms & Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/privacy-policy" className="register-link">
+                      Privacy Policy
+                    </Link>
+                  </span>
+                </label>
+                {errors.agreeToTerms && (
+                  <p className="register-input-error">{errors.agreeToTerms}</p>
+                )}
+              </div>
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -521,6 +570,9 @@ class SignupPage extends Component {
               >
                 {isSubmitting ? "Creating account..." : "Register"}
               </button>
+              {errors.general && (
+                <div className="register-error-alert">{errors.general}</div>
+              )}
             </form>
 
             {/* Login Link */}

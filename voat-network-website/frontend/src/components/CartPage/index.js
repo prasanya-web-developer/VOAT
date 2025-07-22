@@ -993,7 +993,7 @@ class CartSidebar extends Component {
                     onClick={onClose}
                     disabled={isCheckingOut}
                   >
-                    <Link to="/services"> Continue Shopping</Link>
+                    <Link to="/portfolio-list"> Continue Shopping</Link>
                   </button>
                 </div>
                 {cartItems.length > 1 && (

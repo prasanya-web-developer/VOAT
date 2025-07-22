@@ -297,6 +297,14 @@
   color: #4b5563;
 }
 
+.login-error-alert {
+  color: #dc2626;
+  margin-top: 0.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
 @media (max-width: 640px) {
   .notification-container {
     left: 1rem;

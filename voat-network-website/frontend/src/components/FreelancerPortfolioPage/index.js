@@ -1676,7 +1676,7 @@ class MyPortfolio extends Component {
                                 ₹{option.price}
                               </div>
                               <div className="option-delivery">
-                                <span className="delivery-icon">⚡</span>
+                                <span className="delivery-icon">📆</span>
                                 <span className="delivery-text">
                                   {option.timeFrame}
                                 </span>

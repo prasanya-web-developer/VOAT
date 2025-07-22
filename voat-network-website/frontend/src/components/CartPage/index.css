@@ -805,9 +805,9 @@
   position: relative;
 }
 
-.action-btn:disabled .btn-icon {
+/* .action-btn:disabled .btn-icon {
   animation: spin 1s linear infinite;
-}
+} */
 
 /* Checkbox styling enhancements */
 .cartpage-checkbox:focus,

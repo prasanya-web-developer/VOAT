@@ -30,6 +30,7 @@ class NavBar extends Component {
     searchQuery: "",
     activeMenu: "",
     cartSidebarOpen: false,
+    currentMessageIndex: 0,
   };
 
   // Backend URLs - will try both environments
@@ -66,8 +67,11 @@ class NavBar extends Component {
     // Check which backend is available
     this.checkBackendAvailability();
 
-    // Check initial login status without showing notifications
+    // Check initial login stat
+    // us without showing notifications
     this.loadUserData();
+
+    this.startCarousel();
 
     // Set up interval to check for login status changes
     this.loginCheckInterval = setInterval(
@@ -99,6 +103,16 @@ class NavBar extends Component {
     } else {
       this.setState({ activeMenu: "" });
     }
+  };
+
+  startCarousel = () => {
+    this.carouselInterval = setInterval(() => {
+      const messages = this.getSpecialOfferText();
+      this.setState((prevState) => ({
+        currentMessageIndex:
+          (prevState.currentMessageIndex + 1) % messages.length,
+      }));
+    }, 4000); // Change message every 4 seconds (increased from 3)
   };
 
   // Get initials from user name
@@ -342,6 +356,7 @@ class NavBar extends Component {
     clearTimeout(this.redirectTimer);
     clearTimeout(this.welcomeMessageTimer);
     clearInterval(this.loginCheckInterval);
+    clearInterval(this.carouselInterval);
   }
 
   // Method to check login status periodically
@@ -621,12 +636,19 @@ class NavBar extends Component {
 
   getSpecialOfferText = () => {
     const { user } = this.state;
-    if (!user) return "🔥 Special Launch Offer - 30% off on all services!";
 
-    // Check user role to determine the message - handle exact match with possible formats
+    if (!user) {
+      return [
+        "🔥 Special Launch Offer - 30% off on all services!",
+        "📅 Book your consultation today and save big!",
+        "🚀 Join thousands of satisfied customers!",
+        "💎 Premium services at unbeatable prices!",
+      ];
+    }
+
+    // Check user role to determine the messages
     const role = user.role || "";
 
-    // Check for freelancer roles with various possible formats
     if (
       role === "freelancer" ||
       role === "Freelancer" ||
@@ -636,9 +658,19 @@ class NavBar extends Component {
       role.toLowerCase().includes("freelancer") ||
       role.toLowerCase().includes("service provider")
     ) {
-      return "🚀 Start your freelancing journey today with VOAT!";
+      return [
+        "🚀 Start your freelancing journey today with VOAT!",
+        "💼 Grow your business with our platform!",
+        "🌟 Connect with clients worldwide!",
+        "📈 Boost your freelance career now!",
+      ];
     } else {
-      return "🔥 Special Launch Offer - 30% off on all services!";
+      return [
+        "🔥 Special Launch Offer - 30% off on all services!",
+        "📅 Book your consultation today and save big!",
+        "🚀 Join thousands of satisfied customers!",
+        "💎 Premium services at unbeatable prices!",
+      ];
     }
   };
 
@@ -718,7 +750,18 @@ class NavBar extends Component {
         <header className={showSpecialOffer ? "" : "navbar-sticky"}>
           <div className="navbar-container">
             <div className="navbar-special-offer">
-              {this.getSpecialOfferText()}
+              <div className="carousel-container">
+                {this.getSpecialOfferText().map((message, index) => (
+                  <div
+                    key={index}
+                    className={`carousel-message ${
+                      index === this.state.currentMessageIndex ? "active" : ""
+                    }`}
+                  >
+                    {message}
+                  </div>
+                ))}
+              </div>
             </div>
             <nav
               className={`navbar ${showSpecialOffer ? "" : "navbar-no-offer"}`}

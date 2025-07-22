@@ -170,6 +170,15 @@ class LoginPage extends React.Component {
   handleSubmit = async (e) => {
     e.preventDefault();
 
+    setTimeout(() => {
+      this.setState((prevState) => ({
+        errors: {
+          ...prevState.errors,
+          general: null,
+        },
+      }));
+    }, 10000);
+
     if (this.validateForm()) {
       this.setState({ isSubmitting: true });
 
@@ -311,10 +320,6 @@ class LoginPage extends React.Component {
         <div className="login-container">
           <h2 className="login-title">Login in to your account</h2>
 
-          {errors.general && (
-            <div className="login-error-alert">{errors.general}</div>
-          )}
-
           <div className="login-form-wrapper">
             <form className="login-form" onSubmit={this.handleSubmit}>
               {/* Email Input */}
@@ -374,6 +379,10 @@ class LoginPage extends React.Component {
               >
                 {isSubmitting ? "Logging in..." : "Login"}
               </button>
+
+              {errors.general && (
+                <div className="login-error-alert">{errors.general}</div>
+              )}
             </form>
 
             {/* Register Link */}

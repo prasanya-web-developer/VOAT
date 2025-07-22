@@ -1,58 +1,41 @@
 import { Component } from "react";
 import { Link } from "react-router-dom";
 import { Navigate } from "react-router-dom";
-import { Home, Shield, Eye, Lock, Database, UserCheck } from "lucide-react";
+import {
+  Home,
+  Shield,
+  Eye,
+  Lock,
+  Database,
+  UserCheck,
+  Cookie,
+} from "lucide-react";
 import "./index.css";
 
 class PrivacyPolicyPage extends Component {
   state = {
-    checkedItems: {
-      dataCollection: false,
-      dataUsage: false,
-      dataSharing: false,
-      dataProtection: false,
-      userRights: false,
-      cookiePolicy: false,
-      termsConditions: false,
-    },
-    allChecked: false,
+    acceptedPolicy: false,
     isSubmitting: false,
     redirectToLogin: false,
     errors: {},
   };
 
-  // Check if all items are checked
-  checkAllItems = () => {
-    const { checkedItems } = this.state;
-    const allChecked = Object.values(checkedItems).every(
-      (item) => item === true
-    );
-    this.setState({ allChecked });
-  };
-
   // Handle checkbox change
-  handleCheckboxChange = (itemName) => {
-    this.setState(
-      (prevState) => ({
-        checkedItems: {
-          ...prevState.checkedItems,
-          [itemName]: !prevState.checkedItems[itemName],
-        },
-      }),
-      () => {
-        this.checkAllItems();
-      }
-    );
+  handleCheckboxChange = () => {
+    this.setState((prevState) => ({
+      acceptedPolicy: !prevState.acceptedPolicy,
+      errors: {}, // Clear errors when checkbox is toggled
+    }));
   };
 
   // Handle form submission
   handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!this.state.allChecked) {
+    if (!this.state.acceptedPolicy) {
       this.setState({
         errors: {
-          general: "Please accept all privacy policy terms to continue.",
+          general: "Please accept the privacy policy terms to continue.",
         },
       });
       return;
@@ -63,9 +46,6 @@ class PrivacyPolicyPage extends Component {
     try {
       // Get user data from localStorage
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
-
-      // You can add API call here to update user's privacy policy acceptance
-      // For now, we'll just simulate the process
 
       // Simulate API call delay
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -93,7 +73,7 @@ class PrivacyPolicyPage extends Component {
   };
 
   render() {
-    const { checkedItems, allChecked, isSubmitting, redirectToLogin, errors } =
+    const { acceptedPolicy, isSubmitting, redirectToLogin, errors } =
       this.state;
 
     // Redirect to login page if privacy policy was accepted
@@ -124,36 +104,54 @@ class PrivacyPolicyPage extends Component {
 
           <div className="privacypolicy-content">
             <form onSubmit={this.handleSubmit} className="privacypolicy-form">
+              {/* Introduction */}
+              <div className="privacypolicy-section">
+                <div className="privacypolicy-section-header">
+                  <Shield className="privacypolicy-section-icon" />
+                  <h3 className="privacypolicy-section-title">Introduction</h3>
+                </div>
+                <div className="privacypolicy-section-content">
+                  <p>
+                    <strong>Last updated on Jun 5 2025</strong>
+                  </p>
+                  <p>
+                    This privacy policy sets out how VOAT NETWORK PRIVATE
+                    LIMITED uses and protects any information that you give VOAT
+                    NETWORK PRIVATE LIMITED when you visit their website and/or
+                    agree to purchase from them.
+                  </p>
+                  <p>
+                    VOAT NETWORK PRIVATE LIMITED is committed to ensuring that
+                    your privacy is protected. Should we ask you to provide
+                    certain information by which you can be identified when
+                    using this website, then you can be assured that it will
+                    only be used in accordance with this privacy statement.
+                  </p>
+                </div>
+              </div>
+
               {/* Data Collection */}
               <div className="privacypolicy-section">
                 <div className="privacypolicy-section-header">
                   <Database className="privacypolicy-section-icon" />
                   <h3 className="privacypolicy-section-title">
-                    Data Collection
+                    Information We Collect
                   </h3>
                 </div>
                 <div className="privacypolicy-section-content">
-                  <p>
-                    We collect information you provide directly to us, such as
-                    when you create an account, update your profile, or contact
-                    us. This includes your name, email address, phone number,
-                    profession, and any other information you choose to provide.
-                  </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.dataCollection}
-                        onChange={() =>
-                          this.handleCheckboxChange("dataCollection")
-                        }
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I understand and accept the data collection practices
-                      </span>
-                    </label>
-                  </div>
+                  <p>We may collect the following information:</p>
+                  <ul>
+                    <li>Name</li>
+                    <li>Contact information including email address</li>
+                    <li>
+                      Demographic information such as postcode, preferences and
+                      interests, if required
+                    </li>
+                    <li>
+                      Other information relevant to customer surveys and/or
+                      offers
+                    </li>
+                  </ul>
                 </div>
               </div>
 
@@ -161,191 +159,156 @@ class PrivacyPolicyPage extends Component {
               <div className="privacypolicy-section">
                 <div className="privacypolicy-section-header">
                   <Eye className="privacypolicy-section-icon" />
-                  <h3 className="privacypolicy-section-title">Data Usage</h3>
-                </div>
-                <div className="privacypolicy-section-content">
-                  <p>
-                    We use the information we collect to provide, maintain, and
-                    improve our services, process transactions, send
-                    communications, and protect VOAT Network and our users. We
-                    may also use your information to personalize your experience
-                    and show relevant content.
-                  </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.dataUsage}
-                        onChange={() => this.handleCheckboxChange("dataUsage")}
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I agree to the data usage practices described above
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Data Sharing */}
-              <div className="privacypolicy-section">
-                <div className="privacypolicy-section-header">
-                  <UserCheck className="privacypolicy-section-icon" />
-                  <h3 className="privacypolicy-section-title">Data Sharing</h3>
-                </div>
-                <div className="privacypolicy-section-content">
-                  <p>
-                    We do not sell, trade, or otherwise transfer your personal
-                    information to third parties without your consent, except as
-                    described in this policy. We may share information with
-                    trusted partners who assist us in operating our platform,
-                    conducting business, or serving users.
-                  </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.dataSharing}
-                        onChange={() =>
-                          this.handleCheckboxChange("dataSharing")
-                        }
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I understand the data sharing policies
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Data Protection */}
-              <div className="privacypolicy-section">
-                <div className="privacypolicy-section-header">
-                  <Lock className="privacypolicy-section-icon" />
                   <h3 className="privacypolicy-section-title">
-                    Data Protection
+                    How We Use Your Information
                   </h3>
                 </div>
                 <div className="privacypolicy-section-content">
                   <p>
-                    We implement appropriate security measures to protect your
-                    personal information against unauthorized access,
-                    alteration, disclosure, or destruction. We use SSL
-                    encryption, secure servers, and regular security audits to
-                    safeguard your data.
+                    We require this information to understand your needs and
+                    provide you with a better service, and in particular for the
+                    following reasons:
                   </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.dataProtection}
-                        onChange={() =>
-                          this.handleCheckboxChange("dataProtection")
-                        }
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I acknowledge the data protection measures
-                      </span>
-                    </label>
-                  </div>
+                  <ul>
+                    <li>Internal record keeping</li>
+                    <li>
+                      We may use the information to improve our products and
+                      services
+                    </li>
+                    <li>
+                      We may periodically send promotional emails about new
+                      products, special offers or other information which we
+                      think you may find interesting using the email address
+                      which you have provided
+                    </li>
+                    <li>
+                      From time to time, we may also use your information to
+                      contact you for market research purposes. We may contact
+                      you by email, phone, fax or mail
+                    </li>
+                    <li>
+                      We may use the information to customise the website
+                      according to your interests
+                    </li>
+                  </ul>
                 </div>
               </div>
 
-              {/* User Rights */}
+              {/* Data Security */}
               <div className="privacypolicy-section">
                 <div className="privacypolicy-section-header">
-                  <UserCheck className="privacypolicy-section-icon" />
-                  <h3 className="privacypolicy-section-title">Your Rights</h3>
+                  <Lock className="privacypolicy-section-icon" />
+                  <h3 className="privacypolicy-section-title">Data Security</h3>
                 </div>
                 <div className="privacypolicy-section-content">
                   <p>
-                    You have the right to access, update, or delete your
-                    personal information. You can also object to processing,
-                    request data portability, and withdraw consent at any time.
-                    To exercise these rights, please contact us through our
-                    support channels.
+                    We are committed to ensuring that your information is
+                    secure. In order to prevent unauthorised access or
+                    disclosure we have put in suitable measures.
                   </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.userRights}
-                        onChange={() => this.handleCheckboxChange("userRights")}
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I understand my rights regarding my personal data
-                      </span>
-                    </label>
-                  </div>
                 </div>
               </div>
 
               {/* Cookie Policy */}
               <div className="privacypolicy-section">
                 <div className="privacypolicy-section-header">
-                  <Database className="privacypolicy-section-icon" />
-                  <h3 className="privacypolicy-section-title">Cookie Policy</h3>
-                </div>
-                <div className="privacypolicy-section-content">
-                  <p>
-                    We use cookies and similar technologies to enhance your
-                    experience, analyze usage patterns, and personalize content.
-                    You can control cookie settings through your browser
-                    preferences, though some features may not function properly
-                    without cookies.
-                  </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.cookiePolicy}
-                        onChange={() =>
-                          this.handleCheckboxChange("cookiePolicy")
-                        }
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I accept the use of cookies as described
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Terms and Conditions */}
-              <div className="privacypolicy-section">
-                <div className="privacypolicy-section-header">
-                  <Shield className="privacypolicy-section-icon" />
+                  <Cookie className="privacypolicy-section-icon" />
                   <h3 className="privacypolicy-section-title">
-                    Terms and Conditions
+                    How We Use Cookies
                   </h3>
                 </div>
                 <div className="privacypolicy-section-content">
                   <p>
-                    By using VOAT Network, you agree to our Terms of Service and
-                    this Privacy Policy. These terms govern your use of our
-                    platform and services. We may update these terms from time
-                    to time, and continued use constitutes acceptance of any
-                    changes.
+                    A cookie is a small file which asks permission to be placed
+                    on your computer's hard drive. Once you agree, the file is
+                    added and the cookie helps analyze web traffic or lets you
+                    know when you visit a particular site. Cookies allow web
+                    applications to respond to you as an individual. The web
+                    application can tailor its operations to your needs, likes
+                    and dislikes by gathering and remembering information about
+                    your preferences.
                   </p>
-                  <div className="privacypolicy-checkbox-container">
-                    <label className="privacypolicy-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={checkedItems.termsConditions}
-                        onChange={() =>
-                          this.handleCheckboxChange("termsConditions")
-                        }
-                        className="privacypolicy-checkbox"
-                      />
-                      <span className="privacypolicy-checkbox-text">
-                        I agree to the Terms and Conditions
-                      </span>
-                    </label>
-                  </div>
+                  <p>
+                    We use traffic log cookies to identify which pages are being
+                    used. This helps us analyze data about webpage traffic and
+                    improve our website in order to tailor it to customer needs.
+                    We only use this information for statistical analysis
+                    purposes and then the data is removed from the system.
+                  </p>
+                  <p>
+                    You can choose to accept or decline cookies. Most web
+                    browsers automatically accept cookies, but you can usually
+                    modify your browser setting to decline cookies if you
+                    prefer. This may prevent you from taking full advantage of
+                    the website.
+                  </p>
+                </div>
+              </div>
+
+              {/* Personal Information Control */}
+              <div className="privacypolicy-section">
+                <div className="privacypolicy-section-header">
+                  <UserCheck className="privacypolicy-section-icon" />
+                  <h3 className="privacypolicy-section-title">
+                    Controlling Your Personal Information
+                  </h3>
+                </div>
+                <div className="privacypolicy-section-content">
+                  <p>
+                    You may choose to restrict the collection or use of your
+                    personal information in the following ways:
+                  </p>
+                  <ul>
+                    <li>
+                      Whenever you are asked to fill in a form on the website,
+                      look for the box that you can click to indicate that you
+                      do not want the information to be used by anybody for
+                      direct marketing purposes
+                    </li>
+                    <li>
+                      If you have previously agreed to us using your personal
+                      information for direct marketing purposes, you may change
+                      your mind at any time by writing to or emailing us at
+                      admin@voatnetwork.in
+                    </li>
+                  </ul>
+                  <p>
+                    We will not sell, distribute or lease your personal
+                    information to third parties unless we have your permission
+                    or are required by law to do so. We may use your personal
+                    information to send you promotional information about third
+                    parties which we think you may find interesting if you tell
+                    us that you wish this to happen.
+                  </p>
+                  <p>
+                    If you believe that any information we are holding on you is
+                    incorrect or incomplete, please write to 13-68, RRV PURAM-
+                    69 WARD, Revenue Ward 69 Visakhapatnam Visakhapatnam ANDHRA
+                    PRADESH 531019 or contact us at 7799770919 or
+                    admin@voatnetwork.in as soon as possible. We will promptly
+                    correct any information found to be incorrect.
+                  </p>
+                </div>
+              </div>
+
+              {/* Single Acceptance Checkbox */}
+              <div className="privacypolicy-acceptance-section">
+                <div className="privacypolicy-checkbox-container">
+                  <label className="privacypolicy-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={acceptedPolicy}
+                      onChange={this.handleCheckboxChange}
+                      className="privacypolicy-checkbox"
+                    />
+                    <span className="privacypolicy-checkbox-text">
+                      I have read and agree to all the terms outlined in this
+                      Privacy Policy, including data collection, usage, security
+                      practices, cookie policy, and personal information
+                      control. I understand my rights and consent to the
+                      processing of my personal information as described above.
+                    </span>
+                  </label>
                 </div>
               </div>
 
@@ -354,18 +317,18 @@ class PrivacyPolicyPage extends Component {
                 <button
                   type="submit"
                   className={`privacypolicy-submit-button ${
-                    !allChecked ? "privacypolicy-submit-disabled" : ""
+                    !acceptedPolicy ? "privacypolicy-submit-disabled" : ""
                   }`}
-                  disabled={!allChecked || isSubmitting}
+                  disabled={!acceptedPolicy || isSubmitting}
                 >
                   {isSubmitting
                     ? "Processing..."
                     : "Accept Privacy Policy & Continue"}
                 </button>
 
-                {!allChecked && (
+                {!acceptedPolicy && (
                   <p className="privacypolicy-submit-note">
-                    Please accept all terms above to continue
+                    Please accept the privacy policy terms to continue
                   </p>
                 )}
               </div>

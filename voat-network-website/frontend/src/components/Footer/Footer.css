@@ -166,9 +166,11 @@
 }
 
 /* Copyright Section */
-
 .copy-right-container {
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
   padding: 15px 0;
   animation: fadeIn 1s ease-out 0.6s both;
 }
@@ -181,8 +183,51 @@
   letter-spacing: 0.5px;
 }
 
+.privacy-policy-link {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.5px;
+  transition: color 0.3s ease;
+}
+
+.privacy-policy-link:hover {
+  color: #3b82f6;
+}
+
 .footer-links {
   text-decoration: none;
+}
+
+.footer-links-container {
+  display: flex;
+  align-items: center;
+}
+
+.footer-bottom-link {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.5px;
+  transition: color 0.3s ease;
+}
+
+.footer-bottom-link:hover {
+  color: #3b82f6;
+}
+
+.link-separator {
+  color: #94a3b8;
+  margin: 0 8px;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .footer-links-container {
+    margin-bottom: 10px;
+  }
 }
 
 @keyframes fadeInUp {
@@ -248,6 +293,12 @@
 
   .logo-about-container {
     margin-bottom: 0;
+  }
+
+  .copy-right-container {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
   }
 
   .copy-right-container p {
