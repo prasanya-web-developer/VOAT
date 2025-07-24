@@ -225,6 +225,8 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    isRecommended: { type: Boolean, default: false },
+    isRecommended: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -1453,6 +1455,50 @@ app.get("/api/admin/migrate-hold-field", async (req, res) => {
       success: false,
       error: "Migration failed",
       details: error.message,
+    });
+  }
+});
+
+// PUT - Toggle recommended status for portfolio submission
+app.put("/api/admin/portfolio-submission/:id/recommend", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isRecommended } = req.body;
+
+    console.log(
+      `${isRecommended ? "Adding to" : "Removing from"} recommended:`,
+      id
+    );
+
+    const submission = await PortfolioSubmission.findById(id);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio submission not found",
+      });
+    }
+
+    submission.isRecommended = isRecommended;
+    submission.updatedDate = new Date();
+    await submission.save();
+
+    console.log(
+      `Portfolio ${id} recommendation status updated to ${isRecommended}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Portfolio ${
+        isRecommended ? "added to" : "removed from"
+      } recommended successfully`,
+      submission: submission,
+    });
+  } catch (error) {
+    console.error("Error updating recommendation status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update recommendation status",
+      error: error.message,
     });
   }
 });

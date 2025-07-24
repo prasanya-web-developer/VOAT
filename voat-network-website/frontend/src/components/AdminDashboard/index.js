@@ -11,8 +11,10 @@ class AdminPanel extends Component {
     loginError: "",
     portfolioSubmissions: [],
     quickBookings: [],
+    recommendedProfiles: [], // New state for recommended profiles
     viewingSubmission: null,
     viewingQuickBooking: null,
+    viewingRecommendedProfile: null, // New state for viewing recommended profile
     isLoading: true,
     baseUrl: "https://voat.onrender.com",
     activeTab: "portfolios", // New state for tab management
@@ -28,6 +30,10 @@ class AdminPanel extends Component {
     quickBookingSearchTerm: "",
     quickBookingStatusFilter: "all",
     quickBookingSortBy: "newest",
+
+    // Recommended profiles specific states
+    recommendedSearchTerm: "",
+    recommendedSortBy: "newest",
   };
 
   componentDidMount() {
@@ -35,6 +41,7 @@ class AdminPanel extends Component {
     if (this.state.isAuthenticated) {
       this.fetchPortfolioSubmissions();
       this.fetchQuickBookings();
+      this.fetchRecommendedProfiles();
     }
   }
 
@@ -95,6 +102,7 @@ class AdminPanel extends Component {
       this.setState({ isAuthenticated: true, isLoading: false }, () => {
         this.fetchPortfolioSubmissions();
         this.fetchQuickBookings();
+        this.fetchRecommendedProfiles();
       });
     } else {
       this.setState({ isLoading: false });
@@ -123,6 +131,7 @@ class AdminPanel extends Component {
         () => {
           this.fetchPortfolioSubmissions();
           this.fetchQuickBookings();
+          this.fetchRecommendedProfiles();
         }
       );
     } else {
@@ -133,6 +142,186 @@ class AdminPanel extends Component {
   handleLogout = () => {
     localStorage.removeItem("adminData");
     this.setState({ isAuthenticated: false });
+  };
+
+  // Fetch Recommended Profiles (All approved portfolios)
+  fetchRecommendedProfiles = async () => {
+    try {
+      this.setState({ isLoading: true });
+
+      console.log(
+        "Fetching recommended profiles from:",
+        `${this.state.baseUrl}/api/portfolios`
+      );
+
+      const response = await fetch(`${this.state.baseUrl}/api/portfolios`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      });
+
+      console.log("Recommended profiles response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Recommended profiles fetch error:", errorText);
+        throw new Error(
+          `HTTP error! status: ${response.status} - ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("Fetched recommended profiles:", data);
+
+      // Add isRecommended field to each profile (default false)
+      const profilesWithRecommendedStatus = data.map((profile) => ({
+        ...profile,
+        isRecommended: profile.isRecommended || false,
+      }));
+
+      this.setState({
+        recommendedProfiles: Array.isArray(profilesWithRecommendedStatus)
+          ? profilesWithRecommendedStatus
+          : [],
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error("Error fetching recommended profiles:", error);
+      this.setState({
+        recommendedProfiles: [],
+        isLoading: false,
+      });
+
+      // Optional: Show error notification
+      alert(`Failed to fetch recommended profiles: ${error.message}`);
+    }
+  };
+
+  // Handle Add/Remove from recommended
+  handleToggleRecommended = async (profileId, isCurrentlyRecommended) => {
+    const action = isCurrentlyRecommended ? "remove from" : "add to";
+    if (
+      !window.confirm(
+        `Are you sure you want to ${action} VOAT recommended profiles?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      this.setState({ isLoading: true });
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/portfolio-submission/${profileId}/recommend`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ isRecommended: !isCurrentlyRecommended }),
+        }
+      );
+
+      if (!response.ok)
+        throw new Error(`Failed to ${action} recommended profiles`);
+
+      // Update the profile in the state
+      const updatedProfiles = this.state.recommendedProfiles.map((profile) =>
+        profile._id === profileId || profile.id === profileId
+          ? { ...profile, isRecommended: !isCurrentlyRecommended }
+          : profile
+      );
+
+      // Also update viewing profile if it's open
+      let updatedViewingProfile = this.state.viewingRecommendedProfile;
+      if (
+        updatedViewingProfile &&
+        (updatedViewingProfile._id === profileId ||
+          updatedViewingProfile.id === profileId)
+      ) {
+        updatedViewingProfile = {
+          ...updatedViewingProfile,
+          isRecommended: !isCurrentlyRecommended,
+        };
+      }
+
+      this.setState({
+        recommendedProfiles: updatedProfiles,
+        viewingRecommendedProfile: updatedViewingProfile,
+        isLoading: false,
+      });
+
+      alert(
+        `Profile ${
+          isCurrentlyRecommended ? "removed from" : "added to"
+        } VOAT recommended successfully!`
+      );
+    } catch (error) {
+      console.error(`Error ${action} recommended:`, error);
+      this.setState({ isLoading: false });
+      alert(`Failed to ${action} recommended. Please try again.`);
+    }
+  };
+
+  // Handle View Recommended Profile
+  handleViewRecommendedProfile = async (profile) => {
+    console.log("View recommended profile clicked for:", profile);
+
+    try {
+      // For recommended profiles, we already have most data, but let's fetch fresh data if needed
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/portfolio-submission/${
+          profile._id || profile.id
+        }`
+      );
+
+      let detailedProfile = profile;
+
+      if (response.ok) {
+        const data = await response.json();
+        detailedProfile = { ...data, isRecommended: profile.isRecommended };
+        console.log("Detailed recommended profile data:", detailedProfile);
+      } else {
+        console.warn("Failed to fetch detailed profile, using original data");
+      }
+
+      // If we have a userId, fetch fresh user data with profile image
+      if (detailedProfile.userId) {
+        try {
+          const userResponse = await fetch(
+            `${this.state.baseUrl}/api/user/${detailedProfile.userId}`
+          );
+
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            console.log(`Fresh user data for recommended profile:`, userData);
+
+            // Update profile with fresh profile image
+            detailedProfile = {
+              ...detailedProfile,
+              profileImage:
+                userData.user?.profileImage || detailedProfile.profileImage,
+            };
+          }
+        } catch (error) {
+          console.error(
+            "Error fetching fresh user data for recommended profile:",
+            error
+          );
+        }
+      }
+
+      this.setState({ viewingRecommendedProfile: detailedProfile });
+    } catch (error) {
+      console.error("Error fetching detailed recommended profile:", error);
+      this.setState({ viewingRecommendedProfile: profile });
+    }
+  };
+
+  handleCloseRecommendedProfileView = () => {
+    this.setState({ viewingRecommendedProfile: null });
   };
 
   // Fetch Quick Bookings
@@ -643,6 +832,15 @@ class AdminPanel extends Component {
     this.setState({ quickBookingSortBy: sortBy, currentPage: 1 });
   };
 
+  // Filter and search methods for recommended profiles
+  handleRecommendedSearchChange = (e) => {
+    this.setState({ recommendedSearchTerm: e.target.value, currentPage: 1 });
+  };
+
+  handleRecommendedSortChange = (sortBy) => {
+    this.setState({ recommendedSortBy: sortBy, currentPage: 1 });
+  };
+
   getFilteredSubmissions = () => {
     const { portfolioSubmissions, searchTerm, statusFilter, sortBy } =
       this.state;
@@ -726,6 +924,44 @@ class AdminPanel extends Component {
     return filtered;
   };
 
+  getFilteredRecommendedProfiles = () => {
+    const { recommendedProfiles, recommendedSearchTerm, recommendedSortBy } =
+      this.state;
+
+    let filtered = recommendedProfiles.filter((profile) => {
+      const matchesSearch =
+        profile.name
+          .toLowerCase()
+          .includes(recommendedSearchTerm.toLowerCase()) ||
+        profile.email
+          .toLowerCase()
+          .includes(recommendedSearchTerm.toLowerCase()) ||
+        (profile.profession || profile.headline || "")
+          .toLowerCase()
+          .includes(recommendedSearchTerm.toLowerCase());
+
+      return matchesSearch;
+    });
+
+    // Sort recommended profiles
+    filtered.sort((a, b) => {
+      switch (recommendedSortBy) {
+        case "newest":
+          return new Date(b.submittedDate) - new Date(a.submittedDate);
+        case "oldest":
+          return new Date(a.submittedDate) - new Date(b.submittedDate);
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "recommended":
+          return (b.isRecommended ? 1 : 0) - (a.isRecommended ? 1 : 0);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  };
+
   getStats = () => {
     const { portfolioSubmissions } = this.state;
     return {
@@ -749,6 +985,19 @@ class AdminPanel extends Component {
       ).length,
       accepted: quickBookings.filter((qb) => qb.status === "accepted").length,
       rejected: quickBookings.filter((qb) => qb.status === "rejected").length,
+    };
+  };
+
+  getRecommendedProfilesStats = () => {
+    const { recommendedProfiles } = this.state;
+    return {
+      total: recommendedProfiles.length,
+      recommended: recommendedProfiles.filter(
+        (profile) => profile.isRecommended
+      ).length,
+      notRecommended: recommendedProfiles.filter(
+        (profile) => !profile.isRecommended
+      ).length,
     };
   };
 
@@ -821,6 +1070,7 @@ class AdminPanel extends Component {
   renderDashboardStats() {
     const portfolioStats = this.getStats();
     const quickBookingStats = this.getQuickBookingStats();
+    const recommendedStats = this.getRecommendedProfilesStats();
 
     return (
       <div className="adminpanel-stats-container">
@@ -935,6 +1185,50 @@ class AdminPanel extends Component {
             </div>
           </div>
         </div>
+
+        <div className="adminpanel-stats-section">
+          <h3 className="adminpanel-stats-title">
+            <i className="fas fa-star"></i>
+            VOAT Recommended Profiles
+          </h3>
+          <div className="adminpanel-stats-grid">
+            <div className="adminpanel-stat-card adminpanel-stat-total">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {recommendedStats.total}
+                </div>
+                <div className="adminpanel-stat-label">Total Profiles</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-user-tie"></i>
+              </div>
+            </div>
+
+            <div className="adminpanel-stat-card adminpanel-stat-approved">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {recommendedStats.recommended}
+                </div>
+                <div className="adminpanel-stat-label">Recommended</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-star"></i>
+              </div>
+            </div>
+
+            <div className="adminpanel-stat-card adminpanel-stat-pending">
+              <div className="adminpanel-stat-content">
+                <div className="adminpanel-stat-number">
+                  {recommendedStats.notRecommended}
+                </div>
+                <div className="adminpanel-stat-label">Not Recommended</div>
+              </div>
+              <div className="adminpanel-stat-icon">
+                <i className="fas fa-star-o"></i>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -962,6 +1256,16 @@ class AdminPanel extends Component {
         >
           <i className="fas fa-rocket"></i>
           <span>Quick Bookings</span>
+          <div className="adminpanel-tab-indicator"></div>
+        </button>
+        <button
+          className={`adminpanel-tab-btn ${
+            activeTab === "recommendedProfiles" ? "active" : ""
+          }`}
+          onClick={() => this.handleTabChange("recommendedProfiles")}
+        >
+          <i className="fas fa-star"></i>
+          <span>VOAT Recommended</span>
           <div className="adminpanel-tab-indicator"></div>
         </button>
       </div>
@@ -1122,6 +1426,449 @@ class AdminPanel extends Component {
               <option value="oldest">Oldest First</option>
               <option value="name">Name A-Z</option>
             </select>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  renderRecommendedProfilesControlsSection() {
+    const { recommendedSearchTerm, recommendedSortBy } = this.state;
+
+    return (
+      <div className="adminpanel-controls-panel">
+        <div className="adminpanel-search-section">
+          <div className="adminpanel-search-bar">
+            <i className="fas fa-search adminpanel-search-icon"></i>
+            <input
+              type="text"
+              placeholder="Search by name, email, or profession..."
+              value={recommendedSearchTerm}
+              onChange={this.handleRecommendedSearchChange}
+              className="adminpanel-search-input"
+            />
+          </div>
+        </div>
+
+        <div className="adminpanel-filter-section">
+          <div className="adminpanel-sort-section">
+            <span className="adminpanel-sort-label">Sort by:</span>
+            <select
+              value={recommendedSortBy}
+              onChange={(e) => this.handleRecommendedSortChange(e.target.value)}
+              className="adminpanel-sort-select"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="name">Name A-Z</option>
+              <option value="recommended">Recommended First</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  renderRecommendedProfilesList() {
+    const { isLoading } = this.state;
+    const filteredProfiles = this.getFilteredRecommendedProfiles();
+
+    if (isLoading) {
+      return (
+        <div className="adminpanel-loading-state">
+          <div className="adminpanel-spinner"></div>
+          <p>Loading recommended profiles...</p>
+        </div>
+      );
+    }
+
+    if (!filteredProfiles || filteredProfiles.length === 0) {
+      return (
+        <div className="adminpanel-empty-state">
+          <div className="adminpanel-empty-icon">
+            <i className="fas fa-star"></i>
+          </div>
+          <h3>No Profiles Found</h3>
+          <p>There are no freelancer profiles matching your current filters.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="adminpanel-submissions-grid">
+        {filteredProfiles.map((profile) => {
+          const profileImageSrc = this.getProfileImageSrc(profile.profileImage);
+
+          return (
+            <div
+              key={profile._id || profile.id}
+              className="adminpanel-submission-card"
+            >
+              <div className="adminpanel-card-header">
+                <div className="adminpanel-profile-section">
+                  <div className="adminpanel-avatar">
+                    {profileImageSrc ? (
+                      <img
+                        src={profileImageSrc}
+                        alt={profile.name}
+                        onError={(e) => {
+                          console.log("Image failed to load:", e.target.src);
+                          e.target.onerror = null;
+                          e.target.style.display = "none";
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = "flex";
+                          }
+                        }}
+                        onLoad={(e) => {
+                          console.log(
+                            "Image loaded successfully:",
+                            e.target.src
+                          );
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = "none";
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="adminpanel-avatar-initials"
+                      style={{ display: profileImageSrc ? "none" : "flex" }}
+                    >
+                      {this.getInitials(profile.name)}
+                    </div>
+                  </div>
+                  <div className="adminpanel-profile-info">
+                    <h3 className="adminpanel-profile-name">{profile.name}</h3>
+                    <p className="adminpanel-profile-profession">
+                      {profile.profession ||
+                        profile.headline ||
+                        "Not specified"}
+                    </p>
+                    <div className="adminpanel-profile-meta">
+                      <span className="adminpanel-experience">
+                        <i className="fas fa-briefcase"></i>
+                        {profile.workExperience
+                          ? `${profile.workExperience} years`
+                          : "N/A"}
+                      </span>
+                      {profile.uservoatId && (
+                        <span className="adminpanel-voat-id">
+                          <i className="fas fa-id-badge"></i>
+                          {profile.uservoatId}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className={`adminpanel-status-badge ${
+                    profile.isRecommended
+                      ? "adminpanel-status-approved"
+                      : "adminpanel-status-pending"
+                  }`}
+                >
+                  {profile.isRecommended ? (
+                    <>
+                      <i className="fas fa-star"></i>
+                      Recommended
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-star-o"></i>
+                      Not Recommended
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="adminpanel-card-body">
+                <div className="adminpanel-submission-info">
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-envelope"></i>
+                    <span>{profile.email}</span>
+                  </div>
+                  <div className="adminpanel-info-item">
+                    <i className="fas fa-calendar"></i>
+                    <span>
+                      {profile.submittedDate
+                        ? new Date(profile.submittedDate).toLocaleDateString()
+                        : "Unknown"}
+                    </span>
+                  </div>
+                  {profile.services && profile.services.length > 0 && (
+                    <div className="adminpanel-info-item">
+                      <i className="fas fa-cogs"></i>
+                      <span>{profile.services.length} Services</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="adminpanel-card-footer">
+                <button
+                  className="adminpanel-view-btn"
+                  onClick={() => this.handleViewRecommendedProfile(profile)}
+                >
+                  <i className="fas fa-eye"></i>
+                  View Details
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  renderRecommendedProfileDetails() {
+    const { viewingRecommendedProfile } = this.state;
+    if (!viewingRecommendedProfile) return null;
+
+    const profileImageSrc = this.getProfileImageSrc(
+      viewingRecommendedProfile.profileImage
+    );
+
+    let services = [];
+    if (viewingRecommendedProfile.services) {
+      try {
+        if (typeof viewingRecommendedProfile.services === "string") {
+          services = JSON.parse(viewingRecommendedProfile.services);
+        } else if (Array.isArray(viewingRecommendedProfile.services)) {
+          services = viewingRecommendedProfile.services;
+
+          const uniqueServices = new Map();
+          services.forEach((service) => {
+            if (service.name && !uniqueServices.has(service.name)) {
+              uniqueServices.set(service.name, service);
+            }
+          });
+
+          services = Array.from(uniqueServices.values());
+        }
+      } catch (err) {
+        console.error("Error parsing services:", err);
+      }
+    }
+
+    return (
+      <div className="adminpanel-modal-overlay">
+        <div className="adminpanel-modal-container">
+          <div className="adminpanel-modal-header">
+            <h2>VOAT Recommended Profile Details</h2>
+            <button
+              className="adminpanel-modal-close"
+              onClick={this.handleCloseRecommendedProfileView}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+
+          <div className="adminpanel-modal-content">
+            <div className="adminpanel-profile-header">
+              <div className="adminpanel-large-avatar">
+                {profileImageSrc ? (
+                  <img
+                    src={profileImageSrc}
+                    alt={viewingRecommendedProfile.name}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = "none";
+                      e.target.nextSibling.style.display = "flex";
+                    }}
+                  />
+                ) : null}
+                <div
+                  className="adminpanel-large-avatar-initials"
+                  style={{ display: profileImageSrc ? "none" : "flex" }}
+                >
+                  {this.getInitials(viewingRecommendedProfile.name)}
+                </div>
+              </div>
+
+              <div className="adminpanel-profile-details">
+                <h1>{viewingRecommendedProfile.name || "Unnamed"}</h1>
+                <p className="adminpanel-profession">
+                  {viewingRecommendedProfile.profession ||
+                    viewingRecommendedProfile.headline ||
+                    "No profession specified"}
+                </p>
+                <p className="adminpanel-headline">
+                  {viewingRecommendedProfile.headline ||
+                    viewingRecommendedProfile.profession ||
+                    "No headline specified"}
+                </p>
+                <div
+                  className={`adminpanel-status-indicator ${
+                    viewingRecommendedProfile.isRecommended
+                      ? "adminpanel-status-approved"
+                      : "adminpanel-status-pending"
+                  }`}
+                >
+                  <i
+                    className={`fas ${
+                      viewingRecommendedProfile.isRecommended
+                        ? "fa-star"
+                        : "fa-star-o"
+                    }`}
+                  ></i>
+                  Status:{" "}
+                  {viewingRecommendedProfile.isRecommended
+                    ? "Recommended"
+                    : "Not Recommended"}
+                </div>
+                {viewingRecommendedProfile.uservoatId && (
+                  <div className="adminpanel-status-indicator adminpanel-status-info">
+                    <i className="fas fa-id-badge"></i>
+                    VOAT ID: {viewingRecommendedProfile.uservoatId}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="adminpanel-details-grid">
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-envelope"></i>
+                  Email Address
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingRecommendedProfile.email || "No email provided"}
+                </div>
+              </div>
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-briefcase"></i>
+                  Work Experience
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingRecommendedProfile.workExperience
+                    ? `${viewingRecommendedProfile.workExperience} years`
+                    : "Not specified"}
+                </div>
+              </div>
+
+              {viewingRecommendedProfile.portfolioLink && (
+                <div className="adminpanel-detail-card">
+                  <div className="adminpanel-detail-label">
+                    <i className="fas fa-link"></i>
+                    Portfolio Link
+                  </div>
+                  <div className="adminpanel-detail-value">
+                    <a
+                      href={viewingRecommendedProfile.portfolioLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="adminpanel-portfolio-link"
+                    >
+                      {viewingRecommendedProfile.portfolioLink}
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="adminpanel-detail-card">
+                <div className="adminpanel-detail-label">
+                  <i className="fas fa-calendar"></i>
+                  Registration Date
+                </div>
+                <div className="adminpanel-detail-value">
+                  {viewingRecommendedProfile.submittedDate
+                    ? new Date(
+                        viewingRecommendedProfile.submittedDate
+                      ).toLocaleDateString()
+                    : "Unknown date"}
+                </div>
+              </div>
+            </div>
+
+            {viewingRecommendedProfile.about && (
+              <div className="adminpanel-about-section">
+                <h3>
+                  <i className="fas fa-user"></i>
+                  About
+                </h3>
+                <p>{viewingRecommendedProfile.about}</p>
+              </div>
+            )}
+
+            <div className="adminpanel-services-section">
+              <h3>
+                <i className="fas fa-cogs"></i>
+                Services Offered
+              </h3>
+              {services && services.length > 0 ? (
+                <div className="adminpanel-services-grid">
+                  {services.map((service, index) => (
+                    <div key={index} className="adminpanel-service-card">
+                      <h4>{service.name || "Unnamed Service"}</h4>
+                      <p>{service.description || "No description provided"}</p>
+
+                      {service.pricing && service.pricing.length > 0 && (
+                        <div className="adminpanel-pricing-section">
+                          <h5>Pricing Options</h5>
+                          <div className="adminpanel-pricing-grid">
+                            {service.pricing.map((price, idx) => (
+                              <div
+                                key={idx}
+                                className="adminpanel-pricing-card"
+                              >
+                                <div className="adminpanel-package-name">
+                                  {price.level || `Package ${idx + 1}`}
+                                </div>
+                                <div className="adminpanel-package-price">
+                                  ₹{price.price || "N/A"}
+                                </div>
+                                <div className="adminpanel-package-time">
+                                  {price.timeFrame || "N/A"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="adminpanel-no-services">
+                  <i className="fas fa-info-circle"></i>
+                  <p>No services have been added by this freelancer.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="adminpanel-modal-actions">
+              {viewingRecommendedProfile.isRecommended ? (
+                <button
+                  className="adminpanel-reject-btn"
+                  onClick={() =>
+                    this.handleToggleRecommended(
+                      viewingRecommendedProfile._id ||
+                        viewingRecommendedProfile.id,
+                      true
+                    )
+                  }
+                >
+                  <i className="fas fa-star-o"></i>
+                  Remove from Recommended
+                </button>
+              ) : (
+                <button
+                  className="adminpanel-approve-btn"
+                  onClick={() =>
+                    this.handleToggleRecommended(
+                      viewingRecommendedProfile._id ||
+                        viewingRecommendedProfile.id,
+                      false
+                    )
+                  }
+                >
+                  <i className="fas fa-star"></i>
+                  Add to Recommended
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1964,7 +2711,12 @@ class AdminPanel extends Component {
   };
 
   renderAdminDashboard() {
-    const { viewingSubmission, viewingQuickBooking, activeTab } = this.state;
+    const {
+      viewingSubmission,
+      viewingQuickBooking,
+      viewingRecommendedProfile,
+      activeTab,
+    } = this.state;
 
     return (
       <div className="adminpanel-dashboard">
@@ -1976,7 +2728,10 @@ class AdminPanel extends Component {
               </div>
               <div className="adminpanel-title-section">
                 <h1>VOAT Admin Dashboard</h1>
-                <p>Manage portfolio submissions and quick booking requests</p>
+                <p>
+                  Manage portfolio submissions, quick booking requests, and
+                  recommended profiles
+                </p>
               </div>
             </div>
 
@@ -2029,8 +2784,23 @@ class AdminPanel extends Component {
               </div>
             )}
 
+            {activeTab === "recommendedProfiles" && (
+              <div className="adminpanel-section">
+                <div className="adminpanel-section-header">
+                  <h2>VOAT Recommended Profiles</h2>
+                  <p>
+                    Manage freelancer profiles for VOAT recommendation system
+                  </p>
+                </div>
+                {this.renderRecommendedProfilesControlsSection()}
+                {this.renderRecommendedProfilesList()}
+              </div>
+            )}
+
             {viewingSubmission && this.renderSubmissionDetails()}
             {viewingQuickBooking && this.renderQuickBookingDetails()}
+            {viewingRecommendedProfile &&
+              this.renderRecommendedProfileDetails()}
           </div>
         </div>
       </div>
