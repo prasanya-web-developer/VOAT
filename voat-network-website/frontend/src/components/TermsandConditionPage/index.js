@@ -235,8 +235,7 @@ class TermsConditionsPage extends Component {
                 </div>
               </div>
 
-              {/* Single Acceptance Checkbox */}
-              <div className="terms-acceptance-section">
+              {/* <div className="terms-acceptance-section">
                 <div className="terms-checkbox-container">
                   <label className="terms-checkbox-label">
                     <input
@@ -256,7 +255,6 @@ class TermsConditionsPage extends Component {
                 </div>
               </div>
 
-              {/* Submit Button */}
               <div className="terms-submit-container">
                 <button
                   type="submit"
@@ -273,7 +271,7 @@ class TermsConditionsPage extends Component {
                     Please accept the terms and conditions to continue
                   </p>
                 )}
-              </div>
+              </div> */}
             </form>
           </div>
         </div>

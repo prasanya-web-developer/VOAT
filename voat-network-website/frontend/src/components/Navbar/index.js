@@ -31,6 +31,7 @@ class NavBar extends Component {
     activeMenu: "",
     cartSidebarOpen: false,
     currentMessageIndex: 0,
+    exitingMessageIndex: null,
   };
 
   // Backend URLs - will try both environments
@@ -107,12 +108,16 @@ class NavBar extends Component {
 
   startCarousel = () => {
     this.carouselInterval = setInterval(() => {
+      const { currentMessageIndex } = this.state;
       const messages = this.getSpecialOfferText();
-      this.setState((prevState) => ({
-        currentMessageIndex:
-          (prevState.currentMessageIndex + 1) % messages.length,
-      }));
-    }, 4000); // Change message every 4 seconds (increased from 3)
+      const nextIndex = (currentMessageIndex + 1) % messages.length;
+
+      // Set the current message to an "exiting" state and the new one to "active"
+      this.setState({
+        exitingMessageIndex: currentMessageIndex,
+        currentMessageIndex: nextIndex,
+      });
+    }, 4000);
   };
 
   // Get initials from user name
@@ -751,16 +756,21 @@ class NavBar extends Component {
           <div className="navbar-container">
             <div className="navbar-special-offer">
               <div className="carousel-container">
-                {this.getSpecialOfferText().map((message, index) => (
-                  <div
-                    key={index}
-                    className={`carousel-message ${
-                      index === this.state.currentMessageIndex ? "active" : ""
-                    }`}
-                  >
-                    {message}
-                  </div>
-                ))}
+                {this.getSpecialOfferText().map((message, index) => {
+                  let classes = "carousel-message";
+                  if (index === this.state.currentMessageIndex) {
+                    classes += " active";
+                  }
+                  if (index === this.state.exitingMessageIndex) {
+                    classes += " exiting";
+                  }
+
+                  return (
+                    <div key={index} className={classes}>
+                      {message}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <nav

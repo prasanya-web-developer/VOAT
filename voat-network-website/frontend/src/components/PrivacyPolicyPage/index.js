@@ -291,7 +291,7 @@ class PrivacyPolicyPage extends Component {
                 </div>
               </div>
 
-              {/* Single Acceptance Checkbox */}
+              {/*               
               <div className="privacypolicy-acceptance-section">
                 <div className="privacypolicy-checkbox-container">
                   <label className="privacypolicy-checkbox-label">
@@ -312,7 +312,7 @@ class PrivacyPolicyPage extends Component {
                 </div>
               </div>
 
-              {/* Submit Button */}
+      
               <div className="privacypolicy-submit-container">
                 <button
                   type="submit"
@@ -331,7 +331,7 @@ class PrivacyPolicyPage extends Component {
                     Please accept the privacy policy terms to continue
                   </p>
                 )}
-              </div>
+              </div> */}
             </form>
           </div>
         </div>

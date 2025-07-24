@@ -53,33 +53,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transform: translateX(100%);
-  transition: all 1.2s ease-in-out;
   white-space: nowrap;
+
+  /* --- Corrected Animation Properties --- */
+  opacity: 0; /* Start invisible */
+  transform: translateX(-100%); /* Start off-screen to the left */
+  transition: transform 1.2s ease-in-out, opacity 0.8s ease; /* Animate both position and fade */
 }
 
 .carousel-message.active {
-  opacity: 1;
-  transform: translateX(0);
-  transition: all 1.2s ease-in-out;
+  opacity: 1; /* Become visible */
+  transform: translateX(0); /* Move to the center */
 }
 
-.carousel-message:not(.active) {
-  transform: translateX(-100%);
-  transition: all 1.2s ease-in-out;
+.carousel-message.exiting {
+  /*
+    An exiting element is already at the center (transform: 0, opacity: 1)
+    from its 'active' state. These new rules define its destination.
+  */
+  opacity: 0; /* Fade out */
+  transform: translateX(100%); /* Move off-screen to the right */
 }
 
-/* Pause carousel on hover */
-.navbar-special-offer:hover .carousel-message {
-  animation-play-state: paused;
-}
-
-/* Smooth fade and slide animation */
+/* Also update the keyframes animation */
 @keyframes smoothSlide {
   0% {
     opacity: 0;
-    transform: translateX(50px);
+    transform: translateX(-50px);
   }
   10% {
     opacity: 1;
@@ -91,8 +91,13 @@
   }
   100% {
     opacity: 0;
-    transform: translateX(-50px);
+    transform: translateX(50px);
   }
+}
+
+/* Pause carousel on hover */
+.navbar-special-offer:hover .carousel-message {
+  animation-play-state: paused;
 }
 
 .navbar {
