@@ -201,7 +201,6 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
     resumePath: { type: String },
     services: [ServiceSchema],
     isHold: { type: Boolean, default: false },
-    // Portfolio work samples
     works: [
       {
         url: { type: String },
@@ -225,8 +224,7 @@ const PortfolioSubmissionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    isRecommended: { type: Boolean, default: false },
-    isRecommended: { type: Boolean, default: false },
+    isRecommended: { type: Boolean, default: false }, // Keep only one isRecommended field
   },
   { timestamps: true }
 );
@@ -1223,6 +1221,7 @@ app.get("/api/portfolios", async (req, res) => {
           updatedDate: 1,
           services: 1,
           isHold: 1,
+          isRecommended: { $ifNull: ["$isRecommended", false] }, // Keep the actual value, default to false if not set
         },
       },
     ]);
@@ -1478,12 +1477,19 @@ app.put("/api/admin/portfolio-submission/:id/recommend", async (req, res) => {
       });
     }
 
-    submission.isRecommended = isRecommended;
+    // Explicitly set the isRecommended field
+    submission.isRecommended = Boolean(isRecommended);
     submission.updatedDate = new Date();
+
+    // Mark the field as modified to ensure MongoDB saves it
+    submission.markModified("isRecommended");
+
     await submission.save();
 
+    // Verify the save was successful
+    const updatedSubmission = await PortfolioSubmission.findById(id);
     console.log(
-      `Portfolio ${id} recommendation status updated to ${isRecommended}`
+      `Portfolio ${id} recommendation status updated to ${updatedSubmission.isRecommended}`
     );
 
     res.status(200).json({
@@ -1491,7 +1497,7 @@ app.put("/api/admin/portfolio-submission/:id/recommend", async (req, res) => {
       message: `Portfolio ${
         isRecommended ? "added to" : "removed from"
       } recommended successfully`,
-      submission: submission,
+      submission: updatedSubmission,
     });
   } catch (error) {
     console.error("Error updating recommendation status:", error);
@@ -1499,6 +1505,33 @@ app.put("/api/admin/portfolio-submission/:id/recommend", async (req, res) => {
       success: false,
       message: "Failed to update recommendation status",
       error: error.message,
+    });
+  }
+});
+
+app.get("/api/admin/fix-recommended-field", async (req, res) => {
+  try {
+    console.log("Fixing isRecommended field for all portfolios...");
+
+    // Set isRecommended to false for all portfolios that don't have this field
+    const result = await PortfolioSubmission.updateMany(
+      { isRecommended: { $exists: false } },
+      { $set: { isRecommended: false } }
+    );
+
+    console.log(`Fixed ${result.modifiedCount} portfolios`);
+
+    res.status(200).json({
+      success: true,
+      message: "isRecommended field fixed successfully",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error fixing isRecommended field:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fix isRecommended field",
+      details: error.message,
     });
   }
 });

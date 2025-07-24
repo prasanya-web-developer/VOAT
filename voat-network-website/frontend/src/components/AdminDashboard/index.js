@@ -144,7 +144,6 @@ class AdminPanel extends Component {
     this.setState({ isAuthenticated: false });
   };
 
-  // Fetch Recommended Profiles (All approved portfolios)
   fetchRecommendedProfiles = async () => {
     try {
       this.setState({ isLoading: true });
@@ -175,10 +174,10 @@ class AdminPanel extends Component {
       const data = await response.json();
       console.log("Fetched recommended profiles:", data);
 
-      // Add isRecommended field to each profile (default false)
+      // Don't modify the isRecommended field - keep it as it comes from the database
       const profilesWithRecommendedStatus = data.map((profile) => ({
         ...profile,
-        isRecommended: profile.isRecommended || false,
+        isRecommended: profile.isRecommended || false, // Use the actual value from database
       }));
 
       this.setState({
@@ -194,7 +193,6 @@ class AdminPanel extends Component {
         isLoading: false,
       });
 
-      // Optional: Show error notification
       alert(`Failed to fetch recommended profiles: ${error.message}`);
     }
   };
@@ -224,13 +222,20 @@ class AdminPanel extends Component {
         }
       );
 
-      if (!response.ok)
-        throw new Error(`Failed to ${action} recommended profiles`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || `Failed to ${action} recommended profiles`
+        );
+      }
 
-      // Update the profile in the state
+      const responseData = await response.json();
+      console.log("Server response:", responseData);
+
+      // Update the profile in the state with the actual response from server
       const updatedProfiles = this.state.recommendedProfiles.map((profile) =>
         profile._id === profileId || profile.id === profileId
-          ? { ...profile, isRecommended: !isCurrentlyRecommended }
+          ? { ...profile, isRecommended: responseData.submission.isRecommended }
           : profile
       );
 
@@ -243,7 +248,7 @@ class AdminPanel extends Component {
       ) {
         updatedViewingProfile = {
           ...updatedViewingProfile,
-          isRecommended: !isCurrentlyRecommended,
+          isRecommended: responseData.submission.isRecommended,
         };
       }
 
@@ -255,7 +260,7 @@ class AdminPanel extends Component {
 
       alert(
         `Profile ${
-          isCurrentlyRecommended ? "removed from" : "added to"
+          responseData.submission.isRecommended ? "added to" : "removed from"
         } VOAT recommended successfully!`
       );
     } catch (error) {
@@ -1595,12 +1600,12 @@ class AdminPanel extends Component {
                         : "Unknown"}
                     </span>
                   </div>
-                  {profile.services && profile.services.length > 0 && (
+                  {/* {profile.services && profile.services.length > 0 && (
                     <div className="adminpanel-info-item">
                       <i className="fas fa-cogs"></i>
                       <span>{profile.services.length} Services</span>
                     </div>
-                  )}
+                  )} */}
                 </div>
               </div>
 

@@ -252,7 +252,7 @@
 .adminpanel-header-content {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1.5rem 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -266,19 +266,19 @@
 }
 
 .adminpanel-logo {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   background: linear-gradient(135deg, #1e40af, #3b82f6);
-  border-radius: 16px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fbbf24;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
 }
 
 .adminpanel-title-section h1 {
-  font-size: 1.875rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #1a202c;
   margin-bottom: 0.25rem;
@@ -286,7 +286,7 @@
 
 .adminpanel-title-section p {
   color: #718096;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -301,62 +301,21 @@
   align-items: center;
   gap: 1rem;
   background: #f7fafc;
-  padding: 1rem 1.25rem;
-  border-radius: 16px;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
 }
 
 .adminpanel-admin-avatar {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   background: linear-gradient(135deg, #1e40af, #3b82f6);
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fbbf24;
-  font-size: 1.25rem;
-}
-
-/* Avatar Initials Enhancement */
-.adminpanel-avatar {
-  position: relative;
-}
-
-.adminpanel-avatar-initials {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  color: white;
-  font-size: 1.125rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: inherit;
-}
-
-.adminpanel-large-avatar {
-  position: relative;
-}
-
-.adminpanel-large-avatar-initials {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: white;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: inherit;
+  font-size: 1rem;
 }
 
 .adminpanel-admin-details {
@@ -380,10 +339,10 @@
   background: linear-gradient(135deg, #f56565, #e53e3e);
   color: white;
   border: none;
-  padding: 0.875rem 1.25rem;
-  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
@@ -406,21 +365,54 @@
 .adminpanel-content-wrapper {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 2.5rem 2rem;
+  padding: 2rem;
 }
 
-/* Stats Grid  */
+/* OPTIMIZED STATS CONTAINER - More Compact Design */
+.adminpanel-stats-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.adminpanel-stats-section {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f1f5f9;
+}
+
+.adminpanel-stats-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.adminpanel-stats-title i {
+  color: #1e40af;
+  font-size: 1rem;
+}
+
+/* OPTIMIZED STATS GRID - More Compact */
 .adminpanel-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
 .adminpanel-stat-card {
   background: white;
-  border-radius: 16px;
-  padding: 1.25rem;
+  border-radius: 12px;
+  padding: 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -429,9 +421,9 @@
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-  height: 100px;
-  min-height: 100px;
-  max-height: 100px;
+  height: 80px;
+  min-height: 80px;
+  max-height: 80px;
 }
 
 .adminpanel-stat-card::before {
@@ -466,7 +458,7 @@
 }
 
 .adminpanel-stat-number {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: #1a202c;
   line-height: 1;
@@ -476,19 +468,19 @@
 .adminpanel-stat-label {
   color: #718096;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .adminpanel-stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1rem;
   color: white;
   flex-shrink: 0;
 }
@@ -506,18 +498,174 @@
   background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
-/* Controls Panel */
+/* OPTIMIZED TAB NAVIGATION - More Compact */
+.adminpanel-tab-navigation {
+  display: flex;
+  background: white;
+  border-radius: 12px;
+  padding: 0.375rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f1f5f9;
+  gap: 0.25rem;
+}
+
+.adminpanel-tab-btn {
+  position: relative;
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #718096;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  overflow: hidden;
+  min-height: 44px;
+}
+
+.adminpanel-tab-btn i {
+  font-size: 0.875rem;
+  transition: transform 0.3s ease;
+}
+
+.adminpanel-tab-btn span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminpanel-tab-btn:hover {
+  background: #f8fafc;
+  color: #4a5568;
+  transform: translateY(-1px);
+}
+
+.adminpanel-tab-btn:hover i {
+  transform: scale(1.1);
+}
+
+.adminpanel-tab-btn.active {
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: white;
+  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.25);
+  transform: translateY(-1px);
+}
+
+.adminpanel-tab-btn.active i {
+  transform: scale(1.1);
+}
+
+.adminpanel-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+  border-radius: 1px;
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.adminpanel-tab-btn.active .adminpanel-tab-indicator {
+  transform: scaleX(1);
+}
+
+/* VOAT ID STYLES FOR RECOMMENDED PROFILES */
+.adminpanel-voat-id {
+  color: #718096;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  padding: 0.1875rem 0.5rem;
+  border-radius: 50px;
+  border: 1px solid #bae6fd;
+}
+
+.adminpanel-voat-id i {
+  color: #0ea5e9;
+  font-size: 0.5625rem;
+}
+
+/* STATUS INDICATOR IMPROVEMENTS */
+.adminpanel-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 50px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0.5rem;
+}
+
+.adminpanel-status-indicator.adminpanel-status-info {
+  background: linear-gradient(135deg, #dbeafe, #3b82f6);
+  color: #1e3a8a;
+  border: 1px solid #60a5fa;
+}
+
+.adminpanel-status-indicator.adminpanel-status-pending {
+  background: linear-gradient(135deg, #fef3c7, #fbbf24);
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.adminpanel-status-indicator.adminpanel-status-accepted,
+.adminpanel-status-indicator.adminpanel-status-approved {
+  background: linear-gradient(135deg, #dcfce7, #22c55e);
+  color: #14532d;
+  border: 1px solid #16a34a;
+}
+
+.adminpanel-status-indicator.adminpanel-status-rejected {
+  background: linear-gradient(135deg, #fee2e2, #ef4444);
+  color: #7f1d1d;
+  border: 1px solid #dc2626;
+}
+
+.adminpanel-status-indicator i {
+  font-size: 0.5rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* CONTROLS PANEL */
 .adminpanel-controls-panel {
   background: white;
-  border-radius: 16px;
-  padding: 1.5rem;
+  border-radius: 12px;
+  padding: 1.25rem;
   margin-bottom: 1.5rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid #f1f5f9;
 }
 
 .adminpanel-search-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .adminpanel-search-bar {
@@ -536,10 +684,10 @@
 
 .adminpanel-search-input {
   width: 100%;
-  padding: 0.875rem 0.875rem 0.875rem 2.5rem;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
   border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 0.875rem;
+  border-radius: 10px;
+  font-size: 0.8125rem;
   font-weight: 500;
   background: #f7fafc;
   transition: all 0.3s ease;
@@ -557,35 +705,35 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .adminpanel-filter-group {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .adminpanel-filter-label {
   font-weight: 600;
   color: #4a5568;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .adminpanel-filter-tabs {
   display: flex;
   background: #f7fafc;
-  border-radius: 12px;
-  padding: 0.5rem;
+  border-radius: 10px;
+  padding: 0.375rem;
   gap: 0.25rem;
 }
 
 .adminpanel-filter-tab {
-  padding: 0.75rem 1.25rem;
+  padding: 0.5rem 0.875rem;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   cursor: pointer;
   transition: all 0.2s ease;
   background: transparent;
@@ -615,14 +763,14 @@
 .adminpanel-sort-label {
   font-weight: 600;
   color: #4a5568;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .adminpanel-sort-select {
-  padding: 0.625rem 0.875rem;
+  padding: 0.5rem 0.75rem;
   border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.6875rem;
   font-weight: 600;
   background: #f7fafc;
   color: #4a5568;
@@ -638,55 +786,76 @@
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
 }
 
-/* Submissions Section */
-.adminpanel-submissions-section {
-  margin-top: 0;
+/* SECTION HEADER OPTIMIZATION */
+.adminpanel-section {
+  margin-bottom: 2rem;
 }
 
 .adminpanel-section-header {
   margin-bottom: 1.5rem;
+  text-align: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .adminpanel-section-header h2 {
-  font-size: 1.375rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: #1a202c;
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.adminpanel-section-header h2::before {
+  content: "";
+  width: 4px;
+  height: 24px;
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  border-radius: 2px;
 }
 
 .adminpanel-section-header p {
   color: #718096;
   font-weight: 500;
+  font-size: 0.875rem;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
 }
 
-/* Submissions Grid */
+/* SUBMISSIONS GRID */
 .adminpanel-submissions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1.25rem;
   align-items: start;
 }
 
 .adminpanel-submission-card {
   background: white;
-  border-radius: 20px;
+  border-radius: 16px;
   padding: 0;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid #f1f5f9;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  height: 320px;
-  min-height: 320px;
-  max-height: 320px;
+  height: 300px;
+  min-height: 300px;
+  max-height: 300px;
   width: 100%;
   overflow: hidden;
   position: relative;
 }
 
 .adminpanel-submission-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
   border-color: #1e40af;
 }
 
@@ -696,12 +865,54 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 3px;
   background: linear-gradient(90deg, #1e40af, #3b82f6, #fbbf24);
 }
 
+/* QUICK BOOKING CARDS */
+.adminpanel-quickbookings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.adminpanel-quickbooking-card {
+  background: white;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  min-height: 300px;
+  max-height: 300px;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.adminpanel-quickbooking-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+  border-color: #f59e0b;
+}
+
+.adminpanel-quickbooking-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b, #1e40af);
+}
+
+/* CARD HEADER */
 .adminpanel-card-header {
-  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  padding: 1.25rem 1.25rem 0.75rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -712,22 +923,22 @@
 
 .adminpanel-profile-section {
   display: flex;
-  gap: 1rem;
+  gap: 0.875rem;
   flex: 1;
   min-width: 0;
   align-items: center;
 }
 
 .adminpanel-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   overflow: hidden;
   background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid white;
+  border: 2px solid white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
   position: relative;
@@ -737,7 +948,7 @@
   content: "";
   position: absolute;
   inset: -2px;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #1e40af, #3b82f6, #fbbf24);
   z-index: -1;
 }
@@ -749,9 +960,19 @@
 }
 
 .adminpanel-avatar-initials {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 800;
-  color: #1e40af;
-  font-size: 1.125rem;
+  color: white;
+  font-size: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: inherit;
 }
 
 .adminpanel-profile-info {
@@ -763,7 +984,7 @@
 }
 
 .adminpanel-profile-name {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 800;
   color: #1a202c;
   margin-bottom: 0.25rem;
@@ -776,7 +997,19 @@
 .adminpanel-profile-profession {
   color: #1e40af;
   font-weight: 600;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.375rem;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.adminpanel-profile-service {
+  color: #f59e0b;
+  font-weight: 600;
+  font-size: 0.75rem;
   margin-bottom: 0.375rem;
   line-height: 1.3;
   overflow: hidden;
@@ -789,28 +1022,43 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.adminpanel-experience {
+.adminpanel-experience,
+.adminpanel-budget,
+.adminpanel-voat-id {
   color: #718096;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 0.25rem;
   background: #f7fafc;
-  padding: 0.1875rem 0.5rem;
+  padding: 0.1875rem 0.4375rem;
   border-radius: 50px;
   border: 1px solid #e2e8f0;
 }
 
-.adminpanel-experience i {
+.adminpanel-experience i,
+.adminpanel-budget i {
   color: #fbbf24;
-  font-size: 0.5625rem;
+  font-size: 0.5rem;
 }
 
+.adminpanel-voat-id {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px solid #bae6fd;
+}
+
+.adminpanel-voat-id i {
+  color: #0ea5e9;
+  font-size: 0.5rem;
+}
+
+/* STATUS BADGES */
 .adminpanel-status-badge {
-  padding: 0.4375rem 0.875rem;
+  padding: 0.375rem 0.75rem;
   border-radius: 50px;
   font-size: 0.5625rem;
   font-weight: 800;
@@ -868,31 +1116,40 @@
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
+.adminpanel-status-accepted {
+  background: linear-gradient(135deg, #dcfce7, #22c55e);
+  color: #14532d;
+  border: 1px solid #16a34a;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.25);
+}
+
+/* CARD BODY */
 .adminpanel-card-body {
   flex: 1;
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem 1.25rem;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
 }
 
-.adminpanel-submission-info {
+.adminpanel-submission-info,
+.adminpanel-quickbooking-info {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4375rem;
 }
 
 .adminpanel-info-item {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.5rem;
   color: #4a5568;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 500;
   line-height: 1.3;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4375rem 0.625rem;
   background: #f8fafc;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
   transition: all 0.3s ease;
 }
@@ -905,13 +1162,14 @@
 
 .adminpanel-info-item i {
   color: #1e40af;
-  width: 14px;
-  font-size: 0.75rem;
+  width: 12px;
+  font-size: 0.6875rem;
   flex-shrink: 0;
 }
 
+/* CARD FOOTER */
 .adminpanel-card-footer {
-  padding: 1rem 1.5rem 1.5rem 1.5rem;
+  padding: 0.875rem 1.25rem 1.25rem 1.25rem;
   display: flex;
   justify-content: center;
   margin-top: auto;
@@ -922,10 +1180,10 @@
   background: linear-gradient(135deg, #1e40af, #3b82f6);
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 10px;
   font-weight: 700;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
@@ -966,25 +1224,25 @@
   background: linear-gradient(135deg, #1e3a8a, #2563eb);
 }
 
-/* Empty & Loading States */
+/* EMPTY & LOADING STATES */
 .adminpanel-empty-state,
 .adminpanel-loading-state {
   text-align: center;
-  padding: 3rem 2rem;
+  padding: 2.5rem 2rem;
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid #f1f5f9;
 }
 
 .adminpanel-empty-icon {
-  font-size: 2.5rem;
+  font-size: 2rem;
   color: #cbd5e1;
   margin-bottom: 1rem;
 }
 
 .adminpanel-empty-state h3 {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #4a5568;
   margin-bottom: 0.5rem;
@@ -994,6 +1252,7 @@
   color: #718096;
   max-width: 400px;
   margin: 0 auto;
+  font-size: 0.875rem;
 }
 
 .adminpanel-loading-state p {
@@ -1002,7 +1261,7 @@
   margin-top: 1rem;
 }
 
-/* Modal Styles */
+/* MODAL STYLES */
 .adminpanel-modal-overlay {
   position: fixed;
   top: 0;
@@ -1021,7 +1280,7 @@
 
 .adminpanel-modal-container {
   background: white;
-  border-radius: 20px;
+  border-radius: 16px;
   width: 100%;
   max-width: 900px;
   max-height: 90vh;
@@ -1034,21 +1293,32 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2rem 2rem 1rem 2rem;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
   border-bottom: 1px solid #e2e8f0;
 }
 
 .adminpanel-modal-header h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #1a202c;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.adminpanel-modal-header h2::before {
+  content: "";
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  border-radius: 2px;
 }
 
 .adminpanel-modal-close {
   background: #f7fafc;
   border: none;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1056,7 +1326,7 @@
   cursor: pointer;
   transition: all 0.3s ease;
   color: #718096;
-  font-size: 1.25rem;
+  font-size: 1rem;
 }
 
 .adminpanel-modal-close:hover {
@@ -1066,23 +1336,25 @@
 }
 
 .adminpanel-modal-content {
-  padding: 2rem;
+  padding: 1.5rem;
 }
 
-/* Profile Header in Modal */
+/* PROFILE HEADER IN MODAL */
 .adminpanel-profile-header {
   display: flex;
-  gap: 2rem;
+  gap: 1.5rem;
   align-items: flex-start;
-  margin-bottom: 2.5rem;
-  padding-bottom: 2rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
   border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 12px;
 }
 
 .adminpanel-large-avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 20px;
+  width: 100px;
+  height: 100px;
+  border-radius: 16px;
   overflow: hidden;
   background: #f7fafc;
   display: flex;
@@ -1090,6 +1362,16 @@
   justify-content: center;
   border: 3px solid #e2e8f0;
   flex-shrink: 0;
+  position: relative;
+}
+
+.adminpanel-large-avatar::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 19px;
+  background: linear-gradient(135deg, #1e40af, #3b82f6, #fbbf24);
+  z-index: -1;
 }
 
 .adminpanel-large-avatar img {
@@ -1099,13 +1381,23 @@
 }
 
 .adminpanel-large-avatar-initials {
-  font-size: 2.5rem;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
   font-weight: 800;
-  color: #a0aec0;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: inherit;
 }
 
 .adminpanel-profile-details h1 {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #1a202c;
   margin-bottom: 0.5rem;
@@ -1114,66 +1406,56 @@
 .adminpanel-profession {
   color: #1e40af;
   font-weight: 700;
-  font-size: 1.125rem;
+  font-size: 1rem;
   margin-bottom: 0.5rem;
 }
 
 .adminpanel-headline {
   color: #718096;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 500;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   line-height: 1.5;
 }
 
-.adminpanel-status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  padding: 0.5rem 1rem;
-  border-radius: 50px;
-}
-
-.adminpanel-status-indicator.adminpanel-status-pending {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.adminpanel-status-indicator.adminpanel-status-approved {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.adminpanel-status-indicator.adminpanel-status-rejected {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.adminpanel-status-indicator i {
-  font-size: 0.5rem;
-}
-
-/* Details Grid */
+/* DETAILS GRID */
 .adminpanel-details-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+  padding: 0 1.5rem;
 }
 
 .adminpanel-detail-card {
   background: #f8fafc;
-  padding: 1.5rem;
-  border-radius: 16px;
+  padding: 1.25rem;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.adminpanel-detail-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #1e40af, #3b82f6);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
 }
 
 .adminpanel-detail-card:hover {
   background: #f1f5f9;
   border-color: #cbd5e1;
+}
+
+.adminpanel-detail-card:hover::before {
+  transform: scaleX(1);
 }
 
 .adminpanel-detail-label {
@@ -1182,7 +1464,7 @@
   gap: 0.75rem;
   font-weight: 700;
   color: #4a5568;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   margin-bottom: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1190,13 +1472,13 @@
 
 .adminpanel-detail-label i {
   color: #1e40af;
-  font-size: 1rem;
+  font-size: 0.875rem;
 }
 
 .adminpanel-detail-value {
   color: #1a202c;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.875rem;
   word-break: break-word;
 }
 
@@ -1212,10 +1494,10 @@
   text-decoration: underline;
 }
 
-/* About & Services Sections */
+/* ABOUT & SERVICES SECTIONS */
 .adminpanel-about-section,
 .adminpanel-services-section {
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
 }
 
 .adminpanel-about-section h3,
@@ -1223,10 +1505,10 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: #1a202c;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   padding-bottom: 0.75rem;
   border-bottom: 2px solid #e2e8f0;
 }
@@ -1234,29 +1516,29 @@
 .adminpanel-about-section h3 i,
 .adminpanel-services-section h3 i {
   color: #1e40af;
-  font-size: 1.125rem;
+  font-size: 1rem;
 }
 
 .adminpanel-about-section p {
   color: #4a5568;
   line-height: 1.7;
-  font-size: 1rem;
+  font-size: 0.875rem;
   background: #f8fafc;
-  padding: 1.5rem;
-  border-radius: 16px;
+  padding: 1.25rem;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
 }
 
 .adminpanel-services-grid {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .adminpanel-service-card {
   background: #f8fafc;
   border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 2rem;
+  border-radius: 12px;
+  padding: 1.5rem;
   transition: all 0.3s ease;
 }
 
@@ -1268,42 +1550,42 @@
 
 .adminpanel-service-card h4 {
   color: #1a202c;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
   margin-bottom: 0.75rem;
 }
 
 .adminpanel-service-card > p {
   color: #4a5568;
-  font-size: 1rem;
+  font-size: 0.875rem;
   line-height: 1.6;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .adminpanel-pricing-section {
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .adminpanel-pricing-section h5 {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: #4a5568;
-  margin-bottom: 1rem;
+  margin-bottom: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .adminpanel-pricing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.875rem;
 }
 
 .adminpanel-pricing-card {
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.25rem;
+  border-radius: 10px;
+  padding: 1rem;
   text-align: center;
   transition: all 0.3s ease;
 }
@@ -1317,14 +1599,14 @@
 .adminpanel-package-name {
   font-weight: 700;
   color: #4a5568;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.625rem;
 }
 
 .adminpanel-package-price {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: #fbbf24;
   margin-bottom: 0.5rem;
@@ -1332,58 +1614,64 @@
 
 .adminpanel-package-time {
   color: #718096;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
 .adminpanel-no-services {
   text-align: center;
-  padding: 3rem;
+  padding: 2.5rem;
   background: #f8fafc;
   border: 2px dashed #cbd5e1;
-  border-radius: 16px;
+  border-radius: 12px;
   color: #718096;
 }
 
 .adminpanel-no-services i {
-  font-size: 2rem;
+  font-size: 1.75rem;
   color: #cbd5e1;
-  margin-bottom: 1rem;
+  margin-bottom: 0.875rem;
   display: block;
 }
 
 .adminpanel-no-services p {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 500;
   margin: 0;
 }
 
-/* Modal Actions */
+/* MODAL ACTIONS */
 .adminpanel-modal-actions {
   display: flex;
   justify-content: center;
-  gap: 1rem;
-  margin-top: 2.5rem;
-  padding-top: 2rem;
+  gap: 0.875rem;
+  margin-top: 2rem;
+  padding: 1.5rem;
   border-top: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  flex-wrap: wrap;
 }
 
 .adminpanel-approve-btn,
-.adminpanel-reject-btn {
-  padding: 1rem 2rem;
+.adminpanel-reject-btn,
+.adminpanel-delete-btn,
+.adminpanel-hold-btn {
+  padding: 0.875rem 1.5rem;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.625rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  min-width: 160px;
+  min-width: 140px;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
 
 .adminpanel-approve-btn {
@@ -1395,6 +1683,7 @@
 .adminpanel-approve-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669, #047857);
 }
 
 .adminpanel-reject-btn {
@@ -1406,6 +1695,69 @@
 .adminpanel-reject-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+.adminpanel-delete-btn {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: white;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
+}
+
+.adminpanel-delete-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.4);
+  background: linear-gradient(135deg, #b91c1c, #991b1b);
+}
+
+.adminpanel-hold-btn.held {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
+}
+
+.adminpanel-hold-btn.unheld {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.adminpanel-hold-btn.held:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+.adminpanel-hold-btn.unheld:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.adminpanel-approve-btn::before,
+.adminpanel-reject-btn::before,
+.adminpanel-delete-btn::before,
+.adminpanel-hold-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.adminpanel-approve-btn:hover::before,
+.adminpanel-reject-btn:hover::before,
+.adminpanel-delete-btn:hover::before,
+.adminpanel-hold-btn:hover::before {
+  left: 100%;
 }
 
 .adminpanel-status-message {
@@ -1415,25 +1767,25 @@
   gap: 0.75rem;
   background: #edf2f7;
   color: #4a5568;
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.875rem 1.25rem;
+  border-radius: 10px;
   border: 1px solid #cbd5e1;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.875rem;
 }
 
 .adminpanel-status-message i {
-  font-size: 1.125rem;
+  font-size: 1rem;
 }
 
-/* Responsive Design */
+/* RESPONSIVE DESIGN */
 @media (max-width: 1400px) {
   .adminpanel-content-wrapper {
     padding: 2rem 1.5rem;
   }
 
   .adminpanel-header-content {
-    padding: 2rem 1.5rem;
+    padding: 1.5rem;
   }
 }
 
@@ -1442,8 +1794,9 @@
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .adminpanel-submissions-grid {
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  .adminpanel-submissions-grid,
+  .adminpanel-quickbookings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 }
 
@@ -1452,6 +1805,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 1.5rem;
+    padding: 1.25rem;
   }
 
   .adminpanel-brand-section {
@@ -1473,6 +1827,14 @@
   .adminpanel-sort-section {
     justify-content: center;
   }
+
+  .adminpanel-tab-navigation {
+    flex-wrap: wrap;
+  }
+
+  .adminpanel-tab-btn {
+    min-width: 120px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1485,54 +1847,101 @@
   }
 
   .adminpanel-header-content {
-    padding: 1.5rem 1rem;
+    padding: 1rem;
   }
 
   .adminpanel-title-section h1 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
+  }
+
+  .adminpanel-title-section p {
+    font-size: 0.75rem;
+  }
+
+  .adminpanel-stats-container {
+    gap: 1rem;
+  }
+
+  .adminpanel-stats-section {
+    padding: 1rem;
+  }
+
+  .adminpanel-stats-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
   }
 
   .adminpanel-stats-grid {
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
-  .adminpanel-submissions-grid {
+  .adminpanel-stat-card {
+    height: 70px;
+    min-height: 70px;
+    max-height: 70px;
+    padding: 0.75rem;
+  }
+
+  .adminpanel-stat-number {
+    font-size: 1.5rem;
+  }
+
+  .adminpanel-stat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.875rem;
+  }
+
+  .adminpanel-tab-navigation {
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.25rem;
+  }
+
+  .adminpanel-tab-btn {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.6875rem;
+    min-width: auto;
+  }
+
+  .adminpanel-submissions-grid,
+  .adminpanel-quickbookings-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
 
-  .adminpanel-submission-card {
+  .adminpanel-submission-card,
+  .adminpanel-quickbooking-card {
     height: auto;
-    min-height: 320px;
+    min-height: 280px;
     max-height: none;
-    padding: 0;
   }
 
   .adminpanel-card-header {
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 1.5rem;
-    min-height: auto;
-    padding: 2rem 1.5rem 1rem 1.5rem;
+    gap: 1rem;
+    padding: 1.25rem 1rem 0.75rem 1rem;
   }
 
   .adminpanel-profile-section {
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .adminpanel-avatar {
-    width: 80px;
-    height: 80px;
-    border-radius: 20px;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
   }
 
   .adminpanel-profile-name,
-  .adminpanel-profile-profession {
+  .adminpanel-profile-profession,
+  .adminpanel-profile-service {
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
@@ -1541,11 +1950,12 @@
   }
 
   .adminpanel-profile-name {
-    font-size: 1.125rem;
+    font-size: 1rem;
   }
 
-  .adminpanel-profile-profession {
-    font-size: 1rem;
+  .adminpanel-profile-profession,
+  .adminpanel-profile-service {
+    font-size: 0.8125rem;
   }
 
   .adminpanel-status-badge {
@@ -1554,11 +1964,41 @@
   }
 
   .adminpanel-card-body {
-    padding: 0 1.5rem;
+    padding: 0.5rem 1rem;
   }
 
   .adminpanel-card-footer {
-    padding: 1.5rem;
+    padding: 1rem;
+  }
+
+  .adminpanel-section-header {
+    padding: 1.25rem;
+  }
+
+  .adminpanel-section-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .adminpanel-section-header p {
+    font-size: 0.75rem;
+  }
+
+  .adminpanel-controls-panel {
+    padding: 1rem;
+  }
+
+  .adminpanel-search-input {
+    font-size: 0.75rem;
+  }
+
+  .adminpanel-filter-tabs {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .adminpanel-filter-tab {
+    padding: 0.4375rem 0.75rem;
+    font-size: 0.625rem;
   }
 
   .adminpanel-modal-overlay {
@@ -1571,30 +2011,38 @@
 
   .adminpanel-modal-header,
   .adminpanel-modal-content {
-    padding: 1.5rem;
+    padding: 1.25rem;
   }
 
   .adminpanel-profile-header {
     flex-direction: column;
     text-align: center;
     align-items: center;
+    padding: 1.25rem;
   }
 
   .adminpanel-profile-details h1 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 
   .adminpanel-details-grid {
     grid-template-columns: 1fr;
+    padding: 0;
   }
 
   .adminpanel-modal-actions {
     flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.25rem;
   }
 
-  .adminpanel-filter-tabs {
-    flex-wrap: wrap;
-    justify-content: center;
+  .adminpanel-approve-btn,
+  .adminpanel-reject-btn,
+  .adminpanel-delete-btn,
+  .adminpanel-hold-btn {
+    min-width: 120px;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.6875rem;
   }
 }
 
@@ -1609,38 +2057,72 @@
   }
 
   .adminpanel-title-section h1 {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
   }
 
   .adminpanel-header-content {
-    padding: 1rem;
+    padding: 0.875rem;
   }
 
   .adminpanel-content-wrapper {
-    padding: 1rem;
+    padding: 1rem 0.75rem;
+  }
+
+  .adminpanel-stats-section {
+    padding: 0.875rem;
+  }
+
+  .adminpanel-stats-title {
+    font-size: 0.75rem;
+  }
+
+  .adminpanel-stat-card {
+    height: 60px;
+    min-height: 60px;
+    max-height: 60px;
+    padding: 0.625rem;
   }
 
   .adminpanel-stat-number {
-    font-size: 1.75rem;
+    font-size: 1.25rem;
+  }
+
+  .adminpanel-stat-label {
+    font-size: 0.625rem;
   }
 
   .adminpanel-stat-icon {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
   }
 
-  .adminpanel-submission-card {
-    padding: 1rem;
+  .adminpanel-tab-btn {
+    padding: 0.5rem 0.625rem;
+    font-size: 0.625rem;
+  }
+
+  .adminpanel-tab-btn span {
+    display: none;
+  }
+
+  .adminpanel-submission-card,
+  .adminpanel-quickbooking-card {
+    min-height: 260px;
   }
 
   .adminpanel-avatar {
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
   }
 
   .adminpanel-profile-name {
     font-size: 0.875rem;
+  }
+
+  .adminpanel-profile-profession,
+  .adminpanel-profile-service {
+    font-size: 0.75rem;
   }
 
   .adminpanel-brand-section {
@@ -1653,26 +2135,47 @@
     flex-direction: column;
     text-align: center;
     gap: 0.75rem;
+    padding: 0.625rem;
   }
 
   .adminpanel-large-avatar {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
   }
 
   .adminpanel-profile-details h1 {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
+  }
+
+  .adminpanel-section-header h2 {
+    font-size: 1.125rem;
+  }
+
+  .adminpanel-controls-panel {
+    padding: 0.875rem;
+  }
+
+  .adminpanel-approve-btn,
+  .adminpanel-reject-btn,
+  .adminpanel-delete-btn,
+  .adminpanel-hold-btn {
+    min-width: 100px;
+    padding: 0.625rem 1rem;
+    font-size: 0.625rem;
   }
 }
 
-/* Accessibility & Focus States */
+/* ACCESSIBILITY & FOCUS STATES */
 .adminpanel-login-btn:focus,
 .adminpanel-logout-btn:focus,
 .adminpanel-view-btn:focus,
 .adminpanel-approve-btn:focus,
 .adminpanel-reject-btn:focus,
+.adminpanel-delete-btn:focus,
+.adminpanel-hold-btn:focus,
 .adminpanel-filter-tab:focus,
-.adminpanel-modal-close:focus {
+.adminpanel-modal-close:focus,
+.adminpanel-tab-btn:focus {
   outline: 2px solid #fbbf24;
   outline-offset: 2px;
 }
@@ -1684,15 +2187,17 @@
   outline-offset: 2px;
 }
 
-/* Smooth Animations */
+/* SMOOTH ANIMATIONS */
 .adminpanel-submission-card,
+.adminpanel-quickbooking-card,
 .adminpanel-stat-card,
 .adminpanel-service-card,
-.adminpanel-pricing-card {
+.adminpanel-pricing-card,
+.adminpanel-detail-card {
   will-change: transform;
 }
 
-/* Custom Scrollbar */
+/* CUSTOM SCROLLBAR */
 .adminpanel-modal-container::-webkit-scrollbar {
   width: 6px;
 }
@@ -1711,7 +2216,7 @@
   background: linear-gradient(135deg, #1e3a8a, #2563eb);
 }
 
-/* Print Styles */
+/* PRINT STYLES */
 @media print {
   .adminpanel-wrapper {
     background: white !important;
@@ -1719,7 +2224,8 @@
 
   .adminpanel-header,
   .adminpanel-controls-panel,
-  .adminpanel-submission-card {
+  .adminpanel-submission-card,
+  .adminpanel-quickbooking-card {
     box-shadow: none !important;
     border: 1px solid #e2e8f0 !important;
   }
@@ -1727,7 +2233,9 @@
   .adminpanel-logout-btn,
   .adminpanel-view-btn,
   .adminpanel-approve-btn,
-  .adminpanel-reject-btn {
+  .adminpanel-reject-btn,
+  .adminpanel-delete-btn,
+  .adminpanel-hold-btn {
     display: none !important;
   }
 
@@ -1742,14 +2250,14 @@
   }
 }
 
-/* Performance Optimizations */
+/* PERFORMANCE OPTIMIZATIONS */
 * {
   backface-visibility: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Utility Classes */
+/* UTILITY CLASSES */
 .adminpanel-text-gradient {
   background: linear-gradient(135deg, #1e40af, #3b82f6);
   -webkit-background-clip: text;
@@ -1767,379 +2275,7 @@
     linear-gradient(135deg, #1e40af, #3b82f6) border-box;
 }
 
-/* ADD THESE NEW STYLES TO YOUR EXISTING ADMIN DASHBOARD CSS */
-
-/* Stats Container Enhancement */
-.adminpanel-stats-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
-
-.adminpanel-stats-section {
-  background: white;
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid #f1f5f9;
-}
-
-.adminpanel-stats-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin-bottom: 1.5rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.adminpanel-stats-title i {
-  color: #1e40af;
-  font-size: 1.125rem;
-}
-
-/* Tab Navigation */
-.adminpanel-tab-navigation {
-  display: flex;
-  background: white;
-  border-radius: 16px;
-  padding: 0.5rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid #f1f5f9;
-  gap: 0.5rem;
-}
-
-.adminpanel-tab-btn {
-  position: relative;
-  flex: 1;
-  background: transparent;
-  border: none;
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  color: #718096;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  overflow: hidden;
-}
-
-.adminpanel-tab-btn i {
-  font-size: 1rem;
-  transition: transform 0.3s ease;
-}
-
-.adminpanel-tab-btn:hover {
-  background: #f8fafc;
-  color: #4a5568;
-  transform: translateY(-2px);
-}
-
-.adminpanel-tab-btn:hover i {
-  transform: scale(1.1);
-}
-
-.adminpanel-tab-btn.active {
-  background: linear-gradient(135deg, #1e40af, #3b82f6);
-  color: white;
-  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.25);
-  transform: translateY(-2px);
-}
-
-.adminpanel-tab-btn.active i {
-  transform: scale(1.1);
-}
-
-.adminpanel-tab-indicator {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #fbbf24, #f59e0b);
-  border-radius: 2px;
-  transform: scaleX(0);
-  transition: transform 0.3s ease;
-}
-
-.adminpanel-tab-btn.active .adminpanel-tab-indicator {
-  transform: scaleX(1);
-}
-
-/* Quick Booking Specific Styles */
-.adminpanel-quickbookings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 1.5rem;
-  align-items: start;
-}
-
-.adminpanel-quickbooking-card {
-  background: white;
-  border-radius: 20px;
-  padding: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid #f1f5f9;
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  height: 320px;
-  min-height: 320px;
-  max-height: 320px;
-  width: 100%;
-  overflow: hidden;
-  position: relative;
-}
-
-.adminpanel-quickbooking-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  border-color: #f59e0b;
-}
-
-.adminpanel-quickbooking-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #fbbf24, #f59e0b, #1e40af);
-}
-
-.adminpanel-profile-service {
-  color: #f59e0b;
-  font-weight: 600;
-  font-size: 0.8125rem;
-  margin-bottom: 0.375rem;
-  line-height: 1.3;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-}
-
-.adminpanel-budget {
-  color: #718096;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: #f7fafc;
-  padding: 0.1875rem 0.5rem;
-  border-radius: 50px;
-  border: 1px solid #e2e8f0;
-}
-
-.adminpanel-budget i {
-  color: #fbbf24;
-  font-size: 0.5625rem;
-}
-
-.adminpanel-quickbooking-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-/* Section Styles */
-.adminpanel-section {
-  margin-bottom: 2rem;
-}
-
-.adminpanel-section-header {
-  margin-bottom: 1.5rem;
-  text-align: center;
-  padding: 2rem;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-}
-
-.adminpanel-section-header h2 {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.adminpanel-section-header h2::before {
-  content: "";
-  width: 4px;
-  height: 32px;
-  background: linear-gradient(135deg, #1e40af, #3b82f6);
-  border-radius: 2px;
-}
-
-.adminpanel-section-header p {
-  color: #718096;
-  font-weight: 500;
-  font-size: 1rem;
-  max-width: 600px;
-  margin: 0 auto;
-  line-height: 1.6;
-}
-
-/* Enhanced Modal Styles for Quick Bookings */
-.adminpanel-modal-header h2::before {
-  content: "";
-  width: 4px;
-  height: 24px;
-  background: linear-gradient(135deg, #1e40af, #3b82f6);
-  border-radius: 2px;
-}
-
-/* Enhanced Profile Header */
-.adminpanel-profile-header {
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-  margin-bottom: 2.5rem;
-  padding: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-}
-
-.adminpanel-large-avatar::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 23px;
-  background: linear-gradient(135deg, #1e40af, #3b82f6, #fbbf24);
-  z-index: -1;
-}
-
-.adminpanel-status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  padding: 0.75rem 1.25rem;
-  border-radius: 50px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.adminpanel-status-indicator.adminpanel-status-pending {
-  background: linear-gradient(135deg, #fef3c7, #fbbf24);
-  color: #92400e;
-  border: 1px solid #f59e0b;
-}
-
-.adminpanel-status-indicator.adminpanel-status-accepted,
-.adminpanel-status-indicator.adminpanel-status-approved {
-  background: linear-gradient(135deg, #dcfce7, #22c55e);
-  color: #14532d;
-  border: 1px solid #16a34a;
-}
-
-.adminpanel-status-indicator.adminpanel-status-rejected {
-  background: linear-gradient(135deg, #fee2e2, #ef4444);
-  color: #7f1d1d;
-  border: 1px solid #dc2626;
-}
-
-.adminpanel-status-indicator i {
-  font-size: 0.5rem;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* Enhanced Details Grid */
-.adminpanel-details-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2.5rem;
-  padding: 0 2rem;
-}
-
-.adminpanel-detail-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #1e40af, #3b82f6);
-  transform: scaleX(0);
-  transition: transform 0.3s ease;
-}
-
-.adminpanel-detail-card:hover::before {
-  transform: scaleX(1);
-}
-
-/* Enhanced Modal Actions */
-.adminpanel-modal-actions {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 2.5rem;
-  padding: 2rem;
-  border-top: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-}
-
-.adminpanel-approve-btn::before,
-.adminpanel-reject-btn::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.5s ease;
-}
-
-.adminpanel-approve-btn:hover::before,
-.adminpanel-reject-btn:hover::before {
-  left: 100%;
-}
-
-.adminpanel-approve-btn:hover {
-  background: linear-gradient(135deg, #059669, #047857);
-}
-
-.adminpanel-reject-btn:hover {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-}
-
-/* Custom animations for enhanced UX */
+/* SPECIAL ANIMATIONS FOR ENHANCED UX */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -2151,258 +2287,112 @@
   }
 }
 
+.adminpanel-submissions-grid > *,
 .adminpanel-quickbookings-grid > * {
   animation: fadeInUp 0.6s ease-out;
 }
 
+.adminpanel-submissions-grid > *:nth-child(2),
 .adminpanel-quickbookings-grid > *:nth-child(2) {
   animation-delay: 0.1s;
 }
 
+.adminpanel-submissions-grid > *:nth-child(3),
 .adminpanel-quickbookings-grid > *:nth-child(3) {
   animation-delay: 0.2s;
 }
 
+.adminpanel-submissions-grid > *:nth-child(4),
 .adminpanel-quickbookings-grid > *:nth-child(4) {
   animation-delay: 0.3s;
 }
 
-/* Additional responsive styles for new components */
-@media (max-width: 768px) {
-  .adminpanel-stats-container {
-    gap: 1rem;
-  }
+/* ADDITIONAL IMPROVEMENTS FOR RECOMMENDED PROFILES */
 
-  .adminpanel-stats-section {
-    padding: 1.5rem;
-  }
-
-  .adminpanel-tab-navigation {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .adminpanel-tab-btn {
-    padding: 0.75rem 1rem;
-  }
-
-  .adminpanel-quickbookings-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .adminpanel-quickbooking-card {
-    height: auto;
-    min-height: 300px;
-    max-height: none;
-  }
-
-  .adminpanel-section-header {
-    padding: 1.5rem;
-  }
-
-  .adminpanel-section-header h2 {
-    font-size: 1.5rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .adminpanel-stats-section {
-    padding: 1rem;
-  }
-
-  .adminpanel-stats-title {
-    font-size: 1rem;
-  }
-
-  .adminpanel-tab-btn {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.75rem;
-  }
-
-  .adminpanel-tab-btn span {
-    display: none;
-  }
-
-  .adminpanel-section-header h2 {
-    font-size: 1.25rem;
-  }
-}
-
-/* Delete Button Styles */
-.adminpanel-delete-btn {
-  padding: 1rem 2rem;
-  border: none;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  min-width: 160px;
-  justify-content: center;
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  color: white;
-  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
-  position: relative;
-  overflow: hidden;
-}
-
-.adminpanel-delete-btn::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.5s ease;
-}
-
-.adminpanel-delete-btn:hover::before {
-  left: 100%;
-}
-
-.adminpanel-delete-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.4);
-  background: linear-gradient(135deg, #b91c1c, #991b1b);
-}
-
-/* Hold Button Styles */
-.adminpanel-hold-btn {
-  padding: 1rem 2rem;
-  border: none;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  min-width: 160px;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.adminpanel-hold-btn.held {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
-}
-
-.adminpanel-hold-btn.unheld {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
-}
-
-.adminpanel-hold-btn::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.5s ease;
-}
-
-.adminpanel-hold-btn:hover::before {
-  left: 100%;
-}
-
-.adminpanel-hold-btn.held:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
-  background: linear-gradient(135deg, #d97706, #b45309);
-}
-
-.adminpanel-hold-btn.unheld:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
-  background: linear-gradient(135deg, #059669, #047857);
-}
-
-/* Update modal actions to handle multiple buttons */
-.adminpanel-modal-actions {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 2.5rem;
-  padding: 2rem;
-  border-top: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-  flex-wrap: wrap;
-}
-
-/* Status indicator for held submissions */
-.adminpanel-status-held {
+/* Enhanced status indicators for recommended profiles */
+.adminpanel-status-badge.adminpanel-recommended {
   background: linear-gradient(135deg, #fef3c7, #fbbf24);
   color: #92400e;
   border: 1px solid #f59e0b;
   box-shadow: 0 2px 8px rgba(251, 191, 36, 0.25);
+  position: relative;
+  overflow: hidden;
 }
 
-/* Add held indicator to submission cards */
-.adminpanel-submission-card.held {
-  opacity: 0.7;
-  border-color: #f59e0b;
+/* Star animation for recommended profiles */
+.adminpanel-status-badge.adminpanel-recommended i {
+  animation: starGlow 2s ease-in-out infinite alternate;
 }
 
-.adminpanel-submission-card.held::after {
-  content: "HELD";
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.625rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  z-index: 10;
+@keyframes starGlow {
+  from {
+    text-shadow: 0 0 5px #fbbf24;
+    transform: scale(1);
+  }
+  to {
+    text-shadow: 0 0 10px #f59e0b, 0 0 15px #f59e0b;
+    transform: scale(1.1);
+  }
 }
 
-/* Responsive design for new buttons */
+/* Better spacing for mobile recommended profiles */
 @media (max-width: 768px) {
-  .adminpanel-modal-actions {
-    flex-direction: column;
-    gap: 0.75rem;
+  .adminpanel-profile-meta {
+    justify-content: center;
+    flex-wrap: wrap;
   }
 
-  .adminpanel-delete-btn,
-  .adminpanel-hold-btn {
-    min-width: 120px;
-    padding: 0.75rem 1.5rem;
-    font-size: 0.8125rem;
+  .adminpanel-voat-id {
+    margin-top: 0.25rem;
   }
 }
 
-@media (max-width: 480px) {
-  .adminpanel-delete-btn,
-  .adminpanel-hold-btn {
-    min-width: 100px;
-    padding: 0.625rem 1rem;
-    font-size: 0.75rem;
+/* Loading state improvements */
+.adminpanel-loading-state .adminpanel-spinner {
+  width: 48px;
+  height: 48px;
+  border-width: 3px;
+}
+
+/* Enhanced empty state */
+.adminpanel-empty-state {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 2px dashed #e2e8f0;
+}
+
+.adminpanel-empty-state:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+/* Final optimizations for better performance */
+.adminpanel-submissions-grid,
+.adminpanel-quickbookings-grid {
+  contain: layout style paint;
+}
+
+.adminpanel-modal-overlay {
+  contain: layout style paint;
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+input,
+select,
+.adminpanel-submission-card,
+.adminpanel-quickbooking-card,
+.adminpanel-stat-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced focus visible for better accessibility */
+@supports selector(:focus-visible) {
+  *:focus {
+    outline: none;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
   }
 }
