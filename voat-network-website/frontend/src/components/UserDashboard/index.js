@@ -19,6 +19,9 @@ class UserDashboard extends Component {
     notifications: [],
     stats: {},
     bookingFilter: "all", // for filtering bookings
+    showNotificationSlide: false,
+    orderFilter: "all",
+    orderSearchQuery: "",
     formData: {
       name: "",
       email: "",
@@ -41,6 +44,14 @@ class UserDashboard extends Component {
         { level: "Standard", price: "", timeFrame: "" },
         { level: "Premium", price: "", timeFrame: "" },
       ],
+    },
+    stats: {
+      totalSpent: 0,
+      activeOrders: 0,
+      completedOrders: 0,
+      savedItems: 0,
+      totalBookings: 0,
+      pendingBookings: 0,
     },
     profileImage: null,
     previewImage: null,
@@ -144,6 +155,7 @@ class UserDashboard extends Component {
         this.fetchOrders();
         this.fetchWishlist();
         this.fetchBookings();
+        this.fetchNotifications();
       });
     });
 
@@ -300,6 +312,161 @@ class UserDashboard extends Component {
     }
   };
 
+  toggleNotificationSlide = () => {
+    this.setState((prevState) => ({
+      showNotificationSlide: !prevState.showNotificationSlide,
+    }));
+  };
+
+  fetchNotifications = async () => {
+    try {
+      const userData = this.state.userData;
+      if (!userData || !userData.id) return;
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/notifications/${userData.id}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        this.setState({
+          notifications: result.notifications || [],
+        });
+      } else {
+        // Fallback to sample notifications based on user activity
+        const notifications = [];
+
+        if (this.state.orders.length > 0) {
+          const recentOrder = this.state.orders[0];
+          notifications.push({
+            id: 1,
+            type: "order",
+            message: `Your order ${recentOrder.id} status: ${recentOrder.status}`,
+            time: this.getTimeAgo(new Date(recentOrder.date)),
+            read: false,
+          });
+        }
+
+        if (this.isFreelancer() && this.state.bookings.length > 0) {
+          const pendingBookings = this.state.bookings.filter(
+            (b) => b.status === "pending"
+          );
+          if (pendingBookings.length > 0) {
+            notifications.push({
+              id: 2,
+              type: "booking",
+              message: `You have ${
+                pendingBookings.length
+              } pending booking request${
+                pendingBookings.length > 1 ? "s" : ""
+              }`,
+              time: "Recent",
+              read: false,
+            });
+          }
+        }
+
+        if (this.state.portfolioStatus === "approved") {
+          notifications.push({
+            id: 4,
+            type: "portfolio",
+            message: "Congratulations! Your portfolio has been approved",
+            time: "2 days ago",
+            read: false,
+          });
+        }
+
+        this.setState({ notifications });
+      }
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  markNotificationAsRead = async (id) => {
+    try {
+      this.setState((prevState) => ({
+        notifications: prevState.notifications.map((notification) =>
+          notification.id === id
+            ? { ...notification, read: true }
+            : notification
+        ),
+      }));
+
+      try {
+        await fetch(`${this.state.baseUrl}/api/notifications/${id}/read`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      } catch (error) {
+        console.error("Error marking notification as read on server:", error);
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
+
+  markAllNotificationsAsRead = async () => {
+    try {
+      this.setState((prevState) => ({
+        notifications: prevState.notifications.map((notification) => ({
+          ...notification,
+          read: true,
+        })),
+      }));
+
+      try {
+        const userData = this.state.userData;
+        if (userData && userData.id) {
+          await fetch(
+            `${this.state.baseUrl}/api/notifications/user/${userData.id}/read-all`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Error marking all notifications as read on server:",
+          error
+        );
+      }
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+    }
+  };
+
+  handleOrderFilterChange = (filter) => {
+    this.setState({ orderFilter: filter }, () => {
+      this.fetchOrders();
+    });
+  };
+
+  handleOrderSearch = (query) => {
+    this.setState({ orderSearchQuery: query }, () => {
+      this.fetchOrders();
+    });
+  };
+
+  getTimeAgo = (date) => {
+    const now = new Date();
+    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    return `${diffInWeeks}w ago`;
+  };
+
   updateUserDataInDatabase = async (userData) => {
     try {
       if (!userData.id) {
@@ -448,16 +615,20 @@ class UserDashboard extends Component {
 
   fetchOrders = async () => {
     try {
-      // Try to fetch from API
       const response = await fetch(
         `${this.state.baseUrl}/api/orders/${
           this.state.userData?.id || "unknown"
+        }?search=${this.state.orderSearchQuery}&status=${
+          this.state.orderFilter
         }`
       );
 
       if (response.ok) {
-        const orders = await response.json();
-        this.setState({ orders });
+        const result = await response.json();
+        const orders = result.orders || result;
+        this.setState({ orders }, () => {
+          this.updateStats();
+        });
       } else {
         // For demo purposes, add mock orders
         this.setState({
@@ -818,7 +989,8 @@ class UserDashboard extends Component {
     this.setState({
       activeTab: tab,
       showPortfolioForm: false,
-      showMobileSidebar: false, // Close mobile sidebar when tab changes
+      showMobileSidebar: false,
+      showNotificationSlide: false,
     });
   };
 
@@ -1173,6 +1345,49 @@ class UserDashboard extends Component {
     window.location.href = `/my-portfolio/${this.state.userData.id}`;
   };
 
+  updateStats = async () => {
+    try {
+      const { orders, wishlist, bookings } = this.state;
+
+      // Calculate total spent from completed orders
+      const totalSpent = orders
+        .filter((order) => order.status === "Completed")
+        .reduce((sum, order) => sum + (order.amount || 0), 0);
+
+      // Count active orders (In Progress + Pending)
+      const activeOrders = orders.filter(
+        (order) => order.status === "In Progress" || order.status === "Pending"
+      ).length;
+
+      // Count completed orders
+      const completedOrders = orders.filter(
+        (order) => order.status === "Completed"
+      ).length;
+
+      // Wishlist count
+      const savedItems = wishlist.length;
+
+      // Booking stats (for freelancers)
+      const totalBookings = bookings.length;
+      const pendingBookings = bookings.filter(
+        (booking) => booking.status === "pending"
+      ).length;
+
+      this.setState({
+        stats: {
+          totalSpent,
+          activeOrders,
+          completedOrders,
+          savedItems,
+          totalBookings,
+          pendingBookings,
+        },
+      });
+    } catch (error) {
+      console.error("Error updating stats:", error);
+    }
+  };
+
   removeFromWishlist = async (itemId) => {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
@@ -1293,7 +1508,10 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>My Dashboard</h1>
           <div className="dashboard-actions">
-            <button className="notification-btn">
+            <button
+              className="notification-btn"
+              onClick={this.toggleNotificationSlide}
+            >
               <i className="fas fa-bell"></i>
               <span className="notification-badge">
                 {this.state.notifications.filter((n) => !n.read).length}
@@ -1311,6 +1529,72 @@ class UserDashboard extends Component {
               </div>
               <div className="user-name">{userData.name}</div>
             </div>
+          </div>
+        </div>
+
+        <div
+          className={`notification-slide ${
+            this.state.showNotificationSlide ? "active" : ""
+          }`}
+        >
+          <div className="notification-slide-header">
+            <h3>Notifications</h3>
+            <div className="notification-slide-actions">
+              <button
+                className="btn-mark-all"
+                onClick={this.markAllNotificationsAsRead}
+                disabled={!this.state.notifications.some((n) => !n.read)}
+              >
+                Mark all read
+              </button>
+              <button
+                className="btn-close-slide"
+                onClick={this.toggleNotificationSlide}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          <div className="notification-slide-content">
+            {this.state.notifications.length === 0 ? (
+              <div className="empty-notifications">
+                <i className="fas fa-bell-slash"></i>
+                <p>No notifications yet</p>
+              </div>
+            ) : (
+              this.state.notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`notification-item ${
+                    notification.read ? "read" : "unread"
+                  }`}
+                  onClick={() => this.markNotificationAsRead(notification.id)}
+                >
+                  <div className="notification-icon">
+                    <i
+                      className={`fas fa-${
+                        notification.type === "order"
+                          ? "shopping-cart"
+                          : notification.type === "portfolio"
+                          ? "briefcase"
+                          : notification.type === "booking"
+                          ? "calendar-check"
+                          : "bell"
+                      }`}
+                    ></i>
+                  </div>
+                  <div className="notification-content">
+                    <div className="notification-message">
+                      {notification.message}
+                    </div>
+                    <div className="notification-time">{notification.time}</div>
+                  </div>
+                  {!notification.read && (
+                    <div className="unread-indicator"></div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -1713,6 +1997,24 @@ class UserDashboard extends Component {
   renderOrders() {
     const { orders } = this.state;
 
+    const filteredOrders = orders.filter((order) => {
+      const matchesSearch =
+        !this.state.orderSearchQuery ||
+        order.service
+          .toLowerCase()
+          .includes(this.state.orderSearchQuery.toLowerCase()) ||
+        order.provider
+          .toLowerCase()
+          .includes(this.state.orderSearchQuery.toLowerCase());
+
+      const matchesFilter =
+        this.state.orderFilter === "all" ||
+        order.status.toLowerCase().replace(" ", "-") ===
+          this.state.orderFilter.toLowerCase();
+
+      return matchesSearch && matchesFilter;
+    });
+
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
@@ -1724,9 +2026,15 @@ class UserDashboard extends Component {
                 type="text"
                 placeholder="Search orders..."
                 className="search-input"
+                value={this.state.orderSearchQuery}
+                onChange={(e) => this.handleOrderSearch(e.target.value)}
               />
             </div>
-            <select className="filter-dropdown">
+            <select
+              className="filter-dropdown"
+              value={this.state.orderFilter}
+              onChange={(e) => this.handleOrderFilterChange(e.target.value)}
+            >
               <option value="all">All Orders</option>
               <option value="completed">Completed</option>
               <option value="in-progress">In Progress</option>

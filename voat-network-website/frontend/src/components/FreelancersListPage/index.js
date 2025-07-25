@@ -120,6 +120,7 @@ class PortfolioList extends Component {
       profession: "",
       experience: "",
       amount: [],
+      voatRecommended: false, // Add filter for VOAT recommended
     },
     baseUrl:
       window.location.hostname === "localhost"
@@ -1001,12 +1002,24 @@ class PortfolioList extends Component {
     });
   };
 
+  // Add VOAT Recommended filter handler
+  handleVoatRecommendedFilter = (e) => {
+    const { checked } = e.target;
+    this.setState((prevState) => ({
+      filters: {
+        ...prevState.filters,
+        voatRecommended: checked,
+      },
+    }));
+  };
+
   resetFilters = () => {
     this.setState({
       filters: {
         profession: "",
         experience: "",
         amount: [],
+        voatRecommended: false,
       },
     });
 
@@ -1323,6 +1336,11 @@ class PortfolioList extends Component {
         }
       }
 
+      // Add VOAT Recommended filter
+      if (filters.voatRecommended && !portfolio.isRecommended) {
+        return false;
+      }
+
       return true;
     });
 
@@ -1406,21 +1424,38 @@ class PortfolioList extends Component {
             </div>
 
             {/* Show active filter indicator */}
-            {filters.profession && (
+            {(filters.profession || filters.voatRecommended) && (
               <div className="active-filter-indicator">
-                <span className="filter-tag">
-                  {filters.profession}
-                  <button
-                    onClick={() =>
-                      this.handleFilterChange({
-                        target: { name: "profession", value: "" },
-                      })
-                    }
-                    className="remove-filter-btn"
-                  >
-                    ×
-                  </button>
-                </span>
+                {filters.profession && (
+                  <span className="filter-tag">
+                    {filters.profession}
+                    <button
+                      onClick={() =>
+                        this.handleFilterChange({
+                          target: { name: "profession", value: "" },
+                        })
+                      }
+                      className="remove-filter-btn"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                {filters.voatRecommended && (
+                  <span className="filter-tag voat-recommended-tag">
+                    VOAT Recommended
+                    <button
+                      onClick={() =>
+                        this.handleVoatRecommendedFilter({
+                          target: { checked: false },
+                        })
+                      }
+                      className="remove-filter-btn"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
               </div>
             )}
 
@@ -1453,6 +1488,30 @@ class PortfolioList extends Component {
                 ))}
               </select>
             </div>
+
+            {/* VOAT Recommended Filter */}
+            {/* <div className="filter-section">
+              <label className="checkbox-label voat-recommended-filter">
+                <input
+                  type="checkbox"
+                  checked={filters.voatRecommended}
+                  onChange={this.handleVoatRecommendedFilter}
+                  className="filter-checkbox"
+                />
+                <span className="checkbox-custom voat-checkbox"></span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                </svg>
+                VOAT Recommended
+              </label>
+            </div> */}
 
             <div className="filter-section">
               <label className="filter-label">
@@ -1557,7 +1616,16 @@ class PortfolioList extends Component {
                     </svg>
                     Quick Booking
                   </button>
-                  <button className="voat-recommended-btn">
+                  <button
+                    className={`voat-recommended-btn ${
+                      filters.voatRecommended ? "active" : ""
+                    }`}
+                    onClick={() =>
+                      this.handleVoatRecommendedFilter({
+                        target: { checked: !filters.voatRecommended },
+                      })
+                    }
+                  >
                     <svg
                       width="16"
                       height="16"
@@ -1607,10 +1675,27 @@ class PortfolioList extends Component {
                   const firstServicePrice =
                     this.getFirstServicePrice(portfolio);
                   const voatId = portfolio.voatId || "Not Available";
+                  const isRecommended = portfolio.isRecommended || false;
 
                   return (
                     <div key={userId} className="portfolio-card-simple">
-                      {/* Wishlist Heart Icon */}
+                      {/* VOAT Recommended Badge - Top Left Corner */}
+                      {isRecommended && (
+                        <div className="voat-recommended-badge">
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            stroke="none"
+                          >
+                            <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                          </svg>
+                          <span>VOAT</span>
+                        </div>
+                      )}
+
+                      {/* Wishlist Heart Icon - Top Right Corner */}
                       <button
                         className={`wishlist-heart-btn ${
                           this.isWishlisted(userId) ? "wishlisted" : ""

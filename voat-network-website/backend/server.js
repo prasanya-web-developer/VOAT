@@ -431,6 +431,31 @@ const QuickBookingSchema = new mongoose.Schema(
 
 const QuickBooking = mongoose.model("QuickBooking", QuickBookingSchema);
 
+const NotificationSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    type: {
+      type: String,
+      enum: ["order", "booking", "portfolio", "system", "payment"],
+      required: true,
+    },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    read: { type: Boolean, default: false },
+    relatedId: { type: Schema.Types.ObjectId }, // ID of related order, booking, etc.
+    data: { type: Object }, // Additional data for the notification
+    createdAt: { type: Date, default: Date.now },
+    readAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+const Notification = mongoose.model("Notification", NotificationSchema);
+
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log("Headers:", req.headers);
@@ -946,6 +971,34 @@ app.post(
               { upsert: true, new: true }
             );
           }
+
+          // *** ADD NOTIFICATION HERE FOR NEW SUBMISSIONS ***
+          if (userId) {
+            try {
+              await createNotification(
+                userId,
+                "portfolio",
+                "Portfolio Submitted",
+                "Your portfolio has been submitted successfully and is now under review.",
+                portfolio._id,
+                {
+                  portfolioName: name,
+                  profession: profession,
+                  headline: headline,
+                  submissionDate: new Date().toISOString(),
+                }
+              );
+              console.log(
+                "Portfolio submission notification created successfully"
+              );
+            } catch (notificationError) {
+              console.error(
+                "Error creating portfolio notification:",
+                notificationError
+              );
+              // Don't fail the portfolio submission if notification fails
+            }
+          }
         } else {
           // Normal update - don't change status
           portfolio = await PortfolioSubmission.findOneAndUpdate(
@@ -1142,10 +1195,54 @@ app.put("/api/admin/portfolio-submissions/:id/status", async (req, res) => {
     submission.updatedDate = new Date();
     await submission.save();
 
-    // Send notification to user
+    // *** CREATE NOTIFICATION FOR STATUS UPDATE ***
+    if (submission.userId) {
+      try {
+        let notificationTitle, notificationMessage;
+
+        if (status === "approved") {
+          notificationTitle = "Portfolio Approved! 🎉";
+          notificationMessage = `Congratulations! Your portfolio for "${submission.profession}" has been approved and is now live.`;
+        } else if (status === "rejected") {
+          notificationTitle = "Portfolio Needs Revision";
+          notificationMessage = `Your portfolio submission for "${submission.profession}" needs some revisions. Please check the requirements and resubmit.`;
+        } else {
+          notificationTitle = "Portfolio Under Review";
+          notificationMessage = `Your portfolio for "${submission.profession}" is currently being reviewed by our team.`;
+        }
+
+        await createNotification(
+          submission.userId,
+          "portfolio",
+          notificationTitle,
+          notificationMessage,
+          submission._id,
+          {
+            portfolioName: submission.name,
+            profession: submission.profession,
+            status: status,
+            updatedDate: new Date().toISOString(),
+          }
+        );
+        console.log(
+          `Portfolio status notification created for user ${submission.userId}`
+        );
+      } catch (notificationError) {
+        console.error(
+          "Error creating portfolio status notification:",
+          notificationError
+        );
+        // Don't fail the status update if notification fails
+      }
+    }
+
     console.log(`Portfolio submission ${id} status updated to ${status}`);
 
-    res.status(200).json(submission);
+    res.status(200).json({
+      success: true,
+      message: `Portfolio ${status} successfully`,
+      submission: submission,
+    });
   } catch (error) {
     console.error("Error updating submission status:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -3286,6 +3383,96 @@ app.post("/api/cart/checkout", async (req, res) => {
   }
 });
 
+app.post("/api/create-order-with-notification", async (req, res) => {
+  try {
+    const {
+      userId,
+      userName,
+      userEmail,
+      freelancerId,
+      freelancerName,
+      freelancerEmail,
+      serviceName,
+      serviceLevel,
+      servicePrice,
+      paymentStructure,
+    } = req.body;
+
+    console.log("Creating order with notification:", { userId, serviceName });
+
+    // Validate required fields
+    if (!userId || !freelancerId || !serviceName || !servicePrice) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+
+    // Create the order
+    const newOrder = new Order({
+      userId,
+      userName,
+      userEmail,
+      freelancerId,
+      freelancerName,
+      freelancerEmail,
+      serviceName,
+      serviceLevel,
+      servicePrice,
+      paymentStructure,
+      status: "pending",
+      orderDate: new Date(),
+    });
+
+    const savedOrder = await newOrder.save();
+
+    // Create notification for the user
+    await createNotification(
+      userId,
+      "order",
+      "Order Created Successfully",
+      `Your order for "${serviceName}" has been created and is now pending.`,
+      savedOrder._id,
+      {
+        orderId: savedOrder._id,
+        serviceName: serviceName,
+        amount: servicePrice,
+        freelancerName: freelancerName,
+      }
+    );
+
+    // Create notification for the freelancer
+    await createNotification(
+      freelancerId,
+      "order",
+      "New Order Received",
+      `You have received a new order for "${serviceName}" from ${userName}.`,
+      savedOrder._id,
+      {
+        orderId: savedOrder._id,
+        serviceName: serviceName,
+        amount: servicePrice,
+        clientName: userName,
+      }
+    );
+
+    console.log(`Order created successfully: ${savedOrder._id}`);
+
+    res.status(201).json({
+      success: true,
+      message: "Order created successfully",
+      order: savedOrder,
+    });
+  } catch (error) {
+    console.error("Error creating order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create order",
+      error: error.message,
+    });
+  }
+});
+
 console.log("✅ Cart API endpoints loaded successfully");
 
 // Development debugging endpoints
@@ -3494,8 +3681,12 @@ app.get("/api/bookings/:userId", async (req, res) => {
 app.get("/api/orders/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+    const { search, status, limit = 50 } = req.query;
 
-    console.log("Fetching orders for client:", userId);
+    console.log("Fetching orders for user:", userId, "with filters:", {
+      search,
+      status,
+    });
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
@@ -3504,34 +3695,55 @@ app.get("/api/orders/:userId", async (req, res) => {
       });
     }
 
-    // Find all bookings where the user is the client
-    const orders = await Booking.find({ clientId: userId })
-      .sort({ requestDate: -1 })
-      .populate("clientId", "name email profileImage")
+    let query = { userId };
+
+    // Add status filter
+    if (status && status !== "all") {
+      query.status = status;
+    }
+
+    // Add search functionality
+    if (search) {
+      query.$or = [
+        { serviceName: { $regex: search, $options: "i" } },
+        { freelancerName: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const orders = await Order.find(query)
+      .sort({ orderDate: -1 })
+      .limit(parseInt(limit))
       .populate("freelancerId", "name email profileImage");
 
-    console.log(`Found ${orders.length} orders for client ${userId}`);
-
-    // Format the orders data to match existing structure
+    // Format orders for frontend
     const formattedOrders = orders.map((order, index) => ({
       id: `ORD-${String(index + 1).padStart(3, "0")}`,
       service: order.serviceName,
       status:
-        order.status === "accepted"
+        order.status === "pending"
+          ? "Pending"
+          : order.status === "in-progress"
           ? "In Progress"
-          : order.status === "rejected"
-          ? "Cancelled"
-          : "Pending",
-      date: order.requestDate.toISOString().split("T")[0],
+          : order.status === "completed"
+          ? "Completed"
+          : "Cancelled",
+      date: order.orderDate.toISOString().split("T")[0],
       amount: order.servicePrice,
       provider: order.freelancerName,
-      providerImage: order.freelancerId?.profileImage || null,
-      bookingId: order._id,
-      requestDate: order.requestDate,
-      responseDate: order.responseDate,
+      providerImage:
+        order.freelancerId?.profileImage || order.freelancerProfileImage,
+      orderId: order._id,
+      orderDate: order.orderDate,
+      completedDate: order.completedDate,
     }));
 
-    res.status(200).json(formattedOrders);
+    console.log(`Found ${formattedOrders.length} orders for user ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      orders: formattedOrders,
+      total: formattedOrders.length,
+    });
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({
@@ -3541,6 +3753,8 @@ app.get("/api/orders/:userId", async (req, res) => {
     });
   }
 });
+
+console.log("✅ Notification API endpoints loaded successfully");
 
 // Update Booking Status (Accept/Reject)
 app.put("/api/booking/:bookingId/action", async (req, res) => {
@@ -3588,6 +3802,21 @@ app.put("/api/booking/:bookingId/action", async (req, res) => {
     booking.responseDate = new Date();
 
     const updatedBooking = await booking.save();
+
+    // Create notification for the client
+    await createNotification(
+      booking.clientId,
+      "booking",
+      `Booking ${action === "accept" ? "Accepted" : "Rejected"}`,
+      `Your booking request for "${booking.serviceName}" has been ${action}ed by ${booking.freelancerName}.`,
+      bookingId,
+      {
+        bookingId: bookingId,
+        serviceName: booking.serviceName,
+        freelancerName: booking.freelancerName,
+        status: newStatus,
+      }
+    );
 
     console.log(`Booking ${bookingId} successfully ${action}ed`);
 
@@ -4173,6 +4402,329 @@ app.get("/api/user-voat-id/:userId", async (req, res) => {
   } catch (error) {
     console.error("Error fetching VOAT ID:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// GET - Get user notifications
+app.get("/api/notifications/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50, unreadOnly = false } = req.query;
+
+    console.log("Fetching notifications for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    let query = { userId };
+    if (unreadOnly === "true") {
+      query.read = false;
+    }
+
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .populate("userId", "name email profileImage");
+
+    const unreadCount = await Notification.countDocuments({
+      userId,
+      read: false,
+    });
+
+    console.log(
+      `Found ${notifications.length} notifications for user ${userId}`
+    );
+
+    res.status(200).json({
+      success: true,
+      notifications: notifications,
+      unreadCount: unreadCount,
+    });
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch notifications",
+      error: error.message,
+    });
+  }
+});
+
+// POST - Create notification
+app.post("/api/notifications", async (req, res) => {
+  try {
+    const { userId, type, title, message, relatedId, data } = req.body;
+
+    console.log("Creating notification:", { userId, type, title });
+
+    if (!userId || !type || !title || !message) {
+      return res.status(400).json({
+        success: false,
+        message: "userId, type, title, and message are required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const notification = new Notification({
+      userId,
+      type,
+      title,
+      message,
+      relatedId: relatedId || null,
+      data: data || {},
+    });
+
+    const savedNotification = await notification.save();
+
+    console.log(`Notification created successfully: ${savedNotification._id}`);
+
+    res.status(201).json({
+      success: true,
+      message: "Notification created successfully",
+      notification: savedNotification,
+    });
+  } catch (error) {
+    console.error("Error creating notification:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create notification",
+      error: error.message,
+    });
+  }
+});
+
+// PUT - Mark notification as read
+app.put("/api/notifications/:notificationId/read", async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    console.log("Marking notification as read:", notificationId);
+
+    if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid notification ID format",
+      });
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      notificationId,
+      {
+        read: true,
+        readAt: new Date(),
+      },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
+    }
+
+    console.log(`Notification ${notificationId} marked as read`);
+
+    res.status(200).json({
+      success: true,
+      message: "Notification marked as read",
+      notification: notification,
+    });
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark notification as read",
+      error: error.message,
+    });
+  }
+});
+
+// PUT - Mark all notifications as read for a user
+app.put("/api/notifications/user/:userId/read-all", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Marking all notifications as read for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const result = await Notification.updateMany(
+      { userId, read: false },
+      {
+        read: true,
+        readAt: new Date(),
+      }
+    );
+
+    console.log(
+      `Marked ${result.modifiedCount} notifications as read for user ${userId}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "All notifications marked as read",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark all notifications as read",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE - Delete notification
+app.delete("/api/notifications/:notificationId", async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    console.log("Deleting notification:", notificationId);
+
+    if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid notification ID format",
+      });
+    }
+
+    const notification = await Notification.findByIdAndDelete(notificationId);
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
+    }
+
+    console.log(`Notification ${notificationId} deleted successfully`);
+
+    res.status(200).json({
+      success: true,
+      message: "Notification deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete notification",
+      error: error.message,
+    });
+  }
+});
+
+// Helper function to create notifications (add this as a utility function)
+const createNotification = async (
+  userId,
+  type,
+  title,
+  message,
+  relatedId = null,
+  data = {}
+) => {
+  try {
+    const notification = new Notification({
+      userId,
+      type,
+      title,
+      message,
+      relatedId,
+      data,
+    });
+
+    await notification.save();
+    console.log(`Notification created for user ${userId}: ${title}`);
+    return notification;
+  } catch (error) {
+    console.error("Error creating notification:", error);
+    return null;
+  }
+};
+
+app.get("/api/dashboard-stats/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching dashboard stats for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Get orders count and total spent
+    const orders = await Order.find({ userId });
+    const totalSpent = orders
+      .filter((order) => order.status === "completed")
+      .reduce((sum, order) => sum + (order.servicePrice || 0), 0);
+
+    const activeOrders = orders.filter(
+      (order) => order.status === "pending" || order.status === "in-progress"
+    ).length;
+
+    const completedOrders = orders.filter(
+      (order) => order.status === "completed"
+    ).length;
+
+    // Get wishlist count
+    const wishlist = await Wishlist.findOne({ userId });
+    const savedItems = wishlist ? wishlist.items.length : 0;
+
+    // Get booking stats (for freelancers)
+    const bookings = await Booking.find({ freelancerId: userId });
+    const totalBookings = bookings.length;
+    const pendingBookings = bookings.filter(
+      (booking) => booking.status === "pending"
+    ).length;
+
+    // Get notification count
+    const unreadNotifications = await Notification.countDocuments({
+      userId,
+      read: false,
+    });
+
+    const stats = {
+      totalSpent,
+      activeOrders,
+      completedOrders,
+      savedItems,
+      totalBookings,
+      pendingBookings,
+      unreadNotifications,
+    };
+
+    console.log("Dashboard stats:", stats);
+
+    res.status(200).json({
+      success: true,
+      stats: stats,
+    });
+  } catch (error) {
+    console.error("Error fetching dashboard stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch dashboard stats",
+      error: error.message,
+    });
   }
 });
 
