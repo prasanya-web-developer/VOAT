@@ -1,6 +1,6 @@
 import { Component } from "react";
 import { Link } from "react-router-dom";
-import { v4 as uuidv4 } from "uuid"; // For VOAT ID generation
+import { v4 as uuidv4 } from "uuid";
 import "./index.css";
 
 class UserDashboard extends Component {
@@ -18,10 +18,10 @@ class UserDashboard extends Component {
     bookings: [],
     notifications: [],
     stats: {},
-    bookingFilter: "all", // for filtering bookings
-    showNotificationSlide: false,
+    bookingFilter: "all",
     orderFilter: "all",
     orderSearchQuery: "",
+    showNotifications: false, // New state for notification panel
     formData: {
       name: "",
       email: "",
@@ -45,14 +45,6 @@ class UserDashboard extends Component {
         { level: "Premium", price: "", timeFrame: "" },
       ],
     },
-    stats: {
-      totalSpent: 0,
-      activeOrders: 0,
-      completedOrders: 0,
-      savedItems: 0,
-      totalBookings: 0,
-      pendingBookings: 0,
-    },
     profileImage: null,
     previewImage: null,
     resumeFileName: "",
@@ -63,17 +55,197 @@ class UserDashboard extends Component {
     showMobileSidebar: false,
   };
 
+  componentDidMount() {
+    // Load user data first
+    this.loadUserData().then(() => {
+      // After user data is loaded, fetch other data
+      this.fetchPortfolioStatus().then(() => {
+        this.fetchOrders();
+        this.fetchWishlist();
+        this.fetchBookings();
+        this.fetchNotifications(); // New method to fetch real notifications
+        this.updateStats(); // Calculate real stats
+      });
+    });
+
+    this.checkWishlistConsistency();
+
+    // Add periodic wishlist refresh every 10 seconds
+    this.wishlistRefreshInterval = setInterval(() => {
+      this.fetchWishlist();
+    }, 10000);
+
+    // Listen for wishlist updates from cart
+    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
+    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
+
+    // Close notification panel when clicking outside
+    document.addEventListener("click", this.handleClickOutside);
+  }
+
+  componentWillUnmount() {
+    if (this.wishlistRefreshInterval) {
+      clearInterval(this.wishlistRefreshInterval);
+    }
+    if (this.portfolioStatusTimeout) {
+      clearTimeout(this.portfolioStatusTimeout);
+    }
+    window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
+    document.removeEventListener("click", this.handleClickOutside);
+  }
+
+  handleClickOutside = (event) => {
+    const notificationPanel = document.querySelector(
+      ".notification-slide-panel"
+    );
+    const notificationBtn = document.querySelector(".notification-btn");
+
+    if (
+      notificationPanel &&
+      !notificationPanel.contains(event.target) &&
+      notificationBtn &&
+      !notificationBtn.contains(event.target)
+    ) {
+      this.setState({ showNotifications: false });
+    }
+  };
+
+  // New method to fetch real notifications
+  fetchNotifications = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) return;
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/notifications/${userData.id}`
+      );
+
+      if (response.ok) {
+        const notifications = await response.json();
+        this.setState({ notifications });
+      } else {
+        // Fallback to mock notifications for now
+        this.setState({
+          notifications: [
+            {
+              id: 1,
+              type: "booking",
+              message: "New booking request received",
+              time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+              read: false,
+            },
+            {
+              id: 2,
+              type: "order",
+              message: "Your order has been completed",
+              time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+              read: true,
+            },
+            {
+              id: 3,
+              type: "system",
+              message: "Profile updated successfully",
+              time: new Date(
+                Date.now() - 3 * 24 * 60 * 60 * 1000
+              ).toISOString(), // 3 days ago
+              read: true,
+            },
+          ],
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  // Update stats with real data
+  updateStats = () => {
+    const { orders, wishlist, bookings } = this.state;
+
+    const completedOrders = orders.filter(
+      (order) => order.status === "Completed" || order.status === "completed"
+    );
+
+    const totalSpent = completedOrders.reduce(
+      (sum, order) => sum + (order.amount || 0),
+      0
+    );
+    const activeOrders = orders.filter(
+      (order) =>
+        order.status === "In Progress" ||
+        order.status === "Pending" ||
+        order.status === "pending"
+    ).length;
+
+    this.setState({
+      stats: {
+        totalSpent,
+        activeOrders,
+        completedOrders: completedOrders.length,
+        savedItems: wishlist.length,
+        totalBookings: bookings.length,
+        pendingBookings: bookings.filter((b) => b.status === "pending").length,
+      },
+    });
+  };
+
+  // Toggle notification panel
+  toggleNotifications = (e) => {
+    e.stopPropagation();
+    this.setState((prevState) => ({
+      showNotifications: !prevState.showNotifications,
+    }));
+  };
+
+  // Handle order search
+  handleOrderSearch = (e) => {
+    this.setState({ orderSearchQuery: e.target.value });
+  };
+
+  // Handle order filter
+  handleOrderFilter = (e) => {
+    this.setState({ orderFilter: e.target.value });
+  };
+
+  // Filter orders based on search and filter
+  getFilteredOrders = () => {
+    const { orders, orderSearchQuery, orderFilter } = this.state;
+
+    let filtered = orders;
+
+    // Apply status filter
+    if (orderFilter !== "all") {
+      filtered = filtered.filter((order) => {
+        const normalizedStatus = order.status
+          .toLowerCase()
+          .replace(/\s+/g, "-");
+        return normalizedStatus === orderFilter;
+      });
+    }
+
+    // Apply search filter
+    if (orderSearchQuery.trim()) {
+      const query = orderSearchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (order) =>
+          order.service.toLowerCase().includes(query) ||
+          order.provider.toLowerCase().includes(query) ||
+          order.id.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  };
+
   checkWishlistConsistency = async () => {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
     if (!userData || !userData.id) return;
 
     try {
-      // Get wishlist from localStorage
       const localWishlist = JSON.parse(
         localStorage.getItem(`wishlist_${userData.id}`) || "[]"
       );
 
-      // Get wishlist from server
       const response = await fetch(
         `${this.state.baseUrl}/api/wishlist/${userData.id}`
       );
@@ -85,13 +257,10 @@ class UserDashboard extends Component {
         console.log("- Server wishlist items:", serverWishlist.length);
         console.log("- Local wishlist items:", localWishlist.length);
 
-        // Check if they have the same number of items
         if (serverWishlist.length !== localWishlist.length) {
           console.warn(
             "⚠️ Wishlist inconsistency detected: different item counts"
           );
-
-          // Log item IDs for comparison
           console.log(
             "Server item IDs:",
             serverWishlist.map((item) => item.id)
@@ -113,71 +282,12 @@ class UserDashboard extends Component {
     }
   };
 
-  componentDidMount() {
-    // Add sample notifications
-    this.setState({
-      notifications: [
-        {
-          id: 1,
-          type: "order",
-          message: "Your order #ORD-004 has been accepted",
-          time: "2 hours ago",
-          read: false,
-        },
-        {
-          id: 2,
-          type: "system",
-          message:
-            "Welcome to VOAT Network! Complete your profile to get started.",
-          time: "1 day ago",
-          read: true,
-        },
-        {
-          id: 3,
-          type: "portfolio",
-          message: "Your portfolio submission is under review",
-          time: "3 days ago",
-          read: true,
-        },
-      ],
-      stats: {
-        totalSpent: 1350,
-        activeOrders: 2,
-        completedOrders: 1,
-        savedItems: 5,
-      },
-    });
-
-    // Load user data (which now always fetches from database)
-    this.loadUserData().then(() => {
-      // After user data is loaded, fetch other data
-      this.fetchPortfolioStatus().then(() => {
-        this.fetchOrders();
-        this.fetchWishlist();
-        this.fetchBookings();
-        this.fetchNotifications();
-      });
-    });
-
-    this.checkWishlistConsistency();
-
-    // Add periodic wishlist refresh every 10 seconds
-    this.wishlistRefreshInterval = setInterval(() => {
-      this.fetchWishlist();
-    }, 10000);
-
-    // Listen for wishlist updates from cart
-    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
-    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
-  }
-
   loadUserData = async () => {
     const userDataString = localStorage.getItem("user");
     if (userDataString) {
       try {
         let userData = JSON.parse(userDataString);
 
-        // For new users, ensure VOAT ID exists before proceeding
         if (!userData.voatId) {
           console.log("New user detected, generating VOAT ID");
           const randomPart = uuidv4().substring(0, 9).toUpperCase();
@@ -197,7 +307,6 @@ class UserDashboard extends Component {
           }
         }
 
-        // Set initial state with localStorage data (WITHOUT profile image)
         this.setState({
           userData: userData,
           isLoading: true,
@@ -208,15 +317,12 @@ class UserDashboard extends Component {
             profession: userData.profession || "",
             phone: userData.phone || "",
           },
-          // Don't set previewImage from localStorage - wait for database
           previewImage: null,
         });
 
-        // Always fetch fresh data from database, especially profile image
         const freshUserData = await this.refreshUserFromDatabase();
 
         if (freshUserData) {
-          // Update state with fresh data from database
           this.setState({
             userData: freshUserData,
             isLoading: false,
@@ -227,16 +333,13 @@ class UserDashboard extends Component {
               profession: freshUserData.profession || "",
               phone: freshUserData.phone || "",
             },
-            // Set profile image from database or null
             previewImage: freshUserData.profileImage
               ? this.getFullImageUrl(freshUserData.profileImage)
               : null,
           });
         } else {
-          // Fallback to localStorage data if database fetch fails
           this.setState({
             isLoading: false,
-            // Don't set profile image from localStorage
             previewImage: null,
           });
         }
@@ -257,28 +360,15 @@ class UserDashboard extends Component {
     }
   };
 
-  componentWillUnmount() {
-    if (this.wishlistRefreshInterval) {
-      clearInterval(this.wishlistRefreshInterval);
-    }
-    if (this.portfolioStatusTimeout) {
-      clearTimeout(this.portfolioStatusTimeout);
-    }
-    // Remove event listener
-    window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
-  }
-
   generateInitials = (name) => {
     if (!name || typeof name !== "string") return "U";
 
-    // Clean the name and split by spaces
     const cleanName = name.trim();
     const words = cleanName.split(/\s+/).filter((word) => word.length > 0);
 
     if (words.length === 0) return "U";
 
     if (words.length === 1) {
-      // Single word - take first two characters if available
       const word = words[0];
       if (word.length >= 2) {
         return word.substring(0, 2).toUpperCase();
@@ -286,7 +376,6 @@ class UserDashboard extends Component {
         return word.charAt(0).toUpperCase();
       }
     } else {
-      // Multiple words - take first letter of first two words
       return words
         .slice(0, 2)
         .map((word) => word.charAt(0).toUpperCase())
@@ -294,177 +383,21 @@ class UserDashboard extends Component {
     }
   };
 
-  // Handle wishlist updates from cart
   handleWishlistUpdate = (event) => {
     console.log("=== DASHBOARD RECEIVED WISHLIST UPDATE ===");
     if (event.detail && event.detail.updatedWishlist) {
-      this.setState({
-        wishlist: event.detail.updatedWishlist,
-        stats: {
-          ...this.state.stats,
-          savedItems: event.detail.updatedWishlist.length,
+      this.setState(
+        {
+          wishlist: event.detail.updatedWishlist,
         },
-      });
+        () => {
+          this.updateStats();
+        }
+      );
       console.log("Dashboard wishlist updated from cart sync");
     } else {
-      // Fallback: refresh wishlist from server
       this.fetchWishlist();
     }
-  };
-
-  toggleNotificationSlide = () => {
-    this.setState((prevState) => ({
-      showNotificationSlide: !prevState.showNotificationSlide,
-    }));
-  };
-
-  fetchNotifications = async () => {
-    try {
-      const userData = this.state.userData;
-      if (!userData || !userData.id) return;
-
-      const response = await fetch(
-        `${this.state.baseUrl}/api/notifications/${userData.id}`
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        this.setState({
-          notifications: result.notifications || [],
-        });
-      } else {
-        // Fallback to sample notifications based on user activity
-        const notifications = [];
-
-        if (this.state.orders.length > 0) {
-          const recentOrder = this.state.orders[0];
-          notifications.push({
-            id: 1,
-            type: "order",
-            message: `Your order ${recentOrder.id} status: ${recentOrder.status}`,
-            time: this.getTimeAgo(new Date(recentOrder.date)),
-            read: false,
-          });
-        }
-
-        if (this.isFreelancer() && this.state.bookings.length > 0) {
-          const pendingBookings = this.state.bookings.filter(
-            (b) => b.status === "pending"
-          );
-          if (pendingBookings.length > 0) {
-            notifications.push({
-              id: 2,
-              type: "booking",
-              message: `You have ${
-                pendingBookings.length
-              } pending booking request${
-                pendingBookings.length > 1 ? "s" : ""
-              }`,
-              time: "Recent",
-              read: false,
-            });
-          }
-        }
-
-        if (this.state.portfolioStatus === "approved") {
-          notifications.push({
-            id: 4,
-            type: "portfolio",
-            message: "Congratulations! Your portfolio has been approved",
-            time: "2 days ago",
-            read: false,
-          });
-        }
-
-        this.setState({ notifications });
-      }
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    }
-  };
-
-  markNotificationAsRead = async (id) => {
-    try {
-      this.setState((prevState) => ({
-        notifications: prevState.notifications.map((notification) =>
-          notification.id === id
-            ? { ...notification, read: true }
-            : notification
-        ),
-      }));
-
-      try {
-        await fetch(`${this.state.baseUrl}/api/notifications/${id}/read`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-      } catch (error) {
-        console.error("Error marking notification as read on server:", error);
-      }
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
-    }
-  };
-
-  markAllNotificationsAsRead = async () => {
-    try {
-      this.setState((prevState) => ({
-        notifications: prevState.notifications.map((notification) => ({
-          ...notification,
-          read: true,
-        })),
-      }));
-
-      try {
-        const userData = this.state.userData;
-        if (userData && userData.id) {
-          await fetch(
-            `${this.state.baseUrl}/api/notifications/user/${userData.id}/read-all`,
-            {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            }
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Error marking all notifications as read on server:",
-          error
-        );
-      }
-    } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-    }
-  };
-
-  handleOrderFilterChange = (filter) => {
-    this.setState({ orderFilter: filter }, () => {
-      this.fetchOrders();
-    });
-  };
-
-  handleOrderSearch = (query) => {
-    this.setState({ orderSearchQuery: query }, () => {
-      this.fetchOrders();
-    });
-  };
-
-  getTimeAgo = (date) => {
-    const now = new Date();
-    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
-
-    if (diffInHours < 1) return "Just now";
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-
-    const diffInWeeks = Math.floor(diffInDays / 7);
-    return `${diffInWeeks}w ago`;
   };
 
   updateUserDataInDatabase = async (userData) => {
@@ -492,7 +425,6 @@ class UserDashboard extends Component {
         }
       );
 
-      // Either use the response data or don't fetch it
       if (response.ok) {
         return true;
       } else {
@@ -510,21 +442,15 @@ class UserDashboard extends Component {
       const userData = JSON.parse(localStorage.getItem("user"));
       if (!userData || !userData.id) return null;
 
-      console.log("Fetching fresh user data from database...");
-
       const response = await fetch(
         `${this.state.baseUrl}/api/user/${userData.id}`
       );
 
       if (response.ok) {
         const result = await response.json();
-        console.log("Fresh user data received:", result);
-
-        // Merge database data with local data, prioritizing database values
         const updatedUserData = {
-          ...userData, // Start with localStorage data
-          ...result.user, // Override with database data
-          // Ensure VOAT fields are preserved if they exist locally but not in DB
+          ...userData,
+          ...result.user,
           voatId:
             result.user.voatId || userData.voatId || this.generateVoatId(),
           voatPoints:
@@ -532,17 +458,10 @@ class UserDashboard extends Component {
               ? result.user.voatPoints
               : userData.voatPoints || 0,
           badge: result.user.badge || userData.badge || this.calculateBadge(0),
-          // ALWAYS use database profile image (could be null)
           profileImage: result.user.profileImage,
         };
 
-        // Update localStorage with fresh data
         localStorage.setItem("user", JSON.stringify(updatedUserData));
-
-        console.log(
-          "User data refreshed successfully, profile image:",
-          updatedUserData.profileImage
-        );
         return updatedUserData;
       } else {
         console.error("Failed to fetch user data from database");
@@ -551,42 +470,6 @@ class UserDashboard extends Component {
     } catch (error) {
       console.error("Error refreshing user data:", error);
       return null;
-    }
-  };
-
-  refreshProfileImage = async () => {
-    try {
-      const userData = JSON.parse(localStorage.getItem("user"));
-      if (!userData || !userData.id) return;
-
-      console.log("Refreshing profile image from database...");
-
-      const response = await fetch(
-        `${this.state.baseUrl}/api/user/${userData.id}`
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-
-        // Update only the profile image
-        const updatedUserData = {
-          ...userData,
-          profileImage: result.user.profileImage || null,
-        };
-
-        localStorage.setItem("user", JSON.stringify(updatedUserData));
-
-        this.setState({
-          userData: updatedUserData,
-          previewImage: result.user.profileImage
-            ? this.getFullImageUrl(result.user.profileImage)
-            : null,
-        });
-
-        console.log("Profile image refreshed:", result.user.profileImage);
-      }
-    } catch (error) {
-      console.error("Error refreshing profile image:", error);
     }
   };
 
@@ -601,7 +484,6 @@ class UserDashboard extends Component {
   };
 
   generateVoatId = () => {
-    // Generate a unique ID and format it as VOAT-XXXX-XXXX
     const randomPart = uuidv4().substring(0, 9).toUpperCase();
     return `VOAT-${randomPart.substring(0, 4)}-${randomPart.substring(4, 8)}`;
   };
@@ -618,93 +500,70 @@ class UserDashboard extends Component {
       const response = await fetch(
         `${this.state.baseUrl}/api/orders/${
           this.state.userData?.id || "unknown"
-        }?search=${this.state.orderSearchQuery}&status=${
-          this.state.orderFilter
         }`
       );
 
       if (response.ok) {
-        const result = await response.json();
-        const orders = result.orders || result;
+        const orders = await response.json();
         this.setState({ orders }, () => {
           this.updateStats();
         });
       } else {
-        // For demo purposes, add mock orders
-        this.setState({
-          orders: [
-            {
-              id: "ORD-001",
-              service: "Logo Design",
-              status: "Completed",
-              date: "2025-03-10",
-              amount: 150,
-              provider: "Alex Johnson",
-              providerImage: null,
-            },
-            {
-              id: "ORD-002",
-              service: "Website Development",
-              status: "In Progress",
-              date: "2025-04-01",
-              amount: 850,
-              provider: "Digital Maestros",
-              providerImage: null,
-            },
-            {
-              id: "ORD-003",
-              service: "SEO Optimization",
-              status: "Pending",
-              date: "2025-04-12",
-              amount: 350,
-              provider: "Search Wizards",
-              providerImage: null,
-            },
-            {
-              id: "ORD-004",
-              service: "Content Writing",
-              status: "In Progress",
-              date: "2025-05-05",
-              amount: 225,
-              provider: "Word Crafters",
-              providerImage: null,
-            },
-          ],
-        });
+        // Mock orders with freelancer profile images
+        this.setState(
+          {
+            orders: [
+              {
+                id: "ORD-001",
+                service: "Logo Design",
+                status: "Completed",
+                date: "2025-03-10",
+                amount: 150,
+                provider: "Alex Johnson",
+                providerImage: "/uploads/freelancer1.jpg",
+                providerEmail: "alex@example.com",
+              },
+              {
+                id: "ORD-002",
+                service: "Website Development",
+                status: "In Progress",
+                date: "2025-04-01",
+                amount: 850,
+                provider: "Digital Maestros",
+                providerImage: "/uploads/freelancer2.jpg",
+                providerEmail: "digital@example.com",
+              },
+              {
+                id: "ORD-003",
+                service: "SEO Optimization",
+                status: "Pending",
+                date: "2025-04-12",
+                amount: 350,
+                provider: "Search Wizards",
+                providerImage: "/uploads/freelancer3.jpg",
+                providerEmail: "seo@example.com",
+              },
+              {
+                id: "ORD-004",
+                service: "Content Writing",
+                status: "In Progress",
+                date: "2025-05-05",
+                amount: 225,
+                provider: "Word Crafters",
+                providerImage: null,
+                providerEmail: "words@example.com",
+              },
+            ],
+          },
+          () => {
+            this.updateStats();
+          }
+        );
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
-      // Fallback to mock data if fetch fails
       this.setState({
-        orders: [
-          {
-            id: "ORD-001",
-            service: "Logo Design",
-            status: "Completed",
-            date: "2025-03-10",
-            amount: 150,
-            provider: "Alex Johnson",
-            providerImage: null,
-          },
-          {
-            id: "ORD-002",
-            service: "Website Development",
-            status: "In Progress",
-            date: "2025-04-01",
-            amount: 850,
-            provider: "Digital Maestros",
-            providerImage: null,
-          },
-          {
-            id: "ORD-003",
-            service: "SEO Optimization",
-            status: "Pending",
-            date: "2025-04-12",
-            amount: 350,
-            provider: "Search Wizards",
-            providerImage: null,
-          },
-        ],
+        orders: [],
       });
     }
   };
@@ -721,7 +580,9 @@ class UserDashboard extends Component {
 
       if (response.ok) {
         const bookings = await response.json();
-        this.setState({ bookings });
+        this.setState({ bookings }, () => {
+          this.updateStats();
+        });
       } else {
         console.error("Failed to fetch bookings");
       }
@@ -737,13 +598,12 @@ class UserDashboard extends Component {
       userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
         console.log("No user data available, cannot fetch wishlist");
-        this.setState({ wishlist: [] });
+        this.setState({ wishlist: [] }, () => {
+          this.updateStats();
+        });
         return;
       }
 
-      console.log("Fetching wishlist for user:", userData.id);
-
-      // Fetch from API (this will use the new Wishlist collection)
       const response = await fetch(
         `${this.state.baseUrl}/api/wishlist/${userData.id}`
       );
@@ -755,18 +615,16 @@ class UserDashboard extends Component {
       }
 
       const apiWishlist = await response.json();
-      console.log("Wishlist from API:", apiWishlist);
 
-      // Update state and localStorage
-      this.setState({
-        wishlist: Array.isArray(apiWishlist) ? apiWishlist : [],
-        stats: {
-          ...this.state.stats,
-          savedItems: Array.isArray(apiWishlist) ? apiWishlist.length : 0,
+      this.setState(
+        {
+          wishlist: Array.isArray(apiWishlist) ? apiWishlist : [],
         },
-      });
+        () => {
+          this.updateStats();
+        }
+      );
 
-      // Update localStorage to match database
       localStorage.setItem(
         `wishlist_${userData.id}`,
         JSON.stringify(apiWishlist)
@@ -774,20 +632,20 @@ class UserDashboard extends Component {
     } catch (error) {
       console.error("Error fetching wishlist:", error);
 
-      // Fallback to localStorage - but only if userData exists
       if (userData && userData.id) {
         try {
           const localWishlist = JSON.parse(
             localStorage.getItem(`wishlist_${userData.id}`) || "[]"
           );
 
-          this.setState({
-            wishlist: localWishlist,
-            stats: {
-              ...this.state.stats,
-              savedItems: localWishlist.length,
+          this.setState(
+            {
+              wishlist: localWishlist,
             },
-          });
+            () => {
+              this.updateStats();
+            }
+          );
         } catch (localError) {
           console.error(
             "Error loading wishlist from localStorage:",
@@ -796,14 +654,9 @@ class UserDashboard extends Component {
           this.setState({ wishlist: [] });
         }
       } else {
-        // No valid userData, set empty wishlist
         this.setState({ wishlist: [] });
       }
     }
-  };
-
-  refreshWishlist = async () => {
-    await this.fetchWishlist();
   };
 
   fetchPortfolioStatus = async () => {
@@ -819,24 +672,17 @@ class UserDashboard extends Component {
 
       if (response.ok) {
         const data = await response.json();
-
-        // Clear any previous timeouts to avoid race conditions
         if (this.portfolioStatusTimeout) {
           clearTimeout(this.portfolioStatusTimeout);
         }
-
         this.setState({ portfolioStatus: data.status });
       } else {
-        // Set status to null
         this.setState({ portfolioStatus: null });
-
-        // Try alternative methods to check status
         this.checkLocalStorage();
         this.checkLocalSubmissions();
       }
     } catch (error) {
       console.error("Error fetching portfolio status:", error);
-      // For demo purposes, try local checking as fallback
       this.checkLocalStorage();
       this.checkLocalSubmissions();
     }
@@ -844,7 +690,6 @@ class UserDashboard extends Component {
 
   checkLocalStorage = () => {
     try {
-      // Try to get portfolio status from localStorage as a fallback
       const userId = this.state.userData?.id;
       if (!userId) return;
 
@@ -854,65 +699,16 @@ class UserDashboard extends Component {
       if (storedStatus) {
         this.setState({ portfolioStatus: storedStatus });
       } else {
-        // Check if we need to create a default entry
         const userEmail = this.state.userData?.email;
         if (userEmail === "prasanya.webdev@gmail.com") {
-          // Default admin to approved
           localStorage.setItem(portfolioStatusKey, "approved");
           this.setState({ portfolioStatus: "approved" });
         } else {
-          // Default to null
           this.setState({ portfolioStatus: null });
         }
       }
     } catch (error) {
       console.error("Error checking localStorage:", error);
-    }
-  };
-
-  checkLocalSubmissions = async () => {
-    try {
-      if (!this.state.userData || !this.state.userData.id) {
-        console.log("No user data available for local submissions check");
-        return;
-      }
-
-      // First try to directly fetch the user's portfolio
-      const portfolioResponse = await fetch(
-        `${this.state.baseUrl}/api/portfolio/user/${this.state.userData.id}`
-      );
-
-      if (portfolioResponse.ok) {
-        const portfolioData = await portfolioResponse.json();
-        if (portfolioData.hasPortfolio && portfolioData.portfolio) {
-          this.setState({ portfolioStatus: portfolioData.portfolio.status });
-          return;
-        }
-      }
-
-      // If direct fetch fails, try the admin submissions endpoint
-      const response = await fetch(
-        `${this.state.baseUrl}/api/admin/portfolio-submissions`
-      );
-
-      if (response.ok) {
-        const submissions = await response.json();
-        // Find submission matching this user's ID
-        const userSubmission = submissions.find(
-          (sub) =>
-            (sub.userId && sub.userId.toString() === this.state.userData.id) ||
-            (sub.userId &&
-              sub.userId._id &&
-              sub.userId._id.toString() === this.state.userData.id) ||
-            sub.email === this.state.userData.email
-        );
-
-        if (userSubmission) {
-          this.setState({ portfolioStatus: userSubmission.status });
-        }
-      }
-    } catch (error) {
-      console.error("Error in local submissions check:", error);
     }
   };
 
@@ -940,7 +736,6 @@ class UserDashboard extends Component {
             phone: this.state.userData.phone || "",
           }
         : prevState.formData,
-      // Only set previewImage from database profile image, not localStorage
       previewImage: !prevState.isEditing
         ? this.state.userData.profileImage
           ? this.getFullImageUrl(this.state.userData.profileImage)
@@ -950,47 +745,12 @@ class UserDashboard extends Component {
     }));
   };
 
-  handleInputChange = (e) => {
-    const { name, value } = e.target;
-    this.setState((prevState) => ({
-      formData: {
-        ...prevState.formData,
-        [name]: value,
-      },
-    }));
-  };
-
-  handlePortfolioInputChange = (e) => {
-    const { name, value } = e.target;
-    this.setState((prevState) => ({
-      portfolioFormData: {
-        ...prevState.portfolioFormData,
-        [name]: value,
-      },
-    }));
-  };
-
-  handleImageChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        this.setState({
-          previewImage: reader.result,
-          profileImage: file,
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   handleTabChange = (tab) => {
     this.setState({
       activeTab: tab,
       showPortfolioForm: false,
       showMobileSidebar: false,
-      showNotificationSlide: false,
+      showNotifications: false, // Close notifications when changing tabs
     });
   };
 
@@ -998,470 +758,6 @@ class UserDashboard extends Component {
     this.setState((prevState) => ({
       showMobileSidebar: !prevState.showMobileSidebar,
     }));
-  };
-
-  togglePortfolioForm = () => {
-    this.setState((prevState) => ({
-      showPortfolioForm: !prevState.showPortfolioForm,
-      portfolioFormData: {
-        name: this.state.userData?.name || "",
-        profession: this.state.userData?.profession || "",
-        headline: "",
-        email: this.state.userData?.email || "",
-        workExperience: "",
-        portfolioLink: "",
-        about: "",
-        serviceName: "",
-        serviceDescription: "",
-        pricing: [
-          { level: "Basic", price: "", timeFrame: "" },
-          { level: "Standard", price: "", timeFrame: "" },
-          { level: "Premium", price: "", timeFrame: "" },
-        ],
-      },
-      resumeFileName: "",
-    }));
-  };
-
-  handlePricingChange = (e, index) => {
-    const { name, value } = e.target;
-    this.setState((prevState) => {
-      const updatedPricing = [...prevState.portfolioFormData.pricing];
-      updatedPricing[index] = {
-        ...updatedPricing[index],
-        [name]: value,
-      };
-
-      return {
-        portfolioFormData: {
-          ...prevState.portfolioFormData,
-          pricing: updatedPricing,
-        },
-      };
-    });
-  };
-
-  handleBookingAction = async (bookingId, action) => {
-    try {
-      const response = await fetch(
-        `${this.state.baseUrl}/api/booking/${bookingId}/action`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ action }),
-        }
-      );
-
-      if (response.ok) {
-        // Refresh bookings after action
-        this.fetchBookings();
-        this.addNotification({
-          type: "system",
-          message: `Booking request ${action}ed successfully!`,
-          time: "Just now",
-        });
-      } else {
-        throw new Error(`Failed to ${action} booking`);
-      }
-    } catch (error) {
-      console.error(`Error ${action}ing booking:`, error);
-      this.addNotification({
-        type: "system",
-        message: `Failed to ${action} booking request`,
-        time: "Just now",
-      });
-    }
-  };
-
-  handleBookingFilterChange = (filter) => {
-    this.setState({ bookingFilter: filter });
-  };
-
-  handleSubmit = async (e) => {
-    e.preventDefault();
-    this.setState({ isLoading: true });
-
-    try {
-      const { formData, profileImage, userData } = this.state;
-
-      if (!userData.id) {
-        this.setState({
-          isLoading: false,
-          error: "You need to login again before updating your profile.",
-          errorType: "new_user_edit",
-          isEditing: false,
-        });
-        return;
-      }
-
-      const submitData = new FormData();
-      submitData.append("name", formData.name);
-      submitData.append("email", formData.email);
-      submitData.append("role", formData.role);
-      submitData.append("profession", formData.profession);
-      submitData.append("phone", formData.phone);
-      submitData.append("userId", userData.id);
-      submitData.append("voatId", userData.voatId);
-      submitData.append("voatPoints", userData.voatPoints);
-      submitData.append("badge", userData.badge);
-
-      if (profileImage) {
-        submitData.append("profileImage", profileImage);
-      }
-
-      const response = await fetch(`${this.state.baseUrl}/api/update-profile`, {
-        method: "POST",
-        body: submitData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update profile");
-      }
-
-      const result = await response.json();
-
-      // Force refresh user data from database to get the latest profile image
-      const freshUserData = await this.refreshUserFromDatabase();
-
-      if (freshUserData) {
-        this.setState({
-          userData: freshUserData,
-          isLoading: false,
-          isEditing: false,
-          previewImage: freshUserData.profileImage
-            ? this.getFullImageUrl(freshUserData.profileImage)
-            : null,
-        });
-      } else {
-        // Fallback to response data
-        const updatedUserData = {
-          ...userData,
-          ...formData,
-          profileImage: result.profileImage || userData.profileImage,
-        };
-
-        localStorage.setItem("user", JSON.stringify(updatedUserData));
-
-        this.setState({
-          userData: updatedUserData,
-          isLoading: false,
-          isEditing: false,
-          previewImage:
-            this.getFullImageUrl(result.profileImage) ||
-            this.getFullImageUrl(userData.profileImage),
-        });
-      }
-
-      // Add notification for profile update
-      this.addNotification({
-        type: "system",
-        message: "Your profile has been updated successfully!",
-        time: "Just now",
-      });
-    } catch (error) {
-      console.error("Update error:", error);
-      this.setState({
-        isLoading: false,
-        error: "Failed to update profile. Please try again.",
-        errorType: "update_error",
-      });
-    }
-  };
-
-  handlePortfolioSubmit = async (e) => {
-    e.preventDefault();
-    this.setState({ isLoading: true, error: null });
-
-    try {
-      const { portfolioFormData, userData } = this.state;
-      const baseUrl = this.state.baseUrl || "http://localhost:5000";
-
-      // Skip the connection test and proceed directly to submission
-      const formData = new FormData();
-
-      // Add form data fields
-      formData.append("name", portfolioFormData.name || "");
-      formData.append("profession", portfolioFormData.profession || "");
-      formData.append("headline", portfolioFormData.headline || "");
-      formData.append("email", portfolioFormData.email);
-      formData.append("workExperience", portfolioFormData.workExperience || "");
-      formData.append("portfolioLink", portfolioFormData.portfolioLink || "");
-      formData.append("about", portfolioFormData.about || "");
-
-      // Make sure userId is included properly and is valid
-      if (userData && userData.id) {
-        formData.append("userId", userData.id);
-      }
-
-      // Add profile image or generate placeholder initials
-      if (userData.profileImage) {
-        // If user has a profile image, include the path
-        formData.append("profileImagePath", userData.profileImage);
-        formData.append("hasProfileImage", "true");
-      } else {
-        // Generate initials from user name
-        const initials = this.generateInitials(userData.name);
-        formData.append("profileInitials", initials);
-        formData.append("userName", userData.name || "User");
-        formData.append("hasProfileImage", "false");
-      }
-
-      // This indicates it's a new submission that needs admin review
-      formData.append("isNewSubmission", "true");
-
-      // Create a service object to append to the portfolio if provided
-      if (
-        portfolioFormData.serviceName &&
-        portfolioFormData.serviceDescription
-      ) {
-        const service = {
-          name: portfolioFormData.serviceName,
-          description: portfolioFormData.serviceDescription,
-          pricing: portfolioFormData.pricing || [],
-        };
-
-        // Stringify the service object to pass it in the form
-        formData.append("service", JSON.stringify(service));
-      }
-
-      // Log the URL being used
-      const requestUrl = `${baseUrl}/api/portfolio`;
-
-      // Use try/catch specifically for the portfolio submission
-      try {
-        const response = await fetch(requestUrl, {
-          method: "POST",
-          body: formData,
-          headers: {
-            Accept: "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          let errorMessage = `HTTP error ${response.status}`;
-          try {
-            const errorData = await response.text();
-            errorMessage = `${errorMessage}: ${errorData}`;
-          } catch (e) {
-            // Ignore error parsing body
-          }
-          throw new Error(errorMessage);
-        }
-
-        const result = await response.json();
-
-        // Clear any previous status timeout
-        if (this.portfolioStatusTimeout) {
-          clearTimeout(this.portfolioStatusTimeout);
-        }
-
-        // Update the state immediately
-        this.setState({
-          isLoading: false,
-          showPortfolioForm: false,
-          portfolioStatus: "pending",
-        });
-
-        // Set a timeout to refresh the status in case there's a race condition
-        this.portfolioStatusTimeout = setTimeout(() => {
-          this.fetchPortfolioStatus();
-        }, 1000);
-
-        // Also add the service to the database with a separate API call
-        if (userData && userData.id && portfolioFormData.serviceName) {
-          try {
-            const serviceData = {
-              userId: userData.id,
-              name: portfolioFormData.serviceName,
-              description: portfolioFormData.serviceDescription,
-              pricing: portfolioFormData.pricing || [],
-            };
-
-            const serviceResponse = await fetch(`${baseUrl}/api/add-service`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(serviceData),
-            });
-
-            if (serviceResponse.ok) {
-              console.log("Service added successfully!");
-            } else {
-              console.error(
-                "Failed to add service:",
-                await serviceResponse.text()
-              );
-            }
-          } catch (serviceError) {
-            console.error("Error adding service:", serviceError);
-          }
-        }
-
-        // Add notification
-        this.addNotification({
-          type: "portfolio",
-          message: "Your portfolio has been submitted for review!",
-          time: "Just now",
-        });
-
-        alert(
-          "Portfolio submitted successfully! It will be reviewed by the admin."
-        );
-      } catch (fetchError) {
-        console.error("Fetch error details:", fetchError);
-        throw new Error(`Failed to submit portfolio: ${fetchError.message}`);
-      }
-    } catch (error) {
-      console.error("Portfolio submission error:", error);
-
-      this.setState({
-        isLoading: false,
-        error: error.message,
-      });
-
-      alert(`Failed to submit portfolio: ${error.message}`);
-    }
-  };
-
-  handleResumeChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      this.setState({
-        resumeFileName: file.name,
-        portfolioFormData: {
-          ...this.state.portfolioFormData,
-          resume: file,
-        },
-      });
-      console.log("Resume file attached:", file.name);
-    }
-  };
-
-  handleViewPortfolio = () => {
-    // Navigate to portfolio page or show a modal with portfolio details
-    window.location.href = `/my-portfolio/${this.state.userData.id}`;
-  };
-
-  updateStats = async () => {
-    try {
-      const { orders, wishlist, bookings } = this.state;
-
-      // Calculate total spent from completed orders
-      const totalSpent = orders
-        .filter((order) => order.status === "Completed")
-        .reduce((sum, order) => sum + (order.amount || 0), 0);
-
-      // Count active orders (In Progress + Pending)
-      const activeOrders = orders.filter(
-        (order) => order.status === "In Progress" || order.status === "Pending"
-      ).length;
-
-      // Count completed orders
-      const completedOrders = orders.filter(
-        (order) => order.status === "Completed"
-      ).length;
-
-      // Wishlist count
-      const savedItems = wishlist.length;
-
-      // Booking stats (for freelancers)
-      const totalBookings = bookings.length;
-      const pendingBookings = bookings.filter(
-        (booking) => booking.status === "pending"
-      ).length;
-
-      this.setState({
-        stats: {
-          totalSpent,
-          activeOrders,
-          completedOrders,
-          savedItems,
-          totalBookings,
-          pendingBookings,
-        },
-      });
-    } catch (error) {
-      console.error("Error updating stats:", error);
-    }
-  };
-
-  removeFromWishlist = async (itemId) => {
-    try {
-      const userData = JSON.parse(localStorage.getItem("user") || "{}");
-      if (!userData || !userData.id) return;
-
-      // Calculate updated wishlist BEFORE updating state
-      const updatedWishlist = this.state.wishlist.filter(
-        (item) => item.id !== itemId
-      );
-
-      // Update local state immediately for better UX
-      this.setState((prevState) => ({
-        wishlist: prevState.wishlist.filter((item) => item.id !== itemId),
-        stats: {
-          ...prevState.stats,
-          savedItems: updatedWishlist.length,
-        },
-      }));
-
-      // Update localStorage
-      localStorage.setItem(
-        `wishlist_${userData.id}`,
-        JSON.stringify(updatedWishlist)
-      );
-
-      // Try to update server - two approaches:
-      // 1. Use the DELETE endpoint for the specific item
-      try {
-        const deleteResponse = await fetch(
-          `${this.state.baseUrl}/api/wishlist/remove/${itemId}`,
-          {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ userId: userData.id }),
-          }
-        );
-
-        if (!deleteResponse.ok) {
-          throw new Error("Delete endpoint failed");
-        }
-
-        console.log("Item successfully removed from wishlist in database");
-      } catch (deleteError) {
-        console.error("Error with DELETE endpoint:", deleteError);
-
-        // 2. Fallback: Update the entire wishlist
-        try {
-          await fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(updatedWishlist),
-          });
-
-          console.log(
-            "Wishlist successfully updated in database (fallback method)"
-          );
-        } catch (updateError) {
-          console.error("Failed to update wishlist in database:", updateError);
-        }
-      }
-
-      // Add notification
-      this.addNotification({
-        type: "system",
-        message: "Item removed from your wishlist",
-        time: "Just now",
-      });
-    } catch (error) {
-      console.error("Failed to remove from wishlist:", error);
-    }
   };
 
   markNotificationAsRead = (id) => {
@@ -1493,6 +789,104 @@ class UserDashboard extends Component {
     }));
   };
 
+  formatTime = (timeString) => {
+    try {
+      const time = new Date(timeString);
+      const now = new Date();
+      const diffInMinutes = Math.floor((now - time) / (1000 * 60));
+
+      if (diffInMinutes < 1) return "Just now";
+      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+
+      const diffInHours = Math.floor(diffInMinutes / 60);
+      if (diffInHours < 24) return `${diffInHours}h ago`;
+
+      const diffInDays = Math.floor(diffInHours / 24);
+      if (diffInDays < 7) return `${diffInDays}d ago`;
+
+      return time.toLocaleDateString();
+    } catch (error) {
+      return timeString;
+    }
+  };
+
+  // Notification Slide Panel Component
+  renderNotificationPanel() {
+    const { showNotifications, notifications } = this.state;
+
+    if (!showNotifications) return null;
+
+    const unreadCount = notifications.filter((n) => !n.read).length;
+
+    return (
+      <div className="notification-slide-panel">
+        <div className="notification-panel-header">
+          <h3>Notifications</h3>
+          <div className="notification-panel-actions">
+            {unreadCount > 0 && (
+              <button
+                className="btn-mark-all-read"
+                onClick={this.markAllNotificationsAsRead}
+              >
+                Mark all read
+              </button>
+            )}
+            <button
+              className="btn-close-panel"
+              onClick={() => this.setState({ showNotifications: false })}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+
+        <div className="notification-panel-content">
+          {notifications.length === 0 ? (
+            <div className="empty-notifications">
+              <i className="fas fa-bell-slash"></i>
+              <p>No notifications yet</p>
+            </div>
+          ) : (
+            <div className="notification-list">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`notification-item ${
+                    notification.read ? "read" : "unread"
+                  }`}
+                  onClick={() => this.markNotificationAsRead(notification.id)}
+                >
+                  <div className="notification-icon">
+                    <i
+                      className={`fas fa-${
+                        notification.type === "booking"
+                          ? "calendar-check"
+                          : notification.type === "order"
+                          ? "shopping-cart"
+                          : notification.type === "portfolio"
+                          ? "briefcase"
+                          : "bell"
+                      }`}
+                    ></i>
+                  </div>
+                  <div className="notification-content">
+                    <div className="notification-message">
+                      {notification.message}
+                    </div>
+                    <div className="notification-time">
+                      {this.formatTime(notification.time)}
+                    </div>
+                  </div>
+                  {!notification.read && <div className="unread-dot"></div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   renderUserProfile() {
     const { userData, stats } = this.state;
     const profileImageUrl = this.getFullImageUrl(userData.profileImage);
@@ -1510,12 +904,14 @@ class UserDashboard extends Component {
           <div className="dashboard-actions">
             <button
               className="notification-btn"
-              onClick={this.toggleNotificationSlide}
+              onClick={this.toggleNotifications}
             >
               <i className="fas fa-bell"></i>
-              <span className="notification-badge">
-                {this.state.notifications.filter((n) => !n.read).length}
-              </span>
+              {this.state.notifications.filter((n) => !n.read).length > 0 && (
+                <span className="notification-badge">
+                  {this.state.notifications.filter((n) => !n.read).length}
+                </span>
+              )}
             </button>
             <div className="user-quick-info">
               <div className="user-avatar-small">
@@ -1529,72 +925,6 @@ class UserDashboard extends Component {
               </div>
               <div className="user-name">{userData.name}</div>
             </div>
-          </div>
-        </div>
-
-        <div
-          className={`notification-slide ${
-            this.state.showNotificationSlide ? "active" : ""
-          }`}
-        >
-          <div className="notification-slide-header">
-            <h3>Notifications</h3>
-            <div className="notification-slide-actions">
-              <button
-                className="btn-mark-all"
-                onClick={this.markAllNotificationsAsRead}
-                disabled={!this.state.notifications.some((n) => !n.read)}
-              >
-                Mark all read
-              </button>
-              <button
-                className="btn-close-slide"
-                onClick={this.toggleNotificationSlide}
-              >
-                <i className="fas fa-times"></i>
-              </button>
-            </div>
-          </div>
-          <div className="notification-slide-content">
-            {this.state.notifications.length === 0 ? (
-              <div className="empty-notifications">
-                <i className="fas fa-bell-slash"></i>
-                <p>No notifications yet</p>
-              </div>
-            ) : (
-              this.state.notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`notification-item ${
-                    notification.read ? "read" : "unread"
-                  }`}
-                  onClick={() => this.markNotificationAsRead(notification.id)}
-                >
-                  <div className="notification-icon">
-                    <i
-                      className={`fas fa-${
-                        notification.type === "order"
-                          ? "shopping-cart"
-                          : notification.type === "portfolio"
-                          ? "briefcase"
-                          : notification.type === "booking"
-                          ? "calendar-check"
-                          : "bell"
-                      }`}
-                    ></i>
-                  </div>
-                  <div className="notification-content">
-                    <div className="notification-message">
-                      {notification.message}
-                    </div>
-                    <div className="notification-time">{notification.time}</div>
-                  </div>
-                  {!notification.read && (
-                    <div className="unread-indicator"></div>
-                  )}
-                </div>
-              ))
-            )}
           </div>
         </div>
 
@@ -1689,10 +1019,10 @@ class UserDashboard extends Component {
                 <div className="activity-stats">
                   <div className="activity-stat">
                     <div className="stat-icon money">
-                      <i class="fa-solid fa-indian-rupee-sign"></i>
+                      <i className="fa-solid fa-indian-rupee-sign"></i>
                     </div>
                     <div className="stat-details">
-                      <div className="stat-value">{stats.totalSpent || 0}</div>
+                      <div className="stat-value">₹{stats.totalSpent || 0}</div>
                       <div className="stat-label">Total Spent</div>
                     </div>
                   </div>
@@ -1765,7 +1095,7 @@ class UserDashboard extends Component {
                         <div className="activity-meta">
                           <span className="activity-date">{order.date}</span>
                           <span className="activity-price">
-                            ₹ {order.amount}
+                            ₹{order.amount}
                           </span>
                         </div>
                       </div>
@@ -1790,58 +1120,147 @@ class UserDashboard extends Component {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
 
-        <div className="notifications-panel">
-          <div className="panel-header">
-            <h3>Notifications</h3>
-            <button
-              className="btn-mark-all"
-              onClick={this.markAllNotificationsAsRead}
-              disabled={!this.state.notifications.some((n) => !n.read)}
+  renderOrders() {
+    const filteredOrders = this.getFilteredOrders();
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>My Orders</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search orders..."
+                className="search-input"
+                value={this.state.orderSearchQuery}
+                onChange={this.handleOrderSearch}
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={this.state.orderFilter}
+              onChange={this.handleOrderFilter}
             >
-              Mark all as read
-            </button>
-          </div>
-          <div className="notification-list">
-            {this.state.notifications.length === 0 ? (
-              <div className="empty-notifications">
-                <i className="fas fa-bell-slash"></i>
-                <p>No notifications yet</p>
-              </div>
-            ) : (
-              this.state.notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`notification-item ${
-                    notification.read ? "read" : "unread"
-                  }`}
-                  onClick={() => this.markNotificationAsRead(notification.id)}
-                >
-                  <div className="notification-icon">
-                    <i
-                      className={`fas fa-${
-                        notification.type === "order"
-                          ? "shopping-cart"
-                          : notification.type === "portfolio"
-                          ? "briefcase"
-                          : "bell"
-                      }`}
-                    ></i>
-                  </div>
-                  <div className="notification-content">
-                    <div className="notification-message">
-                      {notification.message}
-                    </div>
-                    <div className="notification-time">{notification.time}</div>
-                  </div>
-                  {!notification.read && (
-                    <div className="unread-indicator"></div>
-                  )}
-                </div>
-              ))
-            )}
+              <option value="all">All Orders</option>
+              <option value="completed">Completed</option>
+              <option value="in-progress">In Progress</option>
+              <option value="pending">Pending</option>
+            </select>
           </div>
         </div>
+
+        {filteredOrders.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-illustration">
+              <i className="fas fa-clipboard-list"></i>
+            </div>
+            <h3>No Orders Found</h3>
+            <p>
+              {this.state.orderSearchQuery || this.state.orderFilter !== "all"
+                ? "No orders match your search criteria."
+                : "You haven't placed any orders yet. Start exploring services to place your first order!"}
+            </p>
+            {!this.state.orderSearchQuery &&
+              this.state.orderFilter === "all" && (
+                <Link to="/portfolio-list">
+                  <button className="btn btn-primary">Explore Services</button>
+                </Link>
+              )}
+          </div>
+        ) : (
+          <div className="orders-grid">
+            {filteredOrders.map((order, index) => (
+              <div className="order-card" key={index}>
+                <div className="order-header">
+                  <div className="order-id">{order.id}</div>
+                  <div
+                    className={`order-status ${order.status
+                      .toLowerCase()
+                      .replace(" ", "-")}`}
+                  >
+                    <i
+                      className={`fas fa-${
+                        order.status === "Completed"
+                          ? "check-circle"
+                          : order.status === "In Progress"
+                          ? "spinner"
+                          : "clock"
+                      }`}
+                    ></i>
+                    {order.status}
+                  </div>
+                </div>
+                <div className="order-body">
+                  <h3 className="order-service">{order.service}</h3>
+                  <div className="order-provider">
+                    <div className="provider-avatar">
+                      {order.providerImage ? (
+                        <img
+                          src={this.getFullImageUrl(order.providerImage)}
+                          alt={order.provider}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder"
+                        style={{
+                          display: order.providerImage ? "none" : "flex",
+                        }}
+                      >
+                        {order.provider?.charAt(0).toUpperCase() || "P"}
+                      </div>
+                    </div>
+                    <div className="provider-details">
+                      <span className="provider-name">{order.provider}</span>
+                      {order.providerEmail && (
+                        <span className="provider-email">
+                          {order.providerEmail}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="order-meta">
+                    <div className="meta-item">
+                      <i className="fas fa-calendar"></i>
+                      <span>{order.date}</span>
+                    </div>
+                    <div className="meta-item price-meta">
+                      <i className="fa-solid fa-indian-rupee-sign"></i>
+                      <span>₹{order.amount}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="order-actions">
+                  <button className="btn btn-details">
+                    <i className="fas fa-eye"></i>
+                    View Details
+                  </button>
+                  {order.status === "Completed" && (
+                    <button className="btn btn-review">
+                      <i className="fas fa-star"></i>
+                      Leave Review
+                    </button>
+                  )}
+                  {order.status === "In Progress" && (
+                    <button className="btn btn-message">
+                      <i className="fas fa-comment"></i>
+                      Message
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -1852,7 +1271,7 @@ class UserDashboard extends Component {
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
-          <h1></h1>
+          <h1>Edit Profile</h1>
           <button className="btn btn-back" onClick={this.toggleEditMode}>
             <i className="fas fa-arrow-left"></i> Back to Profile
           </button>
@@ -1994,434 +1413,6 @@ class UserDashboard extends Component {
     );
   }
 
-  renderOrders() {
-    const { orders } = this.state;
-
-    const filteredOrders = orders.filter((order) => {
-      const matchesSearch =
-        !this.state.orderSearchQuery ||
-        order.service
-          .toLowerCase()
-          .includes(this.state.orderSearchQuery.toLowerCase()) ||
-        order.provider
-          .toLowerCase()
-          .includes(this.state.orderSearchQuery.toLowerCase());
-
-      const matchesFilter =
-        this.state.orderFilter === "all" ||
-        order.status.toLowerCase().replace(" ", "-") ===
-          this.state.orderFilter.toLowerCase();
-
-      return matchesSearch && matchesFilter;
-    });
-
-    return (
-      <div className="dashboard-main-content">
-        <div className="dashboard-header">
-          <h1>My Orders</h1>
-          <div className="dashboard-actions">
-            <div className="search-container">
-              <i className="fas fa-search search-icon"></i>
-              <input
-                type="text"
-                placeholder="Search orders..."
-                className="search-input"
-                value={this.state.orderSearchQuery}
-                onChange={(e) => this.handleOrderSearch(e.target.value)}
-              />
-            </div>
-            <select
-              className="filter-dropdown"
-              value={this.state.orderFilter}
-              onChange={(e) => this.handleOrderFilterChange(e.target.value)}
-            >
-              <option value="all">All Orders</option>
-              <option value="completed">Completed</option>
-              <option value="in-progress">In Progress</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-        </div>
-
-        {orders.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-illustration">
-              <i className="fas fa-clipboard-list"></i>
-            </div>
-            <h3>No Orders Yet</h3>
-            <p>
-              You haven't placed any orders yet. Start exploring services to
-              place your first order!
-            </p>
-            <button className="btn btn-primary">Explore Services</button>
-          </div>
-        ) : (
-          <div className="orders-grid">
-            {orders.map((order, index) => (
-              <div className="order-card" key={index}>
-                <div className="order-header">
-                  <div className="order-id">{order.id}</div>
-                  <div
-                    className={`order-status ${order.status
-                      .toLowerCase()
-                      .replace(" ", "-")}`}
-                  >
-                    <i
-                      className={`fas fa-${
-                        order.status === "Completed"
-                          ? "check-circle"
-                          : order.status === "In Progress"
-                          ? "spinner"
-                          : "clock"
-                      }`}
-                    ></i>
-                    {order.status}
-                  </div>
-                </div>
-                <div className="order-body">
-                  <h3 className="order-service">{order.service}</h3>
-                  <div className="order-provider">
-                    <i className="fas fa-user"></i>
-                    <span>{order.provider}</span>
-                  </div>
-                  <div className="order-meta">
-                    <div className="meta-item">
-                      <i className="fas fa-calendar"></i>
-                      <span>{order.date}</span>
-                    </div>
-                    <div className="meta-item">
-                      <i class="fa-solid fa-indian-rupee-sign"></i>
-                      <span>{order.amount}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="order-actions">
-                  <button className="btn btn-details">View Details</button>
-                  {order.status === "Completed" && (
-                    <button className="btn btn-review">Leave Review</button>
-                  )}
-                  {order.status === "In Progress" && (
-                    <button className="btn btn-message">
-                      <i className="fas fa-comment"></i> Message
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  renderBookings() {
-    const { bookings, bookingFilter } = this.state;
-
-    // Filter bookings based on selected filter
-    const filteredBookings = bookings.filter((booking) => {
-      if (bookingFilter === "all") return true;
-      return booking.status === bookingFilter;
-    });
-
-    return (
-      <div className="dashboard-main-content">
-        <div className="dashboard-header">
-          <h1>Service Bookings</h1>
-          <div className="dashboard-actions">
-            <div className="search-container">
-              <i className="fas fa-search search-icon"></i>
-              <input
-                type="text"
-                placeholder="Search bookings..."
-                className="search-input"
-              />
-            </div>
-            <select
-              className="filter-dropdown"
-              value={bookingFilter}
-              onChange={(e) => this.handleBookingFilterChange(e.target.value)}
-            >
-              <option value="all">All Bookings</option>
-              <option value="pending">Pending</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="booking-stats">
-          <div className="stat-card">
-            <div className="stat-icon pending">
-              <i className="fas fa-clock"></i>
-            </div>
-            <div className="stat-info">
-              <div className="stat-number">
-                {bookings.filter((b) => b.status === "pending").length}
-              </div>
-              <div className="stat-label">Pending</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon accepted">
-              <i className="fas fa-check-circle"></i>
-            </div>
-            <div className="stat-info">
-              <div className="stat-number">
-                {bookings.filter((b) => b.status === "accepted").length}
-              </div>
-              <div className="stat-label">Accepted</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon rejected">
-              <i className="fas fa-times-circle"></i>
-            </div>
-            <div className="stat-info">
-              <div className="stat-number">
-                {bookings.filter((b) => b.status === "rejected").length}
-              </div>
-              <div className="stat-label">Rejected</div>
-            </div>
-          </div>
-        </div>
-
-        {filteredBookings.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-illustration">
-              <i className="fas fa-calendar-check"></i>
-            </div>
-            <h3>No Booking Requests Yet</h3>
-            <p>
-              You haven't received any booking requests yet. Complete your
-              portfolio to start receiving bookings!
-            </p>
-            {!this.state.portfolioStatus && (
-              <button
-                className="btn btn-primary"
-                onClick={this.togglePortfolioForm}
-              >
-                Create Portfolio
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="bookings-grid">
-            {filteredBookings.map((booking, index) => (
-              <div className="booking-card" key={index}>
-                <div className="booking-header">
-                  <div className="booking-id">
-                    #{booking.id || `BK-${index + 1}`}
-                  </div>
-                  <div className={`booking-status ${booking.status}`}>
-                    <i
-                      className={`fas fa-${
-                        booking.status === "accepted"
-                          ? "check-circle"
-                          : booking.status === "rejected"
-                          ? "times-circle"
-                          : "clock"
-                      }`}
-                    ></i>
-                    {booking.status.charAt(0).toUpperCase() +
-                      booking.status.slice(1)}
-                  </div>
-                </div>
-
-                <div className="booking-body">
-                  <div className="client-info">
-                    <div className="client-avatar">
-                      {booking.clientProfileImage ? (
-                        <img
-                          src={
-                            booking.clientProfileImage.startsWith("http")
-                              ? booking.clientProfileImage
-                              : `${this.state.baseUrl}${booking.clientProfileImage}`
-                          }
-                          alt={booking.clientName}
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className="avatar-placeholder"
-                        style={{
-                          display: booking.clientProfileImage ? "none" : "flex",
-                        }}
-                      >
-                        {booking.clientName?.charAt(0).toUpperCase() || "C"}
-                      </div>
-                    </div>
-                    <div className="client-details">
-                      <h3 className="client-name">{booking.clientName}</h3>
-                      <p className="client-email">{booking.clientEmail}</p>
-                    </div>
-                  </div>
-
-                  <div className="service-info">
-                    <h4 className="service-name">{booking.serviceName}</h4>
-                    <div className="service-price">
-                      ₹{booking.servicePrice?.toLocaleString()}
-                    </div>
-                  </div>
-
-                  <div className="booking-meta">
-                    <div className="meta-item">
-                      <i className="fas fa-calendar"></i>
-                      <span>
-                        {new Date(booking.requestDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="meta-item">
-                      <i className="fas fa-clock"></i>
-                      <span>
-                        {new Date(booking.requestDate).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {booking.status === "pending" && (
-                  <div className="booking-actions">
-                    <button
-                      className="btn btn-accept"
-                      onClick={() =>
-                        this.handleBookingAction(booking._id, "accept")
-                      }
-                    >
-                      <i className="fas fa-check"></i> Accept
-                    </button>
-                    <button
-                      className="btn btn-reject"
-                      onClick={() =>
-                        this.handleBookingAction(booking._id, "reject")
-                      }
-                    >
-                      <i className="fas fa-times"></i> Reject
-                    </button>
-                  </div>
-                )}
-
-                {booking.status === "accepted" && (
-                  <div className="booking-actions">
-                    <button className="btn btn-message">
-                      <i className="fas fa-comment"></i> Message Client
-                    </button>
-                    <button className="btn btn-details">
-                      <i className="fas fa-eye"></i> View Details
-                    </button>
-                  </div>
-                )}
-
-                {booking.status === "rejected" && (
-                  <div className="booking-actions">
-                    <button className="btn btn-details">
-                      <i className="fas fa-eye"></i> View Details
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  renderWishlist() {
-    const { wishlist } = this.state;
-
-    return (
-      <div className="dashboard-main-content">
-        <div className="dashboard-header">
-          <h1>My Wishlist</h1>
-          <div className="dashboard-actions">
-            <div className="search-container">
-              <i className="fas fa-search search-icon"></i>
-              <input
-                type="text"
-                placeholder="Search wishlist..."
-                className="search-input"
-              />
-            </div>
-          </div>
-        </div>
-
-        {wishlist.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-illustration">
-              <i className="fas fa-heart"></i>
-            </div>
-            <h3>Your Wishlist is Empty</h3>
-            <p>
-              Save your favorite services to your wishlist for easy access
-              later!
-            </p>
-            <Link to="/portfolio-list">
-              <button className="btn btn-primary">Discover Services</button>
-            </Link>
-          </div>
-        ) : (
-          <div className="wishlist-grid">
-            {wishlist.map((item, index) => (
-              <div className="wishlist-card" key={index}>
-                <div className="wishlist-header">
-                  <button className="btn-wishlist active">
-                    <i className="fas fa-heart"></i>
-                  </button>
-                  <div className="service-rating">
-                    <i className="fas fa-star"></i>
-                    <span>{item.rating || 4.5}</span>
-                  </div>
-                </div>
-                <div className="wishlist-body">
-                  <h3 className="service-title">{item.service}</h3>
-                  <div className="service-provider">
-                    <div className="provider-avatar">
-                      {item.profileImage ? (
-                        <img
-                          src={
-                            item.profileImage.startsWith("http")
-                              ? item.profileImage
-                              : `${this.state.baseUrl}${item.profileImage}`
-                          }
-                          alt={`${item.provider}'s profile`}
-                          onError={(e) => {
-                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                              item.provider
-                            )}&background=random&color=fff&size=100`;
-                          }}
-                        />
-                      ) : (
-                        <div className="avatar-placeholder">
-                          {item.provider.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <span>by {item.provider}</span>
-                  </div>
-                  <div className="service-price">${item.price}</div>
-                </div>
-                <div className="wishlist-actions">
-                  <button className="btn btn-primary">
-                    <i className="fas fa-calendar-check"></i> Book Now
-                  </button>
-                  <button
-                    className="btn btn-icon"
-                    onClick={() => this.removeFromWishlist(item.id)}
-                  >
-                    <i className="fas fa-trash-alt"></i>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   renderPortfolioForm() {
     const { portfolioFormData, userData } = this.state;
 
@@ -2429,7 +1420,10 @@ class UserDashboard extends Component {
       <div className="dashboard-main-content">
         <div className="dashboard-header">
           <h1>Submit Portfolio</h1>
-          <button className="btn btn-back" onClick={this.togglePortfolioForm}>
+          <button
+            className="btn btn-back"
+            onClick={() => this.setState({ showPortfolioForm: false })}
+          >
             <i className="fas fa-arrow-left"></i> Back to Dashboard
           </button>
         </div>
@@ -2455,9 +1449,6 @@ class UserDashboard extends Component {
                       {this.generateInitials(userData?.name)}
                     </div>
                   )}
-                  {/* <span className="preview-note">
-                    This will be used for your portfolio
-                  </span>  */}
                 </div>
               </div>
               <div className="form-row">
@@ -2659,7 +1650,7 @@ class UserDashboard extends Component {
               <button
                 type="button"
                 className="btn btn-cancel"
-                onClick={this.togglePortfolioForm}
+                onClick={() => this.setState({ showPortfolioForm: false })}
               >
                 Cancel
               </button>
@@ -2672,6 +1663,883 @@ class UserDashboard extends Component {
       </div>
     );
   }
+
+  handleInputChange = (e) => {
+    const { name, value } = e.target;
+    this.setState((prevState) => ({
+      formData: {
+        ...prevState.formData,
+        [name]: value,
+      },
+    }));
+  };
+
+  handlePortfolioInputChange = (e) => {
+    const { name, value } = e.target;
+    this.setState((prevState) => ({
+      portfolioFormData: {
+        ...prevState.portfolioFormData,
+        [name]: value,
+      },
+    }));
+  };
+
+  handleImageChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        this.setState({
+          previewImage: reader.result,
+          profileImage: file,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  handlePricingChange = (e, index) => {
+    const { name, value } = e.target;
+    this.setState((prevState) => {
+      const updatedPricing = [...prevState.portfolioFormData.pricing];
+      updatedPricing[index] = {
+        ...updatedPricing[index],
+        [name]: value,
+      };
+
+      return {
+        portfolioFormData: {
+          ...prevState.portfolioFormData,
+          pricing: updatedPricing,
+        },
+      };
+    });
+  };
+
+  handleSubmit = async (e) => {
+    e.preventDefault();
+    this.setState({ isLoading: true });
+
+    try {
+      const { formData, profileImage, userData } = this.state;
+
+      if (!userData.id) {
+        this.setState({
+          isLoading: false,
+          error: "You need to login again before updating your profile.",
+          errorType: "new_user_edit",
+          isEditing: false,
+        });
+        return;
+      }
+
+      const submitData = new FormData();
+      submitData.append("name", formData.name);
+      submitData.append("email", formData.email);
+      submitData.append("role", formData.role);
+      submitData.append("profession", formData.profession);
+      submitData.append("phone", formData.phone);
+      submitData.append("userId", userData.id);
+      submitData.append("voatId", userData.voatId);
+      submitData.append("voatPoints", userData.voatPoints);
+      submitData.append("badge", userData.badge);
+
+      if (profileImage) {
+        submitData.append("profileImage", profileImage);
+      }
+
+      const response = await fetch(`${this.state.baseUrl}/api/update-profile`, {
+        method: "POST",
+        body: submitData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update profile");
+      }
+
+      const result = await response.json();
+
+      // Force refresh user data from database to get the latest profile image
+      const freshUserData = await this.refreshUserFromDatabase();
+
+      if (freshUserData) {
+        this.setState({
+          userData: freshUserData,
+          isLoading: false,
+          isEditing: false,
+          previewImage: freshUserData.profileImage
+            ? this.getFullImageUrl(freshUserData.profileImage)
+            : null,
+        });
+      } else {
+        // Fallback to response data
+        const updatedUserData = {
+          ...userData,
+          ...formData,
+          profileImage: result.profileImage || userData.profileImage,
+        };
+
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+        this.setState({
+          userData: updatedUserData,
+          isLoading: false,
+          isEditing: false,
+          previewImage:
+            this.getFullImageUrl(result.profileImage) ||
+            this.getFullImageUrl(userData.profileImage),
+        });
+      }
+
+      // Add notification for profile update
+      this.addNotification({
+        type: "system",
+        message: "Your profile has been updated successfully!",
+        time: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Update error:", error);
+      this.setState({
+        isLoading: false,
+        error: "Failed to update profile. Please try again.",
+        errorType: "update_error",
+      });
+    }
+  };
+
+  handlePortfolioSubmit = async (e) => {
+    e.preventDefault();
+    this.setState({ isLoading: true, error: null });
+
+    try {
+      const { portfolioFormData, userData } = this.state;
+      const baseUrl = this.state.baseUrl || "http://localhost:5000";
+
+      const formData = new FormData();
+
+      // Add form data fields
+      formData.append("name", portfolioFormData.name || "");
+      formData.append("profession", portfolioFormData.profession || "");
+      formData.append("headline", portfolioFormData.headline || "");
+      formData.append("email", portfolioFormData.email);
+      formData.append("workExperience", portfolioFormData.workExperience || "");
+      formData.append("portfolioLink", portfolioFormData.portfolioLink || "");
+      formData.append("about", portfolioFormData.about || "");
+
+      // Make sure userId is included properly and is valid
+      if (userData && userData.id) {
+        formData.append("userId", userData.id);
+      }
+
+      // Add profile image or generate placeholder initials
+      if (userData.profileImage) {
+        formData.append("profileImagePath", userData.profileImage);
+        formData.append("hasProfileImage", "true");
+      } else {
+        const initials = this.generateInitials(userData.name);
+        formData.append("profileInitials", initials);
+        formData.append("userName", userData.name || "User");
+        formData.append("hasProfileImage", "false");
+      }
+
+      // This indicates it's a new submission that needs admin review
+      formData.append("isNewSubmission", "true");
+
+      // Create a service object to append to the portfolio if provided
+      if (
+        portfolioFormData.serviceName &&
+        portfolioFormData.serviceDescription
+      ) {
+        const service = {
+          name: portfolioFormData.serviceName,
+          description: portfolioFormData.serviceDescription,
+          pricing: portfolioFormData.pricing || [],
+        };
+
+        // Stringify the service object to pass it in the form
+        formData.append("service", JSON.stringify(service));
+      }
+
+      const requestUrl = `${baseUrl}/api/portfolio`;
+
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        body: formData,
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = `HTTP error ${response.status}`;
+        try {
+          const errorData = await response.text();
+          errorMessage = `${errorMessage}: ${errorData}`;
+        } catch (e) {
+          // Ignore error parsing body
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+
+      // Clear any previous status timeout
+      if (this.portfolioStatusTimeout) {
+        clearTimeout(this.portfolioStatusTimeout);
+      }
+
+      // Update the state immediately
+      this.setState({
+        isLoading: false,
+        showPortfolioForm: false,
+        portfolioStatus: "pending",
+      });
+
+      // Set a timeout to refresh the status in case there's a race condition
+      this.portfolioStatusTimeout = setTimeout(() => {
+        this.fetchPortfolioStatus();
+      }, 1000);
+
+      // Also add the service to the database with a separate API call
+      if (userData && userData.id && portfolioFormData.serviceName) {
+        try {
+          const serviceData = {
+            userId: userData.id,
+            name: portfolioFormData.serviceName,
+            description: portfolioFormData.serviceDescription,
+            pricing: portfolioFormData.pricing || [],
+          };
+
+          const serviceResponse = await fetch(`${baseUrl}/api/add-service`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(serviceData),
+          });
+
+          if (serviceResponse.ok) {
+            console.log("Service added successfully!");
+          } else {
+            console.error(
+              "Failed to add service:",
+              await serviceResponse.text()
+            );
+          }
+        } catch (serviceError) {
+          console.error("Error adding service:", serviceError);
+        }
+      }
+
+      // Add notification
+      this.addNotification({
+        type: "portfolio",
+        message: "Your portfolio has been submitted for review!",
+        time: new Date().toISOString(),
+      });
+
+      alert(
+        "Portfolio submitted successfully! It will be reviewed by the admin."
+      );
+    } catch (error) {
+      console.error("Portfolio submission error:", error);
+
+      this.setState({
+        isLoading: false,
+        error: error.message,
+      });
+
+      alert(`Failed to submit portfolio: ${error.message}`);
+    }
+  };
+
+  checkLocalSubmissions = async () => {
+    try {
+      if (!this.state.userData || !this.state.userData.id) {
+        console.log("No user data available for local submissions check");
+        return;
+      }
+
+      // First try to directly fetch the user's portfolio
+      const portfolioResponse = await fetch(
+        `${this.state.baseUrl}/api/portfolio/user/${this.state.userData.id}`
+      );
+
+      if (portfolioResponse.ok) {
+        const portfolioData = await portfolioResponse.json();
+        if (portfolioData.hasPortfolio && portfolioData.portfolio) {
+          this.setState({ portfolioStatus: portfolioData.portfolio.status });
+          return;
+        }
+      }
+
+      // If direct fetch fails, try the admin submissions endpoint
+      const response = await fetch(
+        `${this.state.baseUrl}/api/admin/portfolio-submissions`
+      );
+
+      if (response.ok) {
+        const submissions = await response.json();
+        // Find submission matching this user's ID
+        const userSubmission = submissions.find(
+          (sub) =>
+            (sub.userId && sub.userId.toString() === this.state.userData.id) ||
+            (sub.userId &&
+              sub.userId._id &&
+              sub.userId._id.toString() === this.state.userData.id) ||
+            sub.email === this.state.userData.email
+        );
+
+        if (userSubmission) {
+          this.setState({ portfolioStatus: userSubmission.status });
+        }
+      }
+    } catch (error) {
+      console.error("Error in local submissions check:", error);
+    }
+  };
+
+  refreshProfileImage = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user"));
+      if (!userData || !userData.id) return;
+
+      console.log("Refreshing profile image from database...");
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/user/${userData.id}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+
+        // Update only the profile image
+        const updatedUserData = {
+          ...userData,
+          profileImage: result.user.profileImage || null,
+        };
+
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+        this.setState({
+          userData: updatedUserData,
+          previewImage: result.user.profileImage
+            ? this.getFullImageUrl(result.user.profileImage)
+            : null,
+        });
+
+        console.log("Profile image refreshed:", result.user.profileImage);
+      }
+    } catch (error) {
+      console.error("Error refreshing profile image:", error);
+    }
+  };
+
+  renderBookings() {
+    const { bookings, bookingFilter } = this.state;
+
+    // Filter bookings based on selected filter
+    const filteredBookings = bookings.filter((booking) => {
+      if (bookingFilter === "all") return true;
+      return booking.status === bookingFilter;
+    });
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>Service Bookings</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search bookings..."
+                className="search-input"
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={bookingFilter}
+              onChange={(e) => this.setState({ bookingFilter: e.target.value })}
+            >
+              <option value="all">All Bookings</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="booking-stats-modern">
+          <div className="stat-card-modern pending">
+            <div className="stat-card-icon">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-card-content">
+              <div className="stat-number">
+                {bookings.filter((b) => b.status === "pending").length}
+              </div>
+              <div className="stat-label">Pending Requests</div>
+              <div className="stat-description">Awaiting your response</div>
+            </div>
+            <div className="stat-card-trend">
+              <i className="fas fa-arrow-up"></i>
+            </div>
+          </div>
+
+          <div className="stat-card-modern accepted">
+            <div className="stat-card-icon">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-card-content">
+              <div className="stat-number">
+                {bookings.filter((b) => b.status === "accepted").length}
+              </div>
+              <div className="stat-label">Active Projects</div>
+              <div className="stat-description">Currently working on</div>
+            </div>
+            <div className="stat-card-trend">
+              <i className="fas fa-arrow-up"></i>
+            </div>
+          </div>
+
+          <div className="stat-card-modern completed">
+            <div className="stat-card-icon">
+              <i className="fas fa-trophy"></i>
+            </div>
+            <div className="stat-card-content">
+              <div className="stat-number">
+                {bookings.filter((b) => b.status === "completed").length}
+              </div>
+              <div className="stat-label">Completed</div>
+              <div className="stat-description">Successfully delivered</div>
+            </div>
+            <div className="stat-card-trend">
+              <i className="fas fa-check"></i>
+            </div>
+          </div>
+
+          <div className="stat-card-modern revenue">
+            <div className="stat-card-icon">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-card-content">
+              <div className="stat-number">
+                ₹
+                {bookings
+                  .reduce((sum, b) => sum + (b.servicePrice || 0), 0)
+                  .toLocaleString()}
+              </div>
+              <div className="stat-label">Total Value</div>
+              <div className="stat-description">All bookings combined</div>
+            </div>
+            <div className="stat-card-trend">
+              <i className="fas fa-trending-up"></i>
+            </div>
+          </div>
+        </div>
+
+        {filteredBookings.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-calendar-check"></i>
+              </div>
+              <div className="empty-graphic">
+                <div className="floating-elements">
+                  <div className="float-item">📅</div>
+                  <div className="float-item">💼</div>
+                  <div className="float-item">✨</div>
+                </div>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Booking Requests Yet</h3>
+              <p>
+                {bookingFilter !== "all"
+                  ? `No ${bookingFilter} bookings found.`
+                  : "You haven't received any booking requests yet. Complete your portfolio to start receiving bookings!"}
+              </p>
+              {!this.state.portfolioStatus && bookingFilter === "all" && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => this.setState({ showPortfolioForm: true })}
+                >
+                  <i className="fas fa-plus"></i>
+                  Create Portfolio
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bookings-grid-modern">
+            {filteredBookings.map((booking, index) => (
+              <div
+                className={`booking-card-modern ${booking.status}`}
+                key={index}
+              >
+                <div className="booking-card-header">
+                  <div className="booking-id">
+                    #{booking.id || `BK-${String(index + 1).padStart(3, "0")}`}
+                  </div>
+                  <div className={`booking-status-badge ${booking.status}`}>
+                    <i
+                      className={`fas fa-${
+                        booking.status === "accepted"
+                          ? "check-circle"
+                          : booking.status === "rejected"
+                          ? "times-circle"
+                          : "clock"
+                      }`}
+                    ></i>
+                    <span>
+                      {booking.status.charAt(0).toUpperCase() +
+                        booking.status.slice(1)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="booking-card-body">
+                  <div className="client-section">
+                    <div className="client-avatar-large">
+                      {booking.clientProfileImage ? (
+                        <img
+                          src={
+                            booking.clientProfileImage.startsWith("http")
+                              ? booking.clientProfileImage
+                              : `${this.state.baseUrl}${booking.clientProfileImage}`
+                          }
+                          alt={booking.clientName}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder-large"
+                        style={{
+                          display: booking.clientProfileImage ? "none" : "flex",
+                        }}
+                      >
+                        {booking.clientName?.charAt(0).toUpperCase() || "C"}
+                      </div>
+                      <div className="client-status-indicator"></div>
+                    </div>
+                    <div className="client-info">
+                      <h4 className="client-name">{booking.clientName}</h4>
+                      <p className="client-email">{booking.clientEmail}</p>
+                      <div className="client-badge">
+                        <i className="fas fa-star"></i>
+                        <span>Premium Client</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="service-section">
+                    <div className="service-header">
+                      <h3 className="service-name">{booking.serviceName}</h3>
+                      <div className="service-category">
+                        <i className="fas fa-tag"></i>
+                        <span>Professional Service</span>
+                      </div>
+                    </div>
+                    <div className="service-price">
+                      <span className="currency">₹</span>
+                      <span className="amount">
+                        {booking.servicePrice?.toLocaleString()}
+                      </span>
+                      <span className="price-note">Total Project Value</span>
+                    </div>
+                  </div>
+
+                  <div className="booking-timeline">
+                    <div className="timeline-item">
+                      <i className="fas fa-calendar-plus"></i>
+                      <div className="timeline-content">
+                        <span className="timeline-label">Requested</span>
+                        <span className="timeline-date">
+                          {new Date(booking.requestDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    {booking.responseDate && (
+                      <div className="timeline-item">
+                        <i
+                          className={`fas fa-${
+                            booking.status === "accepted" ? "check" : "times"
+                          }`}
+                        ></i>
+                        <div className="timeline-content">
+                          <span className="timeline-label">
+                            {booking.status === "accepted"
+                              ? "Accepted"
+                              : "Responded"}
+                          </span>
+                          <span className="timeline-date">
+                            {new Date(
+                              booking.responseDate
+                            ).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="booking-card-footer">
+                  {booking.status === "pending" && (
+                    <div className="booking-actions-modern">
+                      <button
+                        className="btn-modern btn-accept"
+                        onClick={() =>
+                          this.handleBookingAction(booking._id, "accept")
+                        }
+                      >
+                        <i className="fas fa-check"></i>
+                        <span>Accept</span>
+                      </button>
+                      <button
+                        className="btn-modern btn-reject"
+                        onClick={() =>
+                          this.handleBookingAction(booking._id, "reject")
+                        }
+                      >
+                        <i className="fas fa-times"></i>
+                        <span>Decline</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {booking.status === "accepted" && (
+                    <div className="booking-actions-modern">
+                      <button className="btn-modern btn-message">
+                        <i className="fas fa-comment-dots"></i>
+                        <span>Message Client</span>
+                      </button>
+                      <button className="btn-modern btn-details">
+                        <i className="fas fa-external-link-alt"></i>
+                        <span>View Project</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {booking.status === "rejected" && (
+                    <div className="booking-actions-modern">
+                      <button className="btn-modern btn-details-secondary">
+                        <i className="fas fa-eye"></i>
+                        <span>View Details</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  handleBookingAction = async (bookingId, action) => {
+    try {
+      const response = await fetch(
+        `${this.state.baseUrl}/api/booking/${bookingId}/action`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action }),
+        }
+      );
+
+      if (response.ok) {
+        this.fetchBookings();
+        this.addNotification({
+          type: "system",
+          message: `Booking request ${action}ed successfully!`,
+          time: new Date().toISOString(),
+        });
+      } else {
+        throw new Error(`Failed to ${action} booking`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing booking:`, error);
+      this.addNotification({
+        type: "system",
+        message: `Failed to ${action} booking request`,
+        time: new Date().toISOString(),
+      });
+    }
+  };
+
+  renderWishlist() {
+    const { wishlist } = this.state;
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>My Wishlist</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search wishlist..."
+                className="search-input"
+              />
+            </div>
+          </div>
+        </div>
+
+        {wishlist.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-illustration">
+              <i className="fas fa-heart"></i>
+            </div>
+            <h3>Your Wishlist is Empty</h3>
+            <p>
+              Save your favorite services to your wishlist for easy access
+              later!
+            </p>
+            <Link to="/portfolio-list">
+              <button className="btn btn-primary">Discover Services</button>
+            </Link>
+          </div>
+        ) : (
+          <div className="wishlist-grid">
+            {wishlist.map((item, index) => (
+              <div className="wishlist-card" key={index}>
+                <div className="wishlist-header">
+                  <button
+                    className="btn-wishlist active"
+                    onClick={() => this.removeFromWishlist(item.id)}
+                  >
+                    <i className="fas fa-heart"></i>
+                  </button>
+                  <div className="service-rating">
+                    <i className="fas fa-star"></i>
+                    <span>{item.rating || 4.5}</span>
+                  </div>
+                </div>
+                <div className="wishlist-body">
+                  <h3 className="service-title">{item.service}</h3>
+                  <div className="service-provider">
+                    <div className="provider-avatar">
+                      {item.profileImage ? (
+                        <img
+                          src={
+                            item.profileImage.startsWith("http")
+                              ? item.profileImage
+                              : `${this.state.baseUrl}${item.profileImage}`
+                          }
+                          alt={`${item.provider}'s profile`}
+                          onError={(e) => {
+                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                              item.provider
+                            )}&background=random&color=fff&size=100`;
+                          }}
+                        />
+                      ) : (
+                        <div className="avatar-placeholder">
+                          {item.provider.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <span>by {item.provider}</span>
+                  </div>
+                  <div className="service-price">₹{item.price}</div>
+                </div>
+                <div className="wishlist-actions">
+                  <button className="btn btn-primary">
+                    <i className="fas fa-calendar-check"></i> Book Now
+                  </button>
+                  <button
+                    className="btn btn-icon"
+                    onClick={() => this.removeFromWishlist(item.id)}
+                  >
+                    <i className="fas fa-trash-alt"></i>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  removeFromWishlist = async (itemId) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) return;
+
+      const updatedWishlist = this.state.wishlist.filter(
+        (item) => item.id !== itemId
+      );
+
+      this.setState(
+        {
+          wishlist: updatedWishlist,
+        },
+        () => {
+          this.updateStats();
+        }
+      );
+
+      localStorage.setItem(
+        `wishlist_${userData.id}`,
+        JSON.stringify(updatedWishlist)
+      );
+
+      try {
+        const deleteResponse = await fetch(
+          `${this.state.baseUrl}/api/wishlist/remove/${itemId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ userId: userData.id }),
+          }
+        );
+
+        if (!deleteResponse.ok) {
+          throw new Error("Delete endpoint failed");
+        }
+
+        console.log("Item successfully removed from wishlist in database");
+      } catch (deleteError) {
+        console.error("Error with DELETE endpoint:", deleteError);
+
+        try {
+          await fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(updatedWishlist),
+          });
+
+          console.log(
+            "Wishlist successfully updated in database (fallback method)"
+          );
+        } catch (updateError) {
+          console.error("Failed to update wishlist in database:", updateError);
+        }
+      }
+
+      this.addNotification({
+        type: "system",
+        message: "Item removed from your wishlist",
+        time: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Failed to remove from wishlist:", error);
+    }
+  };
 
   renderError() {
     return (
@@ -2701,7 +2569,9 @@ class UserDashboard extends Component {
         return (
           <button
             className="sidebar-button approved"
-            onClick={this.handleViewPortfolio}
+            onClick={() =>
+              (window.location.href = `/my-portfolio/${this.state.userData.id}`)
+            }
           >
             <i className="fas fa-user-tie"></i>
             <span>View My Portfolio</span>
@@ -2718,7 +2588,7 @@ class UserDashboard extends Component {
         return (
           <button
             className="sidebar-button rejected"
-            onClick={this.togglePortfolioForm}
+            onClick={() => this.setState({ showPortfolioForm: true })}
           >
             <i className="fas fa-redo"></i>
             <span>Resubmit Portfolio</span>
@@ -2728,7 +2598,7 @@ class UserDashboard extends Component {
         return (
           <button
             className="sidebar-button new"
-            onClick={this.togglePortfolioForm}
+            onClick={() => this.setState({ showPortfolioForm: true })}
           >
             <i className="fas fa-plus-circle"></i>
             <span>Submit Portfolio</span>
@@ -2778,8 +2648,14 @@ class UserDashboard extends Component {
   }
 
   render() {
-    const { isLoading, error, errorType, activeTab, showMobileSidebar } =
-      this.state;
+    const {
+      isLoading,
+      error,
+      errorType,
+      activeTab,
+      showMobileSidebar,
+      showNotifications,
+    } = this.state;
 
     if (isLoading) {
       return (
@@ -2791,11 +2667,7 @@ class UserDashboard extends Component {
     }
 
     if (error && errorType !== "new_user_edit") {
-      return (
-        <>
-          <div className="dashboard-container">{this.renderError()}</div>
-        </>
-      );
+      return <div className="dashboard-container">{this.renderError()}</div>;
     }
 
     const userData = this.state.userData;
@@ -2807,6 +2679,10 @@ class UserDashboard extends Component {
       <>
         <div className="dashboard-container">
           {this.renderMobileToggleButton()}
+
+          {/* Notification Slide Panel */}
+          {this.renderNotificationPanel()}
+
           <div
             className={`dashboard-sidebar ${
               showMobileSidebar ? "mobile-active" : ""
@@ -2858,6 +2734,11 @@ class UserDashboard extends Component {
               >
                 <i className="fas fa-clipboard-list nav-icon"></i>
                 <span className="nav-text">My Orders</span>
+                {this.state.stats.activeOrders > 0 && (
+                  <span className="nav-badge">
+                    {this.state.stats.activeOrders}
+                  </span>
+                )}
               </button>
 
               {this.isFreelancer() && (
@@ -2869,6 +2750,11 @@ class UserDashboard extends Component {
                 >
                   <i className="fas fa-calendar-check nav-icon"></i>
                   <span className="nav-text">Bookings</span>
+                  {this.state.stats.pendingBookings > 0 && (
+                    <span className="nav-badge">
+                      {this.state.stats.pendingBookings}
+                    </span>
+                  )}
                 </button>
               )}
 
@@ -2880,6 +2766,11 @@ class UserDashboard extends Component {
               >
                 <i className="fas fa-heart nav-icon"></i>
                 <span className="nav-text">Wishlist</span>
+                {this.state.stats.savedItems > 0 && (
+                  <span className="nav-badge">
+                    {this.state.stats.savedItems}
+                  </span>
+                )}
               </button>
 
               <button className="nav-item" onClick={this.handleLogout}>
@@ -2887,6 +2778,7 @@ class UserDashboard extends Component {
                 <span className="nav-text">Logout</span>
               </button>
             </nav>
+
             <div className="sidebar-footer">
               {this.renderSidebarButton()}
 
