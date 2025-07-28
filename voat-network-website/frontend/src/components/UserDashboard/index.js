@@ -53,6 +53,8 @@ class UserDashboard extends Component {
         ? "http://localhost:5000"
         : "https://voat.onrender.com",
     showMobileSidebar: false,
+    wishlistLoading: false,
+    cartItems: [],
   };
 
   componentDidMount() {
@@ -79,6 +81,12 @@ class UserDashboard extends Component {
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
 
+    this.cartStatusInterval = setInterval(() => {
+      if (this.state.activeTab === "wishlist") {
+        this.refreshCartStatus();
+      }
+    }, 30000);
+
     // Close notification panel when clicking outside
     document.addEventListener("click", this.handleClickOutside);
   }
@@ -89,6 +97,10 @@ class UserDashboard extends Component {
     }
     if (this.portfolioStatusTimeout) {
       clearTimeout(this.portfolioStatusTimeout);
+    }
+
+    if (this.cartStatusInterval) {
+      clearInterval(this.cartStatusInterval);
     }
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
     document.removeEventListener("click", this.handleClickOutside);
@@ -592,18 +604,20 @@ class UserDashboard extends Component {
   };
 
   fetchWishlist = async () => {
+    this.setState({ wishlistLoading: true });
     let userData;
 
     try {
       userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
         console.log("No user data available, cannot fetch wishlist");
-        this.setState({ wishlist: [] }, () => {
+        this.setState({ wishlist: [], wishlistLoading: false }, () => {
           this.updateStats();
         });
         return;
       }
 
+      // Fetch wishlist
       const response = await fetch(
         `${this.state.baseUrl}/api/wishlist/${userData.id}`
       );
@@ -616,19 +630,65 @@ class UserDashboard extends Component {
 
       const apiWishlist = await response.json();
 
-      this.setState(
-        {
-          wishlist: Array.isArray(apiWishlist) ? apiWishlist : [],
-        },
-        () => {
-          this.updateStats();
-        }
-      );
+      // Fetch user's cart to check which items are already in cart
+      try {
+        const cartResponse = await fetch(
+          `${this.state.baseUrl}/api/cart/${userData.id}`
+        );
 
-      localStorage.setItem(
-        `wishlist_${userData.id}`,
-        JSON.stringify(apiWishlist)
-      );
+        let cartItems = [];
+        if (cartResponse.ok) {
+          const cartData = await cartResponse.json();
+          cartItems = cartData.data || [];
+        }
+
+        // Update wishlist items with cart status
+        const updatedWishlist = apiWishlist.map((item) => ({
+          ...item,
+          inCart: cartItems.some(
+            (cartItem) =>
+              cartItem.serviceName === item.service &&
+              cartItem.freelancerName === item.provider
+          ),
+          serviceLevel: item.serviceLevel || "Standard",
+          deliveryTime: item.deliveryTime || "7-14 days",
+          description:
+            item.description ||
+            "Professional service with quality guarantee and timely delivery.",
+          freelancerId: item.freelancerId || item.serviceId || item.id,
+          providerEmail:
+            item.providerEmail ||
+            `${item.provider?.toLowerCase().replace(" ", "")}@example.com`,
+        }));
+
+        this.setState(
+          {
+            wishlist: updatedWishlist,
+            cartItems: cartItems,
+            wishlistLoading: false,
+          },
+          () => {
+            this.updateStats();
+          }
+        );
+
+        localStorage.setItem(
+          `wishlist_${userData.id}`,
+          JSON.stringify(updatedWishlist)
+        );
+      } catch (cartError) {
+        console.error("Error fetching cart data:", cartError);
+        // Continue with wishlist without cart status
+        this.setState(
+          {
+            wishlist: Array.isArray(apiWishlist) ? apiWishlist : [],
+            wishlistLoading: false,
+          },
+          () => {
+            this.updateStats();
+          }
+        );
+      }
     } catch (error) {
       console.error("Error fetching wishlist:", error);
 
@@ -641,6 +701,7 @@ class UserDashboard extends Component {
           this.setState(
             {
               wishlist: localWishlist,
+              wishlistLoading: false,
             },
             () => {
               this.updateStats();
@@ -651,10 +712,10 @@ class UserDashboard extends Component {
             "Error loading wishlist from localStorage:",
             localError
           );
-          this.setState({ wishlist: [] });
+          this.setState({ wishlist: [], wishlistLoading: false });
         }
       } else {
-        this.setState({ wishlist: [] });
+        this.setState({ wishlist: [], wishlistLoading: false });
       }
     }
   };
@@ -1155,51 +1216,119 @@ class UserDashboard extends Component {
           </div>
         </div>
 
-        {filteredOrders.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-illustration">
-              <i className="fas fa-clipboard-list"></i>
+        {/* Compact Orders Summary Stats */}
+        <div className="orders-summary-stats-compact">
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact pending">
+              <i className="fas fa-clock"></i>
             </div>
-            <h3>No Orders Found</h3>
-            <p>
-              {this.state.orderSearchQuery || this.state.orderFilter !== "all"
-                ? "No orders match your search criteria."
-                : "You haven't placed any orders yet. Start exploring services to place your first order!"}
-            </p>
-            {!this.state.orderSearchQuery &&
-              this.state.orderFilter === "all" && (
-                <Link to="/portfolio-list">
-                  <button className="btn btn-primary">Explore Services</button>
-                </Link>
-              )}
+            <div className="stat-number-compact">
+              {
+                filteredOrders.filter(
+                  (order) => order.status.toLowerCase() === "pending"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Pending</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact progress">
+              <i className="fas fa-spinner"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                filteredOrders.filter((order) =>
+                  order.status.toLowerCase().includes("progress")
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">In Progress</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact completed">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                filteredOrders.filter(
+                  (order) => order.status.toLowerCase() === "completed"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Completed</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact total">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-number-compact">
+              ₹
+              {filteredOrders
+                .reduce((sum, order) => sum + (order.amount || 0), 0)
+                .toLocaleString()}
+            </div>
+            <div className="stat-label-compact">Total Value</div>
+          </div>
+        </div>
+
+        {filteredOrders.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-clipboard-list"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Orders Found</h3>
+              <p>
+                {this.state.orderSearchQuery || this.state.orderFilter !== "all"
+                  ? "No orders match your search criteria."
+                  : "You haven't placed any orders yet. Start exploring services to place your first order!"}
+              </p>
+              {!this.state.orderSearchQuery &&
+                this.state.orderFilter === "all" && (
+                  <Link to="/portfolio-list">
+                    <button className="btn btn-primary">
+                      <i className="fas fa-compass"></i>
+                      Explore Services
+                    </button>
+                  </Link>
+                )}
+            </div>
           </div>
         ) : (
-          <div className="orders-grid">
+          <div className="compact-orders-grid">
             {filteredOrders.map((order, index) => (
-              <div className="order-card" key={index}>
-                <div className="order-header">
-                  <div className="order-id">{order.id}</div>
+              <div className="compact-order-card" key={index}>
+                {/* Order Header */}
+                <div className="compact-order-header">
+                  <div className="order-id-compact">
+                    <i className="fas fa-hashtag"></i>
+                    <span>{order.id}</span>
+                  </div>
                   <div
-                    className={`order-status ${order.status
+                    className={`compact-order-status ${order.status
                       .toLowerCase()
                       .replace(" ", "-")}`}
                   >
-                    <i
-                      className={`fas fa-${
-                        order.status === "Completed"
-                          ? "check-circle"
-                          : order.status === "In Progress"
-                          ? "spinner"
-                          : "clock"
-                      }`}
-                    ></i>
-                    {order.status}
+                    <div className="status-dot"></div>
+                    <span>{order.status}</span>
                   </div>
                 </div>
-                <div className="order-body">
-                  <h3 className="order-service">{order.service}</h3>
-                  <div className="order-provider">
-                    <div className="provider-avatar">
+
+                {/* Service Info */}
+                <div className="compact-order-content">
+                  <div className="service-info-compact">
+                    <h3 className="service-name-compact">{order.service}</h3>
+                    {/* <div className="service-type-compact">
+                      <i className="fas fa-tag"></i>
+                      <span>Professional Service</span>
+                    </div> */}
+                  </div>
+
+                  {/* Provider Section */}
+                  <div className="provider-compact">
+                    <div className="provider-avatar-compact">
                       {order.providerImage ? (
                         <img
                           src={this.getFullImageUrl(order.providerImage)}
@@ -1211,7 +1340,7 @@ class UserDashboard extends Component {
                         />
                       ) : null}
                       <div
-                        className="avatar-placeholder"
+                        className="avatar-placeholder-compact"
                         style={{
                           display: order.providerImage ? "none" : "flex",
                         }}
@@ -1219,41 +1348,91 @@ class UserDashboard extends Component {
                         {order.provider?.charAt(0).toUpperCase() || "P"}
                       </div>
                     </div>
-                    <div className="provider-details">
-                      <span className="provider-name">{order.provider}</span>
-                      {order.providerEmail && (
-                        <span className="provider-email">
-                          {order.providerEmail}
-                        </span>
-                      )}
+                    <div className="provider-details-compact">
+                      <h4 className="provider-name-compact">
+                        {order.provider}
+                      </h4>
+                      <p className="provider-role-compact">Service Provider</p>
                     </div>
                   </div>
-                  <div className="order-meta">
-                    <div className="meta-item">
-                      <i className="fas fa-calendar"></i>
-                      <span>{order.date}</span>
+
+                  {/* Order Meta */}
+                  <div className="order-meta-compact">
+                    <div className="meta-item-compact">
+                      <i className="fas fa-calendar-alt"></i>
+                      <span className="meta-label">Date:</span>
+                      <span className="meta-value">
+                        {new Date(order.date).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
                     </div>
-                    <div className="meta-item price-meta">
-                      <i className="fa-solid fa-indian-rupee-sign"></i>
-                      <span>₹{order.amount}</span>
+                    <div className="meta-item-compact price-meta">
+                      <i className="fas fa-indian-rupee-sign"></i>
+                      <span className="meta-label">Amount:</span>
+                      <span className="meta-value price-value">
+                        ₹{order.amount?.toLocaleString()}
+                      </span>
                     </div>
                   </div>
+
+                  {/* Progress Bar for In Progress Orders */}
+                  {order.status === "In Progress" && (
+                    <div className="progress-compact">
+                      <div className="progress-info">
+                        <span className="progress-text">Progress</span>
+                        <span className="progress-percent">65%</span>
+                      </div>
+                      <div className="progress-bar-compact">
+                        <div
+                          className="progress-fill-compact"
+                          style={{ width: "65%" }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="order-actions">
-                  <button className="btn btn-details">
+
+                {/* Order Actions */}
+                <div className="compact-order-actions">
+                  <button
+                    className="action-btn-compact primary"
+                    onClick={() =>
+                      (window.location.href = `/my-portfolio/${
+                        order.providerId || "unknown"
+                      }`)
+                    }
+                  >
                     <i className="fas fa-eye"></i>
-                    View Details
+                    <span>View Details</span>
                   </button>
+
                   {order.status === "Completed" && (
-                    <button className="btn btn-review">
+                    <button className="action-btn-compact secondary">
                       <i className="fas fa-star"></i>
-                      Leave Review
+                      <span>Review</span>
                     </button>
                   )}
+
                   {order.status === "In Progress" && (
-                    <button className="btn btn-message">
-                      <i className="fas fa-comment"></i>
-                      Message
+                    <button className="action-btn-compact secondary">
+                      <i className="fas fa-comment-dots"></i>
+                      <span>Message</span>
+                    </button>
+                  )}
+
+                  {(order.status === "Pending" ||
+                    order.status === "In Progress") && (
+                    <button
+                      className="action-btn-compact cancel"
+                      onClick={() =>
+                        this.handleCancelOrder(order.bookingId || order.id)
+                      }
+                    >
+                      <i className="fas fa-times"></i>
+                      <span>Cancel</span>
                     </button>
                   )}
                 </div>
@@ -1264,6 +1443,80 @@ class UserDashboard extends Component {
       </div>
     );
   }
+
+  // Add this method to handle order cancellation
+  handleCancelOrder = async (bookingId) => {
+    if (!bookingId) {
+      this.addNotification({
+        type: "system",
+        message: "Unable to cancel order: Invalid booking ID",
+        time: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this order? This action cannot be undone."
+    );
+
+    if (!confirmCancel) return;
+
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        this.addNotification({
+          type: "system",
+          message: "Please login to cancel orders",
+          time: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/booking/${bookingId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId: userData.id }),
+        }
+      );
+
+      if (response.ok) {
+        // Remove the order from the local state
+        this.setState(
+          (prevState) => ({
+            orders: prevState.orders.filter(
+              (order) => order.bookingId !== bookingId && order.id !== bookingId
+            ),
+          }),
+          () => {
+            this.updateStats();
+          }
+        );
+
+        this.addNotification({
+          type: "system",
+          message: "Order cancelled successfully",
+          time: new Date().toISOString(),
+        });
+
+        // Refresh orders from server
+        this.fetchOrders();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to cancel order");
+      }
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      this.addNotification({
+        type: "system",
+        message: error.message || "Failed to cancel order. Please try again.",
+        time: new Date().toISOString(),
+      });
+    }
+  };
 
   renderEditForm() {
     const { formData, previewImage } = this.state;
@@ -2376,7 +2629,7 @@ class UserDashboard extends Component {
   };
 
   renderWishlist() {
-    const { wishlist } = this.state;
+    const { wishlist, wishlistLoading } = this.state;
 
     return (
       <div className="dashboard-main-content">
@@ -2387,47 +2640,72 @@ class UserDashboard extends Component {
               <i className="fas fa-search search-icon"></i>
               <input
                 type="text"
-                placeholder="Search wishlist..."
+                placeholder="Search saved services..."
                 className="search-input"
               />
+            </div>
+            <div className="wishlist-stats-badge">
+              <i className="fas fa-heart"></i>
+              <span>{wishlist.length} Services</span>
             </div>
           </div>
         </div>
 
-        {wishlist.length === 0 ? (
-          <div className="empty-state">
+        {wishlistLoading ? (
+          <div className="loading-state">
+            <div className="loading-spinner"></div>
+            <p>Loading your wishlist...</p>
+          </div>
+        ) : wishlist.length === 0 ? (
+          <div className="empty-state-modern">
             <div className="empty-illustration">
-              <i className="fas fa-heart"></i>
+              <div className="empty-icon">
+                <i className="fas fa-heart-broken"></i>
+              </div>
+              <div className="empty-graphic">
+                <div className="floating-elements">
+                  <div className="float-item">💝</div>
+                  <div className="float-item">⭐</div>
+                  <div className="float-item">🎯</div>
+                </div>
+              </div>
             </div>
-            <h3>Your Wishlist is Empty</h3>
-            <p>
-              Save your favorite services to your wishlist for easy access
-              later!
-            </p>
-            <Link to="/portfolio-list">
-              <button className="btn btn-primary">Discover Services</button>
-            </Link>
+            <div className="empty-content">
+              <h3>Your Wishlist is Empty</h3>
+              <p>
+                Save your favorite services to your wishlist for easy access
+                later! Discover amazing services and keep track of what you
+                love.
+              </p>
+              <Link to="/portfolio-list">
+                <button className="btn btn-primary">
+                  <i className="fas fa-compass"></i>
+                  Discover Services
+                </button>
+              </Link>
+            </div>
           </div>
         ) : (
-          <div className="wishlist-grid">
-            {wishlist.map((item, index) => (
-              <div className="wishlist-card" key={index}>
-                <div className="wishlist-header">
-                  <button
-                    className="btn-wishlist active"
-                    onClick={() => this.removeFromWishlist(item.id)}
-                  >
-                    <i className="fas fa-heart"></i>
-                  </button>
-                  <div className="service-rating">
-                    <i className="fas fa-star"></i>
-                    <span>{item.rating || 4.5}</span>
+          <div className="wishlist-container">
+            <div className="wishlist-grid-compact">
+              {wishlist.map((item, index) => (
+                <div className="wishlist-card-compact" key={index}>
+                  <div className="card-header-compact">
+                    <button
+                      className="btn-remove-heart"
+                      onClick={() => this.removeFromWishlist(item.id)}
+                      title="Remove from wishlist"
+                    >
+                      <i className="fas fa-heart"></i>
+                    </button>
+                    <div className="service-type-badge">
+                      <i className="fas fa-star"></i>
+                      <span>{item.serviceLevel || "Standard"}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="wishlist-body">
-                  <h3 className="service-title">{item.service}</h3>
-                  <div className="service-provider">
-                    <div className="provider-avatar">
+
+                  <div className="provider-section-compact">
+                    <div className="provider-avatar-small">
                       {item.profileImage ? (
                         <img
                           src={
@@ -2437,45 +2715,240 @@ class UserDashboard extends Component {
                           }
                           alt={`${item.provider}'s profile`}
                           onError={(e) => {
-                            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                              item.provider
-                            )}&background=random&color=fff&size=100`;
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
                           }}
                         />
-                      ) : (
-                        <div className="avatar-placeholder">
-                          {item.provider.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="avatar-placeholder-small"
+                        style={{
+                          display: item.profileImage ? "none" : "flex",
+                        }}
+                      >
+                        {item.provider?.charAt(0).toUpperCase() || "P"}
+                      </div>
+                      <div className="online-indicator"></div>
                     </div>
-                    <span>by {item.provider}</span>
+                    <div className="provider-info-compact">
+                      <h4 className="provider-name-compact">{item.provider}</h4>
+                      <span className="provider-badge-compact">Verified</span>
+                    </div>
                   </div>
-                  <div className="service-price">₹{item.price}</div>
+
+                  <div className="service-info-compact">
+                    <h3 className="service-title-compact">{item.service}</h3>
+
+                    <div className="service-meta-compact">
+                      <div className="meta-item-compact">
+                        <i className="fas fa-clock"></i>
+                        <span>{item.deliveryTime || "7-14 days"}</span>
+                      </div>
+                      <div className="meta-item-compact">
+                        <i className="fas fa-shield-check"></i>
+                        <span>Guaranteed</span>
+                      </div>
+                    </div>
+
+                    <div className="price-section-compact">
+                      <div className="price-display-compact">
+                        <span className="price-label-compact">Starting at</span>
+                        <div className="price-amount-compact">
+                          <span className="currency-compact">₹</span>
+                          <span className="amount-compact">
+                            {item.price?.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card-actions-compact">
+                    <button
+                      className="btn-cart-compact"
+                      onClick={() => this.addToCart(item)}
+                      disabled={item.inCart}
+                    >
+                      <i
+                        className={`fas fa-${
+                          item.inCart ? "check" : "shopping-cart"
+                        }`}
+                      ></i>
+                      <span>{item.inCart ? "In Cart" : "Add to Cart"}</span>
+                    </button>
+
+                    <button
+                      className="btn-book-compact"
+                      onClick={() => this.bookService(item)}
+                    >
+                      <i className="fas fa-bolt"></i>
+                      <span>Book Now</span>
+                    </button>
+                  </div>
+
+                  <div className="card-footer-compact">
+                    <div className="added-info">
+                      <i className="fas fa-plus-circle"></i>
+                      <span>Added {this.formatAddedDate(item.addedDate)}</span>
+                    </div>
+                    <button
+                      className="btn-remove-text-compact"
+                      onClick={() => this.removeFromWishlist(item.id)}
+                    >
+                      <i className="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
                 </div>
-                <div className="wishlist-actions">
-                  <button className="btn btn-primary">
-                    <i className="fas fa-calendar-check"></i> Book Now
-                  </button>
-                  <button
-                    className="btn btn-icon"
-                    onClick={() => this.removeFromWishlist(item.id)}
-                  >
-                    <i className="fas fa-trash-alt"></i>
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
     );
   }
 
+  // Helper methods to add to the component
+
+  addToCart = async (item) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        alert("Please login to add items to cart");
+        return;
+      }
+
+      // Check if already in cart
+      if (item.inCart) {
+        this.addNotification({
+          type: "system",
+          message: "This service is already in your cart",
+          time: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const cartData = {
+        userId: userData.id,
+        freelancerId: item.freelancerId || item.serviceId,
+        freelancerName: item.provider,
+        freelancerProfileImage: item.profileImage,
+        serviceName: item.service,
+        serviceLevel: item.serviceLevel || "Standard",
+        basePrice: item.price,
+        paymentType: "final",
+      };
+
+      const response = await fetch(`${this.state.baseUrl}/api/cart/add`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(cartData),
+      });
+
+      if (response.ok) {
+        // Update wishlist item to show it's in cart
+        this.setState((prevState) => ({
+          wishlist: prevState.wishlist.map((wishlistItem) =>
+            wishlistItem.id === item.id
+              ? { ...wishlistItem, inCart: true }
+              : wishlistItem
+          ),
+        }));
+
+        this.addNotification({
+          type: "system",
+          message: "Service added to cart successfully!",
+          time: new Date().toISOString(),
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to add to cart");
+      }
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      this.addNotification({
+        type: "system",
+        message: error.message || "Failed to add service to cart",
+        time: new Date().toISOString(),
+      });
+    }
+  };
+
+  bookService = async (item) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        alert("Please login to book services");
+        return;
+      }
+
+      const bookingData = {
+        clientId: userData.id,
+        clientName: userData.name,
+        clientEmail: userData.email,
+        clientProfileImage: userData.profileImage,
+        freelancerId: item.freelancerId || item.serviceId,
+        freelancerName: item.provider,
+        freelancerEmail:
+          item.providerEmail ||
+          `${item.provider.toLowerCase().replace(" ", "")}@example.com`,
+        serviceName: item.service,
+        servicePrice: item.price,
+      };
+
+      const response = await fetch(`${this.state.baseUrl}/api/create-booking`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      if (response.ok) {
+        this.addNotification({
+          type: "booking",
+          message: `Booking request sent for ${item.service}!`,
+          time: new Date().toISOString(),
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create booking");
+      }
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      this.addNotification({
+        type: "system",
+        message: error.message || "Failed to book service",
+        time: new Date().toISOString(),
+      });
+    }
+  };
+
+  formatAddedDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) return "today";
+      if (diffDays === 1) return "yesterday";
+      if (diffDays < 7) return `${diffDays} days ago`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+      return `${Math.floor(diffDays / 30)} months ago`;
+    } catch (error) {
+      return "recently";
+    }
+  };
+
   removeFromWishlist = async (itemId) => {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) return;
 
+      // Optimistic update
+      const originalWishlist = [...this.state.wishlist];
       const updatedWishlist = this.state.wishlist.filter(
         (item) => item.id !== itemId
       );
@@ -2511,33 +2984,74 @@ class UserDashboard extends Component {
         }
 
         console.log("Item successfully removed from wishlist in database");
+
+        this.addNotification({
+          type: "system",
+          message: "Service removed from your wishlist",
+          time: new Date().toISOString(),
+        });
       } catch (deleteError) {
         console.error("Error with DELETE endpoint:", deleteError);
 
-        try {
-          await fetch(`${this.state.baseUrl}/api/wishlist/${userData.id}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(updatedWishlist),
-          });
+        // Rollback on server error
+        this.setState(
+          {
+            wishlist: originalWishlist,
+          },
+          () => {
+            this.updateStats();
+          }
+        );
 
-          console.log(
-            "Wishlist successfully updated in database (fallback method)"
-          );
-        } catch (updateError) {
-          console.error("Failed to update wishlist in database:", updateError);
-        }
+        localStorage.setItem(
+          `wishlist_${userData.id}`,
+          JSON.stringify(originalWishlist)
+        );
+
+        this.addNotification({
+          type: "system",
+          message: "Failed to remove item from wishlist. Please try again.",
+          time: new Date().toISOString(),
+        });
       }
-
-      this.addNotification({
-        type: "system",
-        message: "Item removed from your wishlist",
-        time: new Date().toISOString(),
-      });
     } catch (error) {
       console.error("Failed to remove from wishlist:", error);
+      this.addNotification({
+        type: "system",
+        message: "An error occurred. Please try again.",
+        time: new Date().toISOString(),
+      });
+    }
+  };
+
+  // Method to refresh cart status for wishlist items
+  refreshCartStatus = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) return;
+
+      const cartResponse = await fetch(
+        `${this.state.baseUrl}/api/cart/${userData.id}`
+      );
+
+      if (cartResponse.ok) {
+        const cartData = await cartResponse.json();
+        const cartItems = cartData.data || [];
+
+        this.setState((prevState) => ({
+          wishlist: prevState.wishlist.map((item) => ({
+            ...item,
+            inCart: cartItems.some(
+              (cartItem) =>
+                cartItem.serviceName === item.service &&
+                cartItem.freelancerName === item.provider
+            ),
+          })),
+          cartItems: cartItems,
+        }));
+      }
+    } catch (error) {
+      console.error("Error refreshing cart status:", error);
     }
   };
 

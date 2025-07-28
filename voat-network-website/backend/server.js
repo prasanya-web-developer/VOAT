@@ -4112,6 +4112,138 @@ app.post("/api/check-booking-eligibility", async (req, res) => {
   }
 });
 
+// DELETE - Cancel/Delete Booking (Updated to handle client cancellation)
+app.delete("/api/booking/:bookingId", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { userId } = req.body; // Either client or freelancer can cancel
+
+    console.log("Cancelling booking:", bookingId, "by user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID format",
+      });
+    }
+
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Check if user is authorized to cancel this booking
+    if (
+      booking.clientId.toString() !== userId &&
+      booking.freelancerId.toString() !== userId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to cancel this booking",
+      });
+    }
+
+    // Determine who is cancelling
+    const isClientCancelling = booking.clientId.toString() === userId;
+    const isFreelancerCancelling = booking.freelancerId.toString() === userId;
+
+    // Only allow cancellation if booking is pending or in progress
+    if (!["pending", "accepted"].includes(booking.status)) {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot cancel a booking that has been ${booking.status}`,
+      });
+    }
+
+    // Create notifications before deleting the booking
+    if (isClientCancelling) {
+      // Notify the freelancer that client cancelled
+      await createNotification({
+        userId: booking.freelancerId,
+        type: "booking",
+        title: "Booking Cancelled by Client",
+        message: `${booking.clientName} has cancelled the booking for "${booking.serviceName}"`,
+        relatedId: booking._id.toString(),
+        metadata: {
+          bookingId: booking._id,
+          clientName: booking.clientName,
+          serviceName: booking.serviceName,
+          cancelledBy: "client",
+        },
+      });
+
+      // Confirm to client
+      await createNotification({
+        userId: booking.clientId,
+        type: "system",
+        title: "Booking Cancelled",
+        message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
+        relatedId: booking._id.toString(),
+        metadata: {
+          bookingId: booking._id,
+          serviceName: booking.serviceName,
+          cancelledBy: "client",
+        },
+      });
+    } else if (isFreelancerCancelling) {
+      // Notify the client that freelancer cancelled
+      await createNotification({
+        userId: booking.clientId,
+        type: "booking",
+        title: "Booking Cancelled by Provider",
+        message: `${booking.freelancerName} has cancelled your booking for "${booking.serviceName}"`,
+        relatedId: booking._id.toString(),
+        metadata: {
+          bookingId: booking._id,
+          freelancerName: booking.freelancerName,
+          serviceName: booking.serviceName,
+          cancelledBy: "freelancer",
+        },
+      });
+
+      // Confirm to freelancer
+      await createNotification({
+        userId: booking.freelancerId,
+        type: "system",
+        title: "Booking Cancelled",
+        message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
+        relatedId: booking._id.toString(),
+        metadata: {
+          bookingId: booking._id,
+          serviceName: booking.serviceName,
+          cancelledBy: "freelancer",
+        },
+      });
+    }
+
+    // Delete the booking
+    await Booking.findByIdAndDelete(bookingId);
+
+    console.log(
+      `Booking ${bookingId} successfully cancelled by ${
+        isClientCancelling ? "client" : "freelancer"
+      }`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Booking cancelled successfully",
+      cancelledBy: isClientCancelling ? "client" : "freelancer",
+    });
+  } catch (error) {
+    console.error("Error cancelling booking:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel booking",
+      error: error.message,
+    });
+  }
+});
+
 console.log("✅ Booking API endpoints loaded successfully");
 
 // debugging routes
