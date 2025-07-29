@@ -16,12 +16,15 @@ class UserDashboard extends Component {
     orders: [],
     wishlist: [],
     bookings: [],
+    selectedBooking: null,
+    showBookingDetails: false,
     notifications: [],
     stats: {},
     bookingFilter: "all",
     orderFilter: "all",
     orderSearchQuery: "",
-    showNotifications: false, // New state for notification panel
+    wishlistSearchQuery: "",
+    showNotifications: false,
     formData: {
       name: "",
       email: "",
@@ -77,6 +80,10 @@ class UserDashboard extends Component {
       this.fetchWishlist();
     }, 10000);
 
+    this.notificationRefreshInterval = setInterval(() => {
+      this.fetchNotifications();
+    }, 30000);
+
     // Listen for wishlist updates from cart
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
@@ -102,6 +109,10 @@ class UserDashboard extends Component {
     if (this.cartStatusInterval) {
       clearInterval(this.cartStatusInterval);
     }
+
+    if (this.notificationRefreshInterval) {
+      clearInterval(this.notificationRefreshInterval);
+    }
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
     document.removeEventListener("click", this.handleClickOutside);
   }
@@ -122,51 +133,48 @@ class UserDashboard extends Component {
     }
   };
 
-  // New method to fetch real notifications
   fetchNotifications = async () => {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
-      if (!userData || !userData.id) return;
+      if (!userData || !userData.id) {
+        console.log("No user data, setting empty notifications");
+        this.setState({ notifications: [] });
+        return;
+      }
+
+      console.log("Fetching notifications for user:", userData.id);
 
       const response = await fetch(
         `${this.state.baseUrl}/api/notifications/${userData.id}`
       );
 
       if (response.ok) {
-        const notifications = await response.json();
-        this.setState({ notifications });
+        const data = await response.json();
+        console.log("✅ Received notifications from API:", data);
+
+        if (data.success && Array.isArray(data.notifications)) {
+          this.setState({
+            notifications: data.notifications,
+          });
+          console.log(
+            `✅ Set ${data.notifications.length} notifications in state`
+          );
+        } else {
+          console.warn("Invalid notifications response format:", data);
+          this.setState({ notifications: [] });
+        }
       } else {
-        // Fallback to mock notifications for now
-        this.setState({
-          notifications: [
-            {
-              id: 1,
-              type: "booking",
-              message: "New booking request received",
-              time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-              read: false,
-            },
-            {
-              id: 2,
-              type: "order",
-              message: "Your order has been completed",
-              time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-              read: true,
-            },
-            {
-              id: 3,
-              type: "system",
-              message: "Profile updated successfully",
-              time: new Date(
-                Date.now() - 3 * 24 * 60 * 60 * 1000
-              ).toISOString(), // 3 days ago
-              read: true,
-            },
-          ],
-        });
+        console.error(
+          "Failed to fetch notifications, status:",
+          response.status
+        );
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        this.setState({ notifications: [] });
       }
     } catch (error) {
-      console.error("Error fetching notifications:", error);
+      console.error("❌ Error fetching notifications:", error);
+      this.setState({ notifications: [] });
     }
   };
 
@@ -247,6 +255,27 @@ class UserDashboard extends Component {
     }
 
     return filtered;
+  };
+
+  handleWishlistSearch = (e) => {
+    this.setState({ wishlistSearchQuery: e.target.value });
+  };
+
+  //method to filter wishlist items:
+  getFilteredWishlist = () => {
+    const { wishlist, wishlistSearchQuery } = this.state;
+
+    if (!wishlistSearchQuery.trim()) {
+      return wishlist;
+    }
+
+    const query = wishlistSearchQuery.toLowerCase();
+    return wishlist.filter(
+      (item) =>
+        item.service.toLowerCase().includes(query) ||
+        item.provider.toLowerCase().includes(query) ||
+        (item.description && item.description.toLowerCase().includes(query))
+    );
   };
 
   checkWishlistConsistency = async () => {
@@ -521,51 +550,11 @@ class UserDashboard extends Component {
           this.updateStats();
         });
       } else {
-        // Mock orders with freelancer profile images
+        // No dummy data - just set empty array
+        console.log("No orders found or failed to fetch orders");
         this.setState(
           {
-            orders: [
-              {
-                id: "ORD-001",
-                service: "Logo Design",
-                status: "Completed",
-                date: "2025-03-10",
-                amount: 150,
-                provider: "Alex Johnson",
-                providerImage: "/uploads/freelancer1.jpg",
-                providerEmail: "alex@example.com",
-              },
-              {
-                id: "ORD-002",
-                service: "Website Development",
-                status: "In Progress",
-                date: "2025-04-01",
-                amount: 850,
-                provider: "Digital Maestros",
-                providerImage: "/uploads/freelancer2.jpg",
-                providerEmail: "digital@example.com",
-              },
-              {
-                id: "ORD-003",
-                service: "SEO Optimization",
-                status: "Pending",
-                date: "2025-04-12",
-                amount: 350,
-                provider: "Search Wizards",
-                providerImage: "/uploads/freelancer3.jpg",
-                providerEmail: "seo@example.com",
-              },
-              {
-                id: "ORD-004",
-                service: "Content Writing",
-                status: "In Progress",
-                date: "2025-05-05",
-                amount: 225,
-                provider: "Word Crafters",
-                providerImage: null,
-                providerEmail: "words@example.com",
-              },
-            ],
+            orders: [],
           },
           () => {
             this.updateStats();
@@ -592,14 +581,26 @@ class UserDashboard extends Component {
 
       if (response.ok) {
         const bookings = await response.json();
-        this.setState({ bookings }, () => {
+
+        // Add service level information if not present
+        const enrichedBookings = bookings.map((booking) => ({
+          ...booking,
+          serviceLevel: booking.serviceLevel || "Standard", // Default to Standard if not specified
+        }));
+
+        this.setState({ bookings: enrichedBookings }, () => {
           this.updateStats();
         });
       } else {
         console.error("Failed to fetch bookings");
+        // Set empty array instead of dummy data
+        this.setState({ bookings: [] }, () => {
+          this.updateStats();
+        });
       }
     } catch (error) {
       console.error("Error fetching bookings:", error);
+      this.setState({ bookings: [] });
     }
   };
 
@@ -821,33 +822,106 @@ class UserDashboard extends Component {
     }));
   };
 
-  markNotificationAsRead = (id) => {
-    this.setState((prevState) => ({
-      notifications: prevState.notifications.map((notification) =>
-        notification.id === id ? { ...notification, read: true } : notification
-      ),
-    }));
+  markNotificationAsRead = async (id) => {
+    try {
+      console.log("Marking notification as read:", id);
+
+      // Update local state immediately for better UX
+      this.setState((prevState) => ({
+        notifications: Array.isArray(prevState.notifications)
+          ? prevState.notifications.map((notification) =>
+              notification.id === id
+                ? { ...notification, read: true }
+                : notification
+            )
+          : [],
+      }));
+
+      // Update on server
+      const response = await fetch(
+        `${this.state.baseUrl}/api/notifications/${id}/read`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        console.log("✅ Notification marked as read on server");
+      } else {
+        console.error("❌ Failed to mark notification as read on server");
+        // Optionally revert the local state change here
+      }
+    } catch (error) {
+      console.error("❌ Error marking notification as read:", error);
+    }
   };
 
-  markAllNotificationsAsRead = () => {
-    this.setState((prevState) => ({
-      notifications: prevState.notifications.map((notification) => ({
-        ...notification,
-        read: true,
-      })),
-    }));
+  // Update markAllNotificationsAsRead method
+  markAllNotificationsAsRead = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) return;
+
+      console.log("Marking all notifications as read");
+
+      // Update local state immediately
+      this.setState((prevState) => ({
+        notifications: Array.isArray(prevState.notifications)
+          ? prevState.notifications.map((notification) => ({
+              ...notification,
+              read: true,
+            }))
+          : [],
+      }));
+
+      // Update on server
+      const response = await fetch(
+        `${this.state.baseUrl}/api/notifications/${userData.id}/read-all`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        console.log("✅ All notifications marked as read on server");
+      } else {
+        console.error("❌ Failed to mark all notifications as read on server");
+      }
+    } catch (error) {
+      console.error("❌ Error marking all notifications as read:", error);
+    }
+  };
+
+  // Add method to refresh notifications after activities
+  refreshNotifications = () => {
+    console.log("🔄 Refreshing notifications...");
+    this.fetchNotifications();
   };
 
   addNotification = (notification) => {
     const newNotification = {
       id: Date.now(),
       read: false,
+      time: new Date().toISOString(),
       ...notification,
     };
 
     this.setState((prevState) => ({
-      notifications: [newNotification, ...prevState.notifications],
+      notifications: Array.isArray(prevState.notifications)
+        ? [newNotification, ...prevState.notifications.slice(0, 9)] // Keep only 10 most recent
+        : [newNotification],
     }));
+
+    // Refresh from server after a short delay
+    setTimeout(() => {
+      this.refreshNotifications();
+    }, 1000);
   };
 
   formatTime = (timeString) => {
@@ -873,11 +947,14 @@ class UserDashboard extends Component {
 
   // Notification Slide Panel Component
   renderNotificationPanel() {
-    const { showNotifications, notifications } = this.state;
+    const { showNotifications, notifications = [] } = this.state; // ✅ Default to empty array
 
     if (!showNotifications) return null;
 
-    const unreadCount = notifications.filter((n) => !n.read).length;
+    // ✅ Safe filtering
+    const unreadCount = Array.isArray(notifications)
+      ? notifications.filter((n) => !n.read).length
+      : 0;
 
     return (
       <div className="notification-slide-panel">
@@ -902,7 +979,8 @@ class UserDashboard extends Component {
         </div>
 
         <div className="notification-panel-content">
-          {notifications.length === 0 ? (
+          {/* ✅ Safe length check */}
+          {!Array.isArray(notifications) || notifications.length === 0 ? (
             <div className="empty-notifications">
               <i className="fas fa-bell-slash"></i>
               <p>No notifications yet</p>
@@ -949,7 +1027,7 @@ class UserDashboard extends Component {
   }
 
   renderUserProfile() {
-    const { userData, stats } = this.state;
+    const { userData, stats, notifications } = this.state;
     const profileImageUrl = this.getFullImageUrl(userData.profileImage);
     const badgeColors = {
       bronze: "#CD7F32",
@@ -968,11 +1046,13 @@ class UserDashboard extends Component {
               onClick={this.toggleNotifications}
             >
               <i className="fas fa-bell"></i>
-              {this.state.notifications.filter((n) => !n.read).length > 0 && (
-                <span className="notification-badge">
-                  {this.state.notifications.filter((n) => !n.read).length}
-                </span>
-              )}
+              {/* ✅ Safe check before filtering */}
+              {Array.isArray(notifications) &&
+                notifications.filter((n) => !n.read).length > 0 && (
+                  <span className="notification-badge">
+                    {notifications.filter((n) => !n.read).length}
+                  </span>
+                )}
             </button>
             <div className="user-quick-info">
               <div className="user-avatar-small">
@@ -2016,6 +2096,10 @@ class UserDashboard extends Component {
       // Force refresh user data from database to get the latest profile image
       const freshUserData = await this.refreshUserFromDatabase();
 
+      setTimeout(() => {
+        this.refreshNotifications();
+      }, 1000);
+
       if (freshUserData) {
         this.setState({
           userData: freshUserData,
@@ -2324,72 +2408,49 @@ class UserDashboard extends Component {
           </div>
         </div>
 
-        <div className="booking-stats-modern">
-          <div className="stat-card-modern pending">
-            <div className="stat-card-icon">
+        {/* Compact Booking Stats */}
+        <div className="booking-stats-compact">
+          <div className="booking-stat-compact">
+            <div className="stat-icon-compact pending">
               <i className="fas fa-clock"></i>
             </div>
-            <div className="stat-card-content">
-              <div className="stat-number">
-                {bookings.filter((b) => b.status === "pending").length}
-              </div>
-              <div className="stat-label">Pending Requests</div>
-              <div className="stat-description">Awaiting your response</div>
+            <div className="stat-number-compact">
+              {bookings.filter((b) => b.status === "pending").length}
             </div>
-            <div className="stat-card-trend">
-              <i className="fas fa-arrow-up"></i>
-            </div>
+            <div className="stat-label-compact">Pending</div>
           </div>
 
-          <div className="stat-card-modern accepted">
-            <div className="stat-card-icon">
+          <div className="booking-stat-compact">
+            <div className="stat-icon-compact accepted">
               <i className="fas fa-check-circle"></i>
             </div>
-            <div className="stat-card-content">
-              <div className="stat-number">
-                {bookings.filter((b) => b.status === "accepted").length}
-              </div>
-              <div className="stat-label">Active Projects</div>
-              <div className="stat-description">Currently working on</div>
+            <div className="stat-number-compact">
+              {bookings.filter((b) => b.status === "accepted").length}
             </div>
-            <div className="stat-card-trend">
-              <i className="fas fa-arrow-up"></i>
-            </div>
+            <div className="stat-label-compact">Active</div>
           </div>
 
-          <div className="stat-card-modern completed">
-            <div className="stat-card-icon">
+          <div className="booking-stat-compact">
+            <div className="stat-icon-compact completed">
               <i className="fas fa-trophy"></i>
             </div>
-            <div className="stat-card-content">
-              <div className="stat-number">
-                {bookings.filter((b) => b.status === "completed").length}
-              </div>
-              <div className="stat-label">Completed</div>
-              <div className="stat-description">Successfully delivered</div>
+            <div className="stat-number-compact">
+              {bookings.filter((b) => b.status === "completed").length}
             </div>
-            <div className="stat-card-trend">
-              <i className="fas fa-check"></i>
-            </div>
+            <div className="stat-label-compact">Completed</div>
           </div>
 
-          <div className="stat-card-modern revenue">
-            <div className="stat-card-icon">
+          <div className="booking-stat-compact">
+            <div className="stat-icon-compact revenue">
               <i className="fas fa-indian-rupee-sign"></i>
             </div>
-            <div className="stat-card-content">
-              <div className="stat-number">
-                ₹
-                {bookings
-                  .reduce((sum, b) => sum + (b.servicePrice || 0), 0)
-                  .toLocaleString()}
-              </div>
-              <div className="stat-label">Total Value</div>
-              <div className="stat-description">All bookings combined</div>
+            <div className="stat-number-compact">
+              ₹
+              {bookings
+                .reduce((sum, b) => sum + (b.servicePrice || 0), 0)
+                .toLocaleString()}
             </div>
-            <div className="stat-card-trend">
-              <i className="fas fa-trending-up"></i>
-            </div>
+            <div className="stat-label-compact">Total Value</div>
           </div>
         </div>
 
@@ -2398,13 +2459,6 @@ class UserDashboard extends Component {
             <div className="empty-illustration">
               <div className="empty-icon">
                 <i className="fas fa-calendar-check"></i>
-              </div>
-              <div className="empty-graphic">
-                <div className="floating-elements">
-                  <div className="float-item">📅</div>
-                  <div className="float-item">💼</div>
-                  <div className="float-item">✨</div>
-                </div>
               </div>
             </div>
             <div className="empty-content">
@@ -2426,26 +2480,16 @@ class UserDashboard extends Component {
             </div>
           </div>
         ) : (
-          <div className="bookings-grid-modern">
+          <div className="modern-bookings-grid">
             {filteredBookings.map((booking, index) => (
-              <div
-                className={`booking-card-modern ${booking.status}`}
-                key={index}
-              >
-                <div className="booking-card-header">
-                  <div className="booking-id">
+              <div className="modern-booking-card" key={index}>
+                {/* Booking Header */}
+                <div className="modern-booking-header">
+                  <div className="booking-id-compact">
                     #{booking.id || `BK-${String(index + 1).padStart(3, "0")}`}
                   </div>
-                  <div className={`booking-status-badge ${booking.status}`}>
-                    <i
-                      className={`fas fa-${
-                        booking.status === "accepted"
-                          ? "check-circle"
-                          : booking.status === "rejected"
-                          ? "times-circle"
-                          : "clock"
-                      }`}
-                    ></i>
+                  <div className={`modern-booking-status ${booking.status}`}>
+                    <div className="status-dot"></div>
                     <span>
                       {booking.status.charAt(0).toUpperCase() +
                         booking.status.slice(1)}
@@ -2453,9 +2497,21 @@ class UserDashboard extends Component {
                   </div>
                 </div>
 
-                <div className="booking-card-body">
-                  <div className="client-section">
-                    <div className="client-avatar-large">
+                {/* Service Info */}
+                <div className="modern-booking-content">
+                  <div className="service-header-compact">
+                    <h3 className="service-name-compact">
+                      {booking.serviceName}
+                    </h3>
+                    <div className="service-type-compact">
+                      <i className="fas fa-layer-group"></i>
+                      <span>{booking.serviceLevel || "Standard"}</span>
+                    </div>
+                  </div>
+
+                  {/* Client Section */}
+                  <div className="client-section-compact">
+                    <div className="client-avatar-compact">
                       {booking.clientProfileImage ? (
                         <img
                           src={
@@ -2471,81 +2527,67 @@ class UserDashboard extends Component {
                         />
                       ) : null}
                       <div
-                        className="avatar-placeholder-large"
+                        className="avatar-placeholder-compact"
                         style={{
                           display: booking.clientProfileImage ? "none" : "flex",
                         }}
                       >
                         {booking.clientName?.charAt(0).toUpperCase() || "C"}
                       </div>
-                      <div className="client-status-indicator"></div>
+                      <div className="client-status-dot"></div>
                     </div>
-                    <div className="client-info">
-                      <h4 className="client-name">{booking.clientName}</h4>
-                      <p className="client-email">{booking.clientEmail}</p>
-                      <div className="client-badge">
-                        <i className="fas fa-star"></i>
-                        <span>Premium Client</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="service-section">
-                    <div className="service-header">
-                      <h3 className="service-name">{booking.serviceName}</h3>
-                      <div className="service-category">
-                        <i className="fas fa-tag"></i>
-                        <span>Professional Service</span>
-                      </div>
-                    </div>
-                    <div className="service-price">
-                      <span className="currency">₹</span>
-                      <span className="amount">
-                        {booking.servicePrice?.toLocaleString()}
-                      </span>
-                      <span className="price-note">Total Project Value</span>
+                    <div className="client-info-compact">
+                      <h4 className="client-name-compact">
+                        {booking.clientName}
+                      </h4>
+                      <p className="client-email-compact">
+                        {booking.clientEmail}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="booking-timeline">
-                    <div className="timeline-item">
+                  {/* Booking Meta */}
+                  <div className="booking-meta-compact">
+                    <div className="meta-item-compact">
                       <i className="fas fa-calendar-plus"></i>
-                      <div className="timeline-content">
-                        <span className="timeline-label">Requested</span>
-                        <span className="timeline-date">
-                          {new Date(booking.requestDate).toLocaleDateString()}
-                        </span>
-                      </div>
+                      <span className="meta-label">Requested:</span>
+                      <span className="meta-value">
+                        {new Date(booking.requestDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="meta-item-compact price-meta">
+                      <i className="fas fa-indian-rupee-sign"></i>
+                      <span className="meta-label">Amount:</span>
+                      <span className="meta-value price-value">
+                        ₹{booking.servicePrice?.toLocaleString()}
+                      </span>
                     </div>
                     {booking.responseDate && (
-                      <div className="timeline-item">
+                      <div className="meta-item-compact">
                         <i
                           className={`fas fa-${
-                            booking.status === "accepted" ? "check" : "times"
+                            booking.status === "accepted"
+                              ? "check"
+                              : booking.status === "rejected"
+                              ? "times"
+                              : "clock"
                           }`}
                         ></i>
-                        <div className="timeline-content">
-                          <span className="timeline-label">
-                            {booking.status === "accepted"
-                              ? "Accepted"
-                              : "Responded"}
-                          </span>
-                          <span className="timeline-date">
-                            {new Date(
-                              booking.responseDate
-                            ).toLocaleDateString()}
-                          </span>
-                        </div>
+                        <span className="meta-label">Responded:</span>
+                        <span className="meta-value">
+                          {new Date(booking.responseDate).toLocaleDateString()}
+                        </span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="booking-card-footer">
+                {/* Booking Actions */}
+                <div className="modern-booking-actions">
                   {booking.status === "pending" && (
-                    <div className="booking-actions-modern">
+                    <>
                       <button
-                        className="btn-modern btn-accept"
+                        className="action-btn-compact accept"
                         onClick={() =>
                           this.handleBookingAction(booking._id, "accept")
                         }
@@ -2554,7 +2596,7 @@ class UserDashboard extends Component {
                         <span>Accept</span>
                       </button>
                       <button
-                        className="btn-modern btn-reject"
+                        className="action-btn-compact reject"
                         onClick={() =>
                           this.handleBookingAction(booking._id, "reject")
                         }
@@ -2562,38 +2604,270 @@ class UserDashboard extends Component {
                         <i className="fas fa-times"></i>
                         <span>Decline</span>
                       </button>
-                    </div>
+                    </>
                   )}
 
                   {booking.status === "accepted" && (
-                    <div className="booking-actions-modern">
-                      <button className="btn-modern btn-message">
-                        <i className="fas fa-comment-dots"></i>
-                        <span>Message Client</span>
-                      </button>
-                      <button className="btn-modern btn-details">
-                        <i className="fas fa-external-link-alt"></i>
-                        <span>View Project</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {booking.status === "rejected" && (
-                    <div className="booking-actions-modern">
-                      <button className="btn-modern btn-details-secondary">
+                    <>
+                      <button
+                        className="action-btn-compact details"
+                        onClick={() => this.openBookingDetails(booking)}
+                      >
                         <i className="fas fa-eye"></i>
                         <span>View Details</span>
                       </button>
-                    </div>
+                      <button
+                        className="action-btn-compact cancel"
+                        onClick={() => this.handleCancelBooking(booking._id)}
+                      >
+                        <i className="fas fa-ban"></i>
+                        <span>Cancel</span>
+                      </button>
+                    </>
+                  )}
+
+                  {booking.status === "rejected" && (
+                    <button
+                      className="action-btn-compact details secondary"
+                      onClick={() => this.openBookingDetails(booking)}
+                    >
+                      <i className="fas fa-eye"></i>
+                      <span>View Details</span>
+                    </button>
+                  )}
+
+                  {booking.status === "completed" && (
+                    <button
+                      className="action-btn-compact details secondary"
+                      onClick={() => this.openBookingDetails(booking)}
+                    >
+                      <i className="fas fa-eye"></i>
+                      <span>View Details</span>
+                    </button>
                   )}
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        {/* Booking Details Overlay */}
+        {this.state.selectedBooking && (
+          <div
+            className="booking-details-overlay"
+            onClick={this.closeBookingDetails}
+          >
+            <div
+              className="booking-details-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h2>Booking Details</h2>
+                <button
+                  className="close-btn"
+                  onClick={this.closeBookingDetails}
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+
+              <div className="modal-content">
+                {/* Client Information */}
+                <div className="detail-section">
+                  <h3>Client Information</h3>
+                  <div className="client-details-full">
+                    <div className="client-avatar-full">
+                      {this.state.selectedBooking.clientProfileImage ? (
+                        <img
+                          src={
+                            this.state.selectedBooking.clientProfileImage.startsWith(
+                              "http"
+                            )
+                              ? this.state.selectedBooking.clientProfileImage
+                              : `${this.state.baseUrl}${this.state.selectedBooking.clientProfileImage}`
+                          }
+                          alt={this.state.selectedBooking.clientName}
+                        />
+                      ) : (
+                        <div className="avatar-placeholder-full">
+                          {this.state.selectedBooking.clientName
+                            ?.charAt(0)
+                            .toUpperCase() || "C"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="client-info-full">
+                      <h4>{this.state.selectedBooking.clientName}</h4>
+                      <p>{this.state.selectedBooking.clientEmail}</p>
+                      <div className="client-badge">
+                        <i className="fas fa-user"></i>
+                        <span>Client</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Information */}
+                <div className="detail-section">
+                  <h3>Service Information</h3>
+                  <div className="service-details-full">
+                    <div className="detail-row">
+                      <span className="detail-label">Service Name:</span>
+                      <span className="detail-value">
+                        {this.state.selectedBooking.serviceName}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Service Type:</span>
+                      <span className="detail-value service-type">
+                        {this.state.selectedBooking.serviceLevel || "Standard"}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Amount:</span>
+                      <span className="detail-value price">
+                        ₹
+                        {this.state.selectedBooking.servicePrice?.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Status:</span>
+                      <span
+                        className={`detail-value status-badge ${this.state.selectedBooking.status}`}
+                      >
+                        {this.state.selectedBooking.status
+                          .charAt(0)
+                          .toUpperCase() +
+                          this.state.selectedBooking.status.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Booking Timeline */}
+                <div className="detail-section">
+                  <h3>Booking Timeline</h3>
+                  <div className="timeline">
+                    <div className="timeline-item">
+                      <div className="timeline-dot active"></div>
+                      <div className="timeline-content">
+                        <h5>Booking Requested</h5>
+                        <p>
+                          {new Date(
+                            this.state.selectedBooking.requestDate
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    {this.state.selectedBooking.responseDate && (
+                      <div className="timeline-item">
+                        <div
+                          className={`timeline-dot ${
+                            this.state.selectedBooking.status !== "pending"
+                              ? "active"
+                              : ""
+                          }`}
+                        ></div>
+                        <div className="timeline-content">
+                          <h5>
+                            {this.state.selectedBooking.status === "accepted"
+                              ? "Booking Accepted"
+                              : this.state.selectedBooking.status === "rejected"
+                              ? "Booking Declined"
+                              : "Response"}
+                          </h5>
+                          <p>
+                            {new Date(
+                              this.state.selectedBooking.responseDate
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
+
+  // Add these methods to handle booking details overlay
+  openBookingDetails = (booking) => {
+    this.setState({
+      selectedBooking: booking,
+      showBookingDetails: true,
+    });
+  };
+
+  closeBookingDetails = () => {
+    this.setState({
+      selectedBooking: null,
+      showBookingDetails: false,
+    });
+  };
+
+  // Add method to handle booking cancellation
+  handleCancelBooking = async (bookingId) => {
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this booking? The client will be notified."
+    );
+
+    if (!confirmCancel) return;
+
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        this.addNotification({
+          type: "system",
+          message: "Please login to cancel bookings",
+          time: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/booking/${bookingId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId: userData.id }),
+        }
+      );
+
+      if (response.ok) {
+        // Remove the booking from local state
+        this.setState((prevState) => ({
+          bookings: prevState.bookings.filter(
+            (booking) => booking._id !== bookingId
+          ),
+        }));
+
+        this.addNotification({
+          type: "system",
+          message: "Booking cancelled successfully. Client has been notified.",
+          time: new Date().toISOString(),
+        });
+
+        // Refresh bookings from server
+        this.fetchBookings();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to cancel booking");
+      }
+    } catch (error) {
+      console.error("Error cancelling booking:", error);
+      this.addNotification({
+        type: "system",
+        message: error.message || "Failed to cancel booking. Please try again.",
+        time: new Date().toISOString(),
+      });
+    }
+  };
 
   handleBookingAction = async (bookingId, action) => {
     try {
@@ -2629,7 +2903,8 @@ class UserDashboard extends Component {
   };
 
   renderWishlist() {
-    const { wishlist, wishlistLoading } = this.state;
+    const { wishlist, wishlistLoading, wishlistSearchQuery } = this.state;
+    const filteredWishlist = this.getFilteredWishlist();
 
     return (
       <div className="dashboard-main-content">
@@ -2642,11 +2917,13 @@ class UserDashboard extends Component {
                 type="text"
                 placeholder="Search saved services..."
                 className="search-input"
+                value={wishlistSearchQuery || ""}
+                onChange={this.handleWishlistSearch}
               />
             </div>
             <div className="wishlist-stats-badge">
               <i className="fas fa-heart"></i>
-              <span>{wishlist.length} Services</span>
+              <span>{filteredWishlist.length} Services</span>
             </div>
           </div>
         </div>
@@ -2656,7 +2933,7 @@ class UserDashboard extends Component {
             <div className="loading-spinner"></div>
             <p>Loading your wishlist...</p>
           </div>
-        ) : wishlist.length === 0 ? (
+        ) : filteredWishlist.length === 0 ? (
           <div className="empty-state-modern">
             <div className="empty-illustration">
               <div className="empty-icon">
@@ -2671,24 +2948,57 @@ class UserDashboard extends Component {
               </div>
             </div>
             <div className="empty-content">
-              <h3>Your Wishlist is Empty</h3>
+              <h3>
+                {wishlistSearchQuery && wishlistSearchQuery.trim()
+                  ? "No Services Found"
+                  : "Your Wishlist is Empty"}
+              </h3>
               <p>
-                Save your favorite services to your wishlist for easy access
-                later! Discover amazing services and keep track of what you
-                love.
+                {wishlistSearchQuery && wishlistSearchQuery.trim()
+                  ? `No services match "${wishlistSearchQuery}". Try a different search term.`
+                  : "Save your favorite services to your wishlist for easy access later! Discover amazing services and keep track of what you love."}
               </p>
-              <Link to="/portfolio-list">
-                <button className="btn btn-primary">
-                  <i className="fas fa-compass"></i>
-                  Discover Services
+              {(!wishlistSearchQuery || !wishlistSearchQuery.trim()) && (
+                <Link to="/portfolio-list">
+                  <button className="btn btn-primary">
+                    <i className="fas fa-compass"></i>
+                    Discover Services
+                  </button>
+                </Link>
+              )}
+              {wishlistSearchQuery && wishlistSearchQuery.trim() && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => this.setState({ wishlistSearchQuery: "" })}
+                >
+                  <i className="fas fa-times"></i>
+                  Clear Search
                 </button>
-              </Link>
+              )}
             </div>
           </div>
         ) : (
           <div className="wishlist-container">
+            {/* Show search results count when searching */}
+            {wishlistSearchQuery && wishlistSearchQuery.trim() && (
+              <div className="search-results-info">
+                <p>
+                  Found {filteredWishlist.length} service
+                  {filteredWishlist.length !== 1 ? "s" : ""}
+                  matching "{wishlistSearchQuery}"
+                  <button
+                    className="clear-search-btn"
+                    onClick={() => this.setState({ wishlistSearchQuery: "" })}
+                  >
+                    <i className="fas fa-times"></i>
+                    Clear
+                  </button>
+                </p>
+              </div>
+            )}
+
             <div className="wishlist-grid-compact">
-              {wishlist.map((item, index) => (
+              {filteredWishlist.map((item, index) => (
                 <div className="wishlist-card-compact" key={index}>
                   <div className="card-header-compact">
                     <button
@@ -2744,10 +3054,10 @@ class UserDashboard extends Component {
                         <i className="fas fa-clock"></i>
                         <span>{item.deliveryTime || "7-14 days"}</span>
                       </div>
-                      <div className="meta-item-compact">
+                      {/* <div className="meta-item-compact">
                         <i className="fas fa-shield-check"></i>
                         <span>Guaranteed</span>
-                      </div>
+                      </div> */}
                     </div>
 
                     <div className="price-section-compact">
@@ -2855,6 +3165,11 @@ class UserDashboard extends Component {
               : wishlistItem
           ),
         }));
+
+        // ✅ Refresh notifications after adding to cart
+        setTimeout(() => {
+          this.refreshNotifications();
+        }, 1000);
 
         this.addNotification({
           type: "system",
@@ -2984,6 +3299,11 @@ class UserDashboard extends Component {
         }
 
         console.log("Item successfully removed from wishlist in database");
+
+        // ✅ Refresh notifications after adding to cart
+        setTimeout(() => {
+          this.refreshNotifications();
+        }, 500);
 
         this.addNotification({
           type: "system",

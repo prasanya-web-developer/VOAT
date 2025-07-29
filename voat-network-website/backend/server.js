@@ -659,19 +659,17 @@ app.post(
       if (badge) user.badge = badge;
 
       if (req.file) {
-        // Clean up old image if it exists and isn't a placeholder
+        // Clean up old image if it exists
         if (
           user.profileImage &&
           !user.profileImage.includes("api/placeholder") &&
           !user.profileImage.startsWith("http")
         ) {
           try {
-            // Remove the leading slash for path resolution
             const oldImagePath = path.join(
               __dirname,
               user.profileImage.replace(/^\/+/, "")
             );
-
             if (fs.existsSync(oldImagePath)) {
               fs.unlinkSync(oldImagePath);
               console.log(`Deleted old profile image: ${oldImagePath}`);
@@ -684,7 +682,7 @@ app.post(
         user.profileImage = `/uploads/${req.file.filename}`;
         console.log("New profile image saved:", user.profileImage);
 
-        // Also update any portfolio submissions with this new image
+        // Update portfolio submissions with new image
         try {
           await PortfolioSubmission.updateMany(
             { userId: user._id },
@@ -700,7 +698,19 @@ app.post(
 
       await user.save();
 
-      // Return the updated user data with the correct profile image path
+      // ✅ CREATE NOTIFICATION FOR PROFILE UPDATE
+      await createNotification({
+        userId: user._id,
+        type: "system",
+        title: "Profile Updated",
+        message: "Your profile has been updated successfully!",
+        relatedId: user._id.toString(),
+        metadata: {
+          action: "profile_update",
+          timestamp: new Date().toISOString(),
+        },
+      });
+
       const responseData = {
         message: "Profile updated successfully",
         user: {
@@ -710,12 +720,12 @@ app.post(
           role: user.role,
           profession: user.profession,
           phone: user.phone,
-          profileImage: user.profileImage, // This will be the latest from database
+          profileImage: user.profileImage,
           voatId: user.voatId,
           voatPoints: user.voatPoints,
           badge: user.badge,
         },
-        profileImage: user.profileImage, // Also return it separately for backward compatibility
+        profileImage: user.profileImage,
       };
 
       console.log("Profile update response:", responseData);
@@ -2584,33 +2594,67 @@ app.post("/api/wishlist/:userId", async (req, res) => {
   }
 });
 
-app.get("/api/wishlist/:userId", async (req, res) => {
+app.post("/api/wishlist/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log("=== BACKEND WISHLIST GET ===");
-    console.log("Fetching wishlist for user:", userId);
+    const wishlistItems = req.body;
+
+    console.log("=== BACKEND WISHLIST UPDATE ===");
+    console.log("User ID received:", userId);
+    console.log("Wishlist items received:", wishlistItems);
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
+      console.error("Invalid user ID format:", userId);
       return res.status(400).json({
         success: false,
         error: "Invalid user ID format",
       });
     }
 
-    let wishlist = await Wishlist.findOne({ userId: userId });
-
-    if (!wishlist) {
-      wishlist = new Wishlist({ userId, items: [] });
-      await wishlist.save();
+    if (!Array.isArray(wishlistItems)) {
+      console.error("Invalid wishlist data:", typeof wishlistItems);
+      return res.status(400).json({
+        success: false,
+        error: "Wishlist data must be an array",
+      });
     }
 
-    console.log("Returning wishlist items:", wishlist.items.length);
-    return res.status(200).json(wishlist.items || []);
+    const updatedWishlist = await Wishlist.findOneAndUpdate(
+      { userId: userId },
+      { $set: { items: wishlistItems } },
+      { new: true, upsert: true }
+    );
+
+    // ✅ CREATE NOTIFICATION FOR WISHLIST UPDATE
+    if (wishlistItems.length > 0) {
+      const lastItem = wishlistItems[wishlistItems.length - 1];
+      await createNotification({
+        userId: userId,
+        type: "system",
+        title: "Item Added to Wishlist",
+        message: `"${lastItem.service}" has been added to your wishlist`,
+        relatedId: lastItem.id,
+        metadata: {
+          action: "wishlist_add",
+          serviceName: lastItem.service,
+          provider: lastItem.provider,
+        },
+      });
+    }
+
+    console.log("Wishlist updated successfully:", updatedWishlist._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Wishlist updated successfully",
+      count: updatedWishlist.items.length,
+    });
   } catch (error) {
-    console.error("Error fetching wishlist:", error);
+    console.error("Backend wishlist error:", error);
     res.status(500).json({
       success: false,
       error: "Internal Server Error",
+      details: error.message,
     });
   }
 });
@@ -2858,6 +2902,22 @@ app.post("/api/cart/add", async (req, res) => {
     // Add item to cart
     cart.items.push(newItem);
     await cart.save();
+
+    // ✅ CREATE NOTIFICATION FOR CART ADD
+    await createNotification({
+      userId: userId,
+      type: "system",
+      title: "Service Added to Cart",
+      message: `"${serviceName}" has been added to your cart`,
+      relatedId: cart._id.toString(),
+      metadata: {
+        action: "cart_add",
+        serviceName,
+        freelancerName,
+        serviceLevel,
+        price: basePrice,
+      },
+    });
 
     console.log(`Item added to cart successfully for user ${userId}`);
 
@@ -3592,6 +3652,8 @@ app.get("/api/orders/:userId", async (req, res) => {
       amount: order.servicePrice,
       provider: order.freelancerName,
       providerImage: order.freelancerId?.profileImage || null,
+      providerEmail: order.freelancerEmail,
+      providerId: order.freelancerId?._id || order.freelancerId, // Include provider ID for navigation
       bookingId: order._id,
       requestDate: order.requestDate,
       responseDate: order.responseDate,
@@ -4404,12 +4466,23 @@ app.get("/api/user-voat-id/:userId", async (req, res) => {
 // Helper function to create notifications
 const createNotification = async (notificationData) => {
   try {
-    const notification = new Notification(notificationData);
+    const notification = new Notification({
+      ...notificationData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     await notification.save();
-    console.log("Notification created:", notification);
+    console.log("✅ Notification created successfully:", {
+      id: notification._id,
+      userId: notification.userId,
+      type: notification.type,
+      message: notification.message,
+    });
+
     return notification;
   } catch (error) {
-    console.error("Error creating notification:", error);
+    console.error("❌ Error creating notification:", error);
     return null;
   }
 };
@@ -4418,7 +4491,6 @@ const createNotification = async (notificationData) => {
 app.get("/api/notifications/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const { page = 1, limit = 20, unreadOnly = false } = req.query;
 
     console.log("Fetching notifications for user:", userId);
 
@@ -4429,18 +4501,12 @@ app.get("/api/notifications/:userId", async (req, res) => {
       });
     }
 
-    let query = { userId };
-    if (unreadOnly === "true") {
-      query.read = false;
-    }
-
-    const notifications = await Notification.find(query)
+    // Get only the 10 most recent notifications
+    const notifications = await Notification.find({ userId })
       .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
+      .limit(10)
       .populate("userId", "name email");
 
-    const totalNotifications = await Notification.countDocuments(query);
     const unreadCount = await Notification.countDocuments({
       userId,
       read: false,
@@ -4452,21 +4518,19 @@ app.get("/api/notifications/:userId", async (req, res) => {
       type: notification.type,
       message: notification.message,
       title: notification.title,
-      time: notification.createdAt,
+      time: notification.createdAt.toISOString(),
       read: notification.read,
       relatedId: notification.relatedId,
       metadata: notification.metadata,
     }));
 
+    console.log(
+      `Returning ${formattedNotifications.length} notifications for user ${userId}`
+    );
+
     res.status(200).json({
       success: true,
       notifications: formattedNotifications,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: totalNotifications,
-        pages: Math.ceil(totalNotifications / limit),
-      },
       unreadCount,
     });
   } catch (error) {
