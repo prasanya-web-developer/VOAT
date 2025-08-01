@@ -24,6 +24,7 @@ class UserDashboard extends Component {
     orderFilter: "all",
     orderSearchQuery: "",
     wishlistSearchQuery: "",
+    bookingSearchQuery: "",
     showNotifications: false,
     formData: {
       name: "",
@@ -215,6 +216,35 @@ class UserDashboard extends Component {
     this.setState((prevState) => ({
       showNotifications: !prevState.showNotifications,
     }));
+  };
+
+  handleBookingSearch = (e) => {
+    this.setState({ bookingSearchQuery: e.target.value });
+  };
+
+  getFilteredBookings = () => {
+    const { bookings, bookingFilter, bookingSearchQuery } = this.state;
+
+    let filtered = bookings;
+
+    // Apply status filter
+    if (bookingFilter !== "all") {
+      filtered = filtered.filter((booking) => booking.status === bookingFilter);
+    }
+
+    // Apply search filter
+    if (bookingSearchQuery.trim()) {
+      const query = bookingSearchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (booking) =>
+          booking.serviceName.toLowerCase().includes(query) ||
+          booking.clientName.toLowerCase().includes(query) ||
+          booking.clientEmail.toLowerCase().includes(query) ||
+          (booking.id && booking.id.toString().toLowerCase().includes(query))
+      );
+    }
+
+    return filtered;
   };
 
   // Handle order search
@@ -2377,10 +2407,7 @@ class UserDashboard extends Component {
     const { bookings, bookingFilter } = this.state;
 
     // Filter bookings based on selected filter
-    const filteredBookings = bookings.filter((booking) => {
-      if (bookingFilter === "all") return true;
-      return booking.status === bookingFilter;
-    });
+    const filteredBookings = this.getFilteredBookings();
 
     return (
       <div className="dashboard-main-content">
@@ -2393,6 +2420,8 @@ class UserDashboard extends Component {
                 type="text"
                 placeholder="Search bookings..."
                 className="search-input"
+                value={this.state.bookingSearchQuery}
+                onChange={this.handleBookingSearch}
               />
             </div>
             <select
