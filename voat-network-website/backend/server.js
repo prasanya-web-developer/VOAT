@@ -79,25 +79,32 @@ const storage = multer.diskStorage({
 const workFileFilter = (req, file, cb) => {
   const allowedTypes = [
     "image/jpeg",
+    "image/jpg",
     "image/png",
     "image/gif",
-    "image/svg+xml",
     "image/webp",
     "image/bmp",
-    "image/tiff",
     "video/mp4",
     "video/avi",
     "video/mov",
     "video/wmv",
-    "video/flv",
     "video/webm",
+    "video/quicktime",
   ];
+
+  console.log("Checking file type:", file.mimetype);
 
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(null, false);
-    return cb(new Error("Only image and video files are allowed!"));
+    cb(
+      new Error(
+        `File type ${
+          file.mimetype
+        } not allowed. Allowed types: ${allowedTypes.join(", ")}`
+      ),
+      false
+    );
   }
 };
 
@@ -106,8 +113,11 @@ const workUpload = multer({
   fileFilter: workFileFilter,
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB max file size for videos
+    files: 10, // Maximum 10 files per upload
   },
 });
+
+console.log("✅ Portfolio work upload API endpoints loaded successfully");
 
 const upload = multer({
   storage: storage,
@@ -853,6 +863,7 @@ app.post(
   upload.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
+    { name: "workFiles", maxCount: 10 }, // Allow up to 10 work files
   ]),
   async (req, res) => {
     try {
@@ -879,6 +890,7 @@ app.post(
       // Get file paths if files were uploaded
       const profileImageFile = req.files?.profileImage?.[0];
       const coverImageFile = req.files?.coverImage?.[0];
+      const workFiles = req.files?.workFiles || [];
 
       // Prepare update data
       const portfolioData = {
@@ -899,8 +911,20 @@ app.post(
         portfolioData.coverImage = `/uploads/${coverImageFile.filename}`;
       }
 
+      // Process work files
+      const workItems = workFiles.map((file) => {
+        const isVideo = file.mimetype.startsWith("video/");
+        return {
+          url: `/uploads/${file.filename}`,
+          thumbnail: isVideo ? "" : `/uploads/${file.filename}`, // For images, thumbnail is the image itself
+          title: file.originalname.split(".")[0], // Use filename without extension as title
+          type: isVideo ? "video" : "image",
+          serviceName: "", // Will be filled from form data if available
+          uploadedDate: new Date(),
+        };
+      });
+
       // Set status to pending for new submissions
-      // This ensures all new portfolio submissions go to admin for review
       if (isNewSubmission === "true") {
         portfolioData.status = "pending";
         portfolioData.submittedDate = new Date();
@@ -962,6 +986,12 @@ app.post(
                 existingPortfolio.services.push(newService);
               }
 
+              // Add work items to existing portfolio
+              if (!existingPortfolio.works) {
+                existingPortfolio.works = [];
+              }
+              existingPortfolio.works.push(...workItems);
+
               existingPortfolio.status = "pending";
               existingPortfolio.submittedDate = new Date();
 
@@ -971,11 +1001,12 @@ app.post(
               // Save the updated portfolio
               portfolio = await existingPortfolio.save();
             } else {
-              // Create a new portfolio with the service
+              // Create a new portfolio with the service and works
               portfolio = new PortfolioSubmission({
                 ...portfolioData,
                 userId,
                 services: [newService],
+                works: workItems,
                 status: "pending",
                 submittedDate: new Date(),
               });
@@ -983,22 +1014,60 @@ app.post(
               await portfolio.save();
             }
           } else {
-            // No service data, just update or create the portfolio
-            portfolio = await PortfolioSubmission.findOneAndUpdate(
-              { userId },
-              {
+            // No service data, just update or create the portfolio with works
+            const existingPortfolio = await PortfolioSubmission.findOne({
+              userId,
+            });
+
+            if (existingPortfolio) {
+              // Add works to existing portfolio
+              if (!existingPortfolio.works) {
+                existingPortfolio.works = [];
+              }
+              existingPortfolio.works.push(...workItems);
+
+              // Update other fields
+              Object.assign(existingPortfolio, {
                 ...portfolioData,
                 status: "pending",
                 submittedDate: new Date(),
-              },
-              { upsert: true, new: true }
-            );
+              });
+
+              portfolio = await existingPortfolio.save();
+            } else {
+              // Create new portfolio with works
+              portfolio = new PortfolioSubmission({
+                ...portfolioData,
+                userId,
+                works: workItems,
+                status: "pending",
+                submittedDate: new Date(),
+              });
+
+              await portfolio.save();
+            }
           }
         } else {
-          // Normal update - don't change status
+          // Normal update - don't change status, but add works if any
+          const existingPortfolio = await PortfolioSubmission.findOne({
+            userId,
+          });
+
+          if (existingPortfolio && workItems.length > 0) {
+            if (!existingPortfolio.works) {
+              existingPortfolio.works = [];
+            }
+            existingPortfolio.works.push(...workItems);
+          }
+
           portfolio = await PortfolioSubmission.findOneAndUpdate(
             { userId },
-            portfolioData,
+            {
+              ...portfolioData,
+              ...(workItems.length > 0 && {
+                $push: { works: { $each: workItems } },
+              }),
+            },
             { upsert: true, new: true }
           );
         }
@@ -1015,12 +1084,14 @@ app.post(
                 pricing: serviceData.pricing || [],
               },
             ],
+            works: workItems,
             status: "pending",
             submittedDate: new Date(),
           });
         } else {
           portfolio = new PortfolioSubmission({
             ...portfolioData,
+            works: workItems,
             status: "pending",
             submittedDate: new Date(),
           });
@@ -1035,6 +1106,7 @@ app.post(
             ? "Portfolio submitted successfully and pending admin approval"
             : "Portfolio updated successfully",
         portfolio: portfolio,
+        worksUploaded: workItems.length,
       });
     } catch (error) {
       console.error("Portfolio operation error:", error);
@@ -2484,10 +2556,11 @@ app.get("/api/user/:userId", async (req, res) => {
       await portfolio.save();
     }
 
-    // Extract services from portfolio for easier access in frontend
+    // Extract services and works from portfolio for easier access in frontend
     const services = portfolio?.services || [];
     const works = portfolio?.works || [];
 
+    // Format works for frontend consumption
     const formattedWorks = works.map((work) => ({
       id: work._id,
       url: work.url,
@@ -2506,7 +2579,7 @@ app.get("/api/user/:userId", async (req, res) => {
       role: user.role,
       profession: user.profession,
       phone: user.phone,
-      profileImage: user.profileImage, // This is the key field - always from database
+      profileImage: user.profileImage,
       voatId: user.voatId,
       voatPoints: user.voatPoints,
       badge: user.badge,
@@ -2517,13 +2590,14 @@ app.get("/api/user/:userId", async (req, res) => {
       userResponse.profileImage
     );
 
-    // Return user data with their portfolio information
+    // Return user data with their portfolio information including works
     res.status(200).json({
       success: true,
       user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      videos: formattedWorks, // The frontend expects this key to be 'videos'
+      works: formattedWorks, // Include works in the response
+      worksCount: formattedWorks.length, // Add count for convenience
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
@@ -4654,6 +4728,205 @@ app.delete("/api/notifications/:notificationId", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete notification",
+      error: error.message,
+    });
+  }
+});
+
+app.post(
+  "/api/portfolio/add-work",
+  workUpload.single("workFile"),
+  async (req, res) => {
+    try {
+      const { userId, title, serviceName } = req.body;
+      const workFile = req.file;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      if (!workFile) {
+        return res.status(400).json({
+          success: false,
+          message: "No work file provided",
+        });
+      }
+
+      // Prepare the data for the new work item
+      const workData = {
+        url: `/uploads/${workFile.filename}`,
+        thumbnail: workFile.mimetype.startsWith("image/")
+          ? `/uploads/${workFile.filename}`
+          : "",
+        title: title || workFile.originalname.split(".")[0],
+        type: workFile.mimetype.startsWith("video/") ? "video" : "image",
+        serviceName: serviceName || "",
+        uploadedDate: new Date(),
+      };
+
+      // Find the user's portfolio and push the new work item
+      const updatedPortfolio = await PortfolioSubmission.findOneAndUpdate(
+        { userId: userId },
+        { $push: { works: workData } },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+
+      if (!updatedPortfolio) {
+        throw new Error("Could not save portfolio work.");
+      }
+
+      // Get the ID of the item we just added
+      const newWork = updatedPortfolio.works[updatedPortfolio.works.length - 1];
+
+      res.status(201).json({
+        success: true,
+        message: "Work added successfully",
+        workId: newWork._id,
+        workUrl: newWork.url,
+        workThumbnail: newWork.thumbnail,
+        workType: newWork.type,
+      });
+    } catch (error) {
+      console.error("Error adding work:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to add work",
+      });
+    }
+  }
+);
+
+// Add a route to remove work from portfolio
+app.delete("/api/portfolio/remove-work", async (req, res) => {
+  try {
+    const { userId, workId } = req.body;
+
+    if (!userId || !workId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID and work ID are required",
+      });
+    }
+
+    // Find the portfolio and remove the work item
+    const portfolio = await PortfolioSubmission.findOne({ userId });
+
+    if (!portfolio) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio not found",
+      });
+    }
+
+    if (!portfolio.works || portfolio.works.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No works found in portfolio",
+      });
+    }
+
+    // Find the work item
+    const workIndex = portfolio.works.findIndex(
+      (work) => work._id.toString() === workId
+    );
+
+    if (workIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Work not found",
+      });
+    }
+
+    // Get the work URL before removing it to delete the file
+    const workUrl = portfolio.works[workIndex].url;
+
+    // Remove the work from the array
+    portfolio.works.splice(workIndex, 1);
+    await portfolio.save();
+
+    // Clean up the file if it exists
+    if (workUrl && !workUrl.startsWith("http")) {
+      try {
+        const fullPath = path.join(__dirname, workUrl.replace(/^\/+/, ""));
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          console.log(`Deleted work file: ${fullPath}`);
+        }
+      } catch (err) {
+        console.error("Error deleting work file:", err);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Work removed successfully",
+      remainingWorks: portfolio.works.length,
+    });
+  } catch (error) {
+    console.error("Error removing work:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to remove work",
+    });
+  }
+});
+
+// Add route to get works by service name
+app.get("/api/portfolio/:userId/works/:serviceName?", async (req, res) => {
+  try {
+    const { userId, serviceName } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const portfolio = await PortfolioSubmission.findOne({ userId });
+
+    if (!portfolio) {
+      return res.status(404).json({
+        success: false,
+        message: "Portfolio not found",
+      });
+    }
+
+    let works = portfolio.works || [];
+
+    // Filter by service name if provided
+    if (serviceName && serviceName !== "all") {
+      works = works.filter(
+        (work) =>
+          work.serviceName &&
+          work.serviceName.toLowerCase() === serviceName.toLowerCase()
+      );
+    }
+
+    const formattedWorks = works.map((work) => ({
+      id: work._id,
+      url: work.url,
+      thumbnail: work.thumbnail || work.url,
+      title: work.title,
+      type: work.type,
+      serviceName: work.serviceName,
+      uploadedDate: work.uploadedDate,
+    }));
+
+    res.status(200).json({
+      success: true,
+      works: formattedWorks,
+      count: formattedWorks.length,
+      serviceName: serviceName || "all",
+    });
+  } catch (error) {
+    console.error("Error fetching works:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch works",
       error: error.message,
     });
   }

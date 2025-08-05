@@ -49,6 +49,9 @@ class UserDashboard extends Component {
         { level: "Premium", price: "", timeFrame: "" },
       ],
     },
+    selectedWorkFiles: [],
+    workPreviews: [],
+    uploadingWorks: false,
     profileImage: null,
     previewImage: null,
     resumeFileName: "",
@@ -850,6 +853,101 @@ class UserDashboard extends Component {
     this.setState((prevState) => ({
       showMobileSidebar: !prevState.showMobileSidebar,
     }));
+  };
+
+  handleWorkFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    const validFiles = [];
+    const previews = [];
+
+    files.forEach((file) => {
+      // Validate file type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "video/mp4",
+        "video/avi",
+        "video/mov",
+        "video/webm",
+      ];
+
+      if (allowedTypes.includes(file.mimetype || file.type)) {
+        validFiles.push(file);
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const preview = {
+            id: Date.now() + Math.random(),
+            file: file,
+            url: e.target.result,
+            type: file.type.startsWith("video/") ? "video" : "image",
+            name: file.name,
+            size: file.size,
+          };
+
+          this.setState((prevState) => ({
+            workPreviews: [...prevState.workPreviews, preview],
+          }));
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    this.setState((prevState) => ({
+      selectedWorkFiles: [...prevState.selectedWorkFiles, ...validFiles],
+    }));
+  };
+
+  removeWorkPreview = (previewId) => {
+    this.setState((prevState) => ({
+      workPreviews: prevState.workPreviews.filter(
+        (preview) => preview.id !== previewId
+      ),
+      selectedWorkFiles: prevState.selectedWorkFiles.filter((file, index) => {
+        const preview = prevState.workPreviews.find((p) => p.id === previewId);
+        return preview ? file !== preview.file : true;
+      }),
+    }));
+  };
+
+  uploadWorksToServer = async (userId) => {
+    const { selectedWorkFiles } = this.state;
+    const uploadedWorks = [];
+
+    this.setState({ uploadingWorks: true });
+
+    for (const file of selectedWorkFiles) {
+      try {
+        const formData = new FormData();
+        formData.append("workFile", file);
+        formData.append("userId", userId);
+        formData.append("title", file.name.split(".")[0]); // Use filename as title
+        formData.append(
+          "serviceName",
+          this.state.portfolioFormData.serviceName || ""
+        );
+
+        const response = await fetch(`${this.state.baseUrl}/api/add-work`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          uploadedWorks.push(result);
+        } else {
+          console.error("Failed to upload work:", file.name);
+        }
+      } catch (error) {
+        console.error("Error uploading work:", error);
+      }
+    }
+
+    this.setState({ uploadingWorks: false });
+    return uploadedWorks;
   };
 
   markNotificationAsRead = async (id) => {
@@ -1777,7 +1875,8 @@ class UserDashboard extends Component {
   }
 
   renderPortfolioForm() {
-    const { portfolioFormData, userData } = this.state;
+    const { portfolioFormData, userData, workPreviews, uploadingWorks } =
+      this.state;
 
     return (
       <div className="dashboard-main-content">
@@ -1795,6 +1894,7 @@ class UserDashboard extends Component {
           <form
             onSubmit={this.handlePortfolioSubmit}
             className="portfolio-form"
+            encType="multipart/form-data"
           >
             <div className="form-section">
               <h3 className="section-title">Personal Information</h3>
@@ -2009,16 +2109,116 @@ class UserDashboard extends Component {
               </div>
             </div>
 
+            {/* Work Upload Section */}
+            <div className="form-section">
+              <h3 className="section-title">Portfolio Works</h3>
+              <p className="section-description">
+                Upload images or videos showcasing your previous work (Optional)
+              </p>
+
+              <div className="work-upload-container">
+                <div className="file-upload-area">
+                  <input
+                    type="file"
+                    id="work-files"
+                    name="workFiles"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={this.handleWorkFileChange}
+                    style={{ display: "none" }}
+                  />
+                  <label htmlFor="work-files" className="file-upload-label">
+                    <div className="upload-icon">
+                      <i className="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div className="upload-text">
+                      <h4>Upload Your Works</h4>
+                      <p>Drag & drop files or click to browse</p>
+                      <span className="file-types">
+                        Supports: JPG, PNG, GIF, MP4, AVI, MOV
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                {workPreviews.length > 0 && (
+                  <div className="work-previews-grid">
+                    <h4>Selected Works ({workPreviews.length})</h4>
+                    <div className="previews-container">
+                      {workPreviews.map((preview) => (
+                        <div key={preview.id} className="work-preview-item">
+                          <div className="preview-content">
+                            {preview.type === "video" ? (
+                              <video
+                                src={preview.url}
+                                className="preview-media"
+                                controls={false}
+                                muted
+                              />
+                            ) : (
+                              <img
+                                src={preview.url}
+                                alt={preview.name}
+                                className="preview-media"
+                              />
+                            )}
+                            <div className="preview-overlay">
+                              <div className="file-info">
+                                <span className="file-name">
+                                  {preview.name}
+                                </span>
+                                <span className="file-size">
+                                  {(preview.size / 1024 / 1024).toFixed(2)} MB
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="remove-preview-btn"
+                                onClick={() =>
+                                  this.removeWorkPreview(preview.id)
+                                }
+                              >
+                                <i className="fas fa-times"></i>
+                              </button>
+                            </div>
+                            <div className="media-type-indicator">
+                              <i
+                                className={`fas fa-${
+                                  preview.type === "video" ? "video" : "image"
+                                }`}
+                              ></i>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {uploadingWorks && (
+                  <div className="uploading-indicator">
+                    <div className="loading-spinner"></div>
+                    <span>Uploading works...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="form-actions">
               <button
                 type="button"
                 className="btn btn-cancel"
                 onClick={() => this.setState({ showPortfolioForm: false })}
+                disabled={uploadingWorks}
               >
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary">
-                Submit Portfolio
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={uploadingWorks}
+              >
+                {uploadingWorks ? "Uploading..." : "Submit Portfolio"}
               </button>
             </div>
           </form>
@@ -2026,6 +2226,30 @@ class UserDashboard extends Component {
       </div>
     );
   }
+
+  clearPortfolioForm = () => {
+    this.setState({
+      portfolioFormData: {
+        name: "",
+        profession: "",
+        headline: "",
+        email: "",
+        workExperience: "",
+        portfolioLink: "",
+        about: "",
+        serviceName: "",
+        serviceDescription: "",
+        pricing: [
+          { level: "Basic", price: "", timeFrame: "" },
+          { level: "Standard", price: "", timeFrame: "" },
+          { level: "Premium", price: "", timeFrame: "" },
+        ],
+      },
+      selectedWorkFiles: [],
+      workPreviews: [],
+      uploadingWorks: false,
+    });
+  };
 
   handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -2180,12 +2404,12 @@ class UserDashboard extends Component {
     this.setState({ isLoading: true, error: null });
 
     try {
-      const { portfolioFormData, userData } = this.state;
+      const { portfolioFormData, userData, selectedWorkFiles } = this.state;
       const baseUrl = this.state.baseUrl || "http://localhost:5000";
 
       const formData = new FormData();
 
-      // Add form data fields
+      // Add existing form data fields
       formData.append("name", portfolioFormData.name || "");
       formData.append("profession", portfolioFormData.profession || "");
       formData.append("headline", portfolioFormData.headline || "");
@@ -2194,12 +2418,11 @@ class UserDashboard extends Component {
       formData.append("portfolioLink", portfolioFormData.portfolioLink || "");
       formData.append("about", portfolioFormData.about || "");
 
-      // Make sure userId is included properly and is valid
       if (userData && userData.id) {
         formData.append("userId", userData.id);
       }
 
-      // Add profile image or generate placeholder initials
+      // Add profile image handling (existing code)
       if (userData.profileImage) {
         formData.append("profileImagePath", userData.profileImage);
         formData.append("hasProfileImage", "true");
@@ -2210,10 +2433,9 @@ class UserDashboard extends Component {
         formData.append("hasProfileImage", "false");
       }
 
-      // This indicates it's a new submission that needs admin review
       formData.append("isNewSubmission", "true");
 
-      // Create a service object to append to the portfolio if provided
+      // Add service data (existing code)
       if (
         portfolioFormData.serviceName &&
         portfolioFormData.serviceDescription
@@ -2223,14 +2445,11 @@ class UserDashboard extends Component {
           description: portfolioFormData.serviceDescription,
           pricing: portfolioFormData.pricing || [],
         };
-
-        // Stringify the service object to pass it in the form
         formData.append("service", JSON.stringify(service));
       }
 
-      const requestUrl = `${baseUrl}/api/portfolio`;
-
-      const response = await fetch(requestUrl, {
+      // Submit portfolio first
+      const response = await fetch(`${baseUrl}/api/portfolio`, {
         method: "POST",
         body: formData,
         headers: {
@@ -2251,53 +2470,29 @@ class UserDashboard extends Component {
 
       const result = await response.json();
 
-      // Clear any previous status timeout
+      // Upload works if any files are selected
+      if (selectedWorkFiles.length > 0 && userData && userData.id) {
+        await this.uploadWorksToServer(userData.id);
+      }
+
+      // Clear portfolio status timeout
       if (this.portfolioStatusTimeout) {
         clearTimeout(this.portfolioStatusTimeout);
       }
 
-      // Update the state immediately
+      // Update state
       this.setState({
         isLoading: false,
         showPortfolioForm: false,
         portfolioStatus: "pending",
+        selectedWorkFiles: [],
+        workPreviews: [],
       });
 
-      // Set a timeout to refresh the status in case there's a race condition
+      // Set timeout to refresh status
       this.portfolioStatusTimeout = setTimeout(() => {
         this.fetchPortfolioStatus();
       }, 1000);
-
-      // Also add the service to the database with a separate API call
-      if (userData && userData.id && portfolioFormData.serviceName) {
-        try {
-          const serviceData = {
-            userId: userData.id,
-            name: portfolioFormData.serviceName,
-            description: portfolioFormData.serviceDescription,
-            pricing: portfolioFormData.pricing || [],
-          };
-
-          const serviceResponse = await fetch(`${baseUrl}/api/add-service`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(serviceData),
-          });
-
-          if (serviceResponse.ok) {
-            console.log("Service added successfully!");
-          } else {
-            console.error(
-              "Failed to add service:",
-              await serviceResponse.text()
-            );
-          }
-        } catch (serviceError) {
-          console.error("Error adding service:", serviceError);
-        }
-      }
 
       // Add notification
       this.addNotification({
@@ -2311,12 +2506,11 @@ class UserDashboard extends Component {
       );
     } catch (error) {
       console.error("Portfolio submission error:", error);
-
       this.setState({
         isLoading: false,
         error: error.message,
+        uploadingWorks: false,
       });
-
       alert(`Failed to submit portfolio: ${error.message}`);
     }
   };
@@ -3484,6 +3678,101 @@ class UserDashboard extends Component {
           }`}
         ></i>
       </button>
+    );
+  }
+
+  renderWorkUploadSection() {
+    const { workPreviews, uploadingWorks } = this.state;
+
+    return (
+      <div className="form-section">
+        <h3 className="section-title">Portfolio Works</h3>
+        <p className="section-description">
+          Upload images or videos showcasing your previous work (Optional)
+        </p>
+
+        <div className="work-upload-container">
+          <div className="file-upload-area">
+            <input
+              type="file"
+              id="work-files"
+              multiple
+              accept="image/*,video/*"
+              onChange={this.handleWorkFileChange}
+              style={{ display: "none" }}
+            />
+            <label htmlFor="work-files" className="file-upload-label">
+              <div className="upload-icon">
+                <i className="fas fa-cloud-upload-alt"></i>
+              </div>
+              <div className="upload-text">
+                <h4>Upload Your Works</h4>
+                <p>Drag & drop files or click to browse</p>
+                <span className="file-types">
+                  Supports: JPG, PNG, GIF, MP4, AVI, MOV
+                </span>
+              </div>
+            </label>
+          </div>
+
+          {workPreviews.length > 0 && (
+            <div className="work-previews-grid">
+              <h4>Selected Works ({workPreviews.length})</h4>
+              <div className="previews-container">
+                {workPreviews.map((preview) => (
+                  <div key={preview.id} className="work-preview-item">
+                    <div className="preview-content">
+                      {preview.type === "video" ? (
+                        <video
+                          src={preview.url}
+                          className="preview-media"
+                          controls={false}
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={preview.url}
+                          alt={preview.name}
+                          className="preview-media"
+                        />
+                      )}
+                      <div className="preview-overlay">
+                        <div className="file-info">
+                          <span className="file-name">{preview.name}</span>
+                          <span className="file-size">
+                            {(preview.size / 1024 / 1024).toFixed(2)} MB
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="remove-preview-btn"
+                          onClick={() => this.removeWorkPreview(preview.id)}
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                      <div className="media-type-indicator">
+                        <i
+                          className={`fas fa-${
+                            preview.type === "video" ? "video" : "image"
+                          }`}
+                        ></i>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {uploadingWorks && (
+            <div className="uploading-indicator">
+              <div className="loading-spinner"></div>
+              <span>Uploading works...</span>
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 

@@ -34,6 +34,7 @@ class AdminPanel extends Component {
     // Recommended profiles specific states
     recommendedSearchTerm: "",
     recommendedSortBy: "newest",
+    previewingWork: null,
   };
 
   componentDidMount() {
@@ -292,7 +293,7 @@ class AdminPanel extends Component {
         console.warn("Failed to fetch detailed profile, using original data");
       }
 
-      // If we have a userId, fetch fresh user data with profile image
+      // If we have a userId, fetch fresh user data with profile image and works
       if (detailedProfile.userId) {
         try {
           const userResponse = await fetch(
@@ -303,11 +304,12 @@ class AdminPanel extends Component {
             const userData = await userResponse.json();
             console.log(`Fresh user data for recommended profile:`, userData);
 
-            // Update profile with fresh profile image
+            // Update profile with fresh profile image and works
             detailedProfile = {
               ...detailedProfile,
               profileImage:
                 userData.user?.profileImage || detailedProfile.profileImage,
+              works: userData.works || detailedProfile.works || [], // Add works data
             };
           }
         } catch (error) {
@@ -715,7 +717,7 @@ class AdminPanel extends Component {
         );
       }
 
-      // If we have a userId, fetch fresh user data with profile image
+      // If we have a userId, fetch fresh user data with profile image and works
       if (detailedSubmission.userId) {
         try {
           const userResponse = await fetch(
@@ -726,11 +728,12 @@ class AdminPanel extends Component {
             const userData = await userResponse.json();
             console.log(`Fresh user data for modal:`, userData);
 
-            // Update submission with fresh profile image
+            // Update submission with fresh profile image and works
             detailedSubmission = {
               ...detailedSubmission,
               profileImage:
                 userData.user?.profileImage || detailedSubmission.profileImage,
+              works: userData.works || detailedSubmission.works || [], // Add works data
             };
           }
         } catch (error) {
@@ -1843,6 +1846,150 @@ class AdminPanel extends Component {
               )}
             </div>
 
+            {/* Works/Portfolio Gallery Section */}
+            {viewingRecommendedProfile.works &&
+              viewingRecommendedProfile.works.length > 0 && (
+                <div className="adminpanel-works-section">
+                  <h3>
+                    <i className="fas fa-images"></i>
+                    Portfolio Works ({viewingRecommendedProfile.works.length})
+                  </h3>
+                  <div className="adminpanel-works-grid">
+                    {viewingRecommendedProfile.works.map((work, index) => {
+                      const workUrl =
+                        work.url && work.url.startsWith("/")
+                          ? `${this.state.baseUrl}${work.url}`
+                          : work.url;
+
+                      return (
+                        <div
+                          key={work._id || index}
+                          className="adminpanel-work-item"
+                        >
+                          <div className="adminpanel-work-preview">
+                            {work.type === "video" ? (
+                              <div className="adminpanel-video-container">
+                                <video
+                                  src={workUrl}
+                                  className="adminpanel-work-media"
+                                  controls
+                                  preload="metadata"
+                                  onError={(e) => {
+                                    console.error(
+                                      "Video failed to load:",
+                                      e.target.src
+                                    );
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                />
+                                <div
+                                  className="adminpanel-media-error"
+                                  style={{ display: "none" }}
+                                >
+                                  <i className="fas fa-video-slash"></i>
+                                  <span>Video unavailable</span>
+                                </div>
+                                <div className="adminpanel-media-type-badge">
+                                  <i className="fas fa-video"></i>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="adminpanel-image-container">
+                                <img
+                                  src={workUrl}
+                                  alt={work.title || `Work ${index + 1}`}
+                                  className="adminpanel-work-media"
+                                  onError={(e) => {
+                                    console.error(
+                                      "Image failed to load:",
+                                      e.target.src
+                                    );
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                  onLoad={(e) => {
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display =
+                                        "none";
+                                    }
+                                  }}
+                                />
+                                <div
+                                  className="adminpanel-media-error"
+                                  style={{ display: "none" }}
+                                >
+                                  <i className="fas fa-image-slash"></i>
+                                  <span>Image unavailable</span>
+                                </div>
+                                <div className="adminpanel-media-type-badge">
+                                  <i className="fas fa-image"></i>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="adminpanel-work-overlay">
+                              <div className="adminpanel-work-actions">
+                                <button
+                                  className="adminpanel-work-fullscreen-btn"
+                                  onClick={() =>
+                                    this.openWorkPreview(work, workUrl)
+                                  }
+                                  title="View fullscreen"
+                                >
+                                  <i className="fas fa-expand"></i>
+                                </button>
+                                {workUrl && (
+                                  <a
+                                    href={workUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="adminpanel-work-download-btn"
+                                    title="Open in new tab"
+                                  >
+                                    <i className="fas fa-external-link-alt"></i>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="adminpanel-work-details">
+                            <h4 className="adminpanel-work-title">
+                              {work.title || `Untitled Work ${index + 1}`}
+                            </h4>
+                            {work.serviceName && (
+                              <p className="adminpanel-work-service">
+                                <i className="fas fa-tag"></i>
+                                {work.serviceName}
+                              </p>
+                            )}
+                            <div className="adminpanel-work-meta">
+                              <span className="adminpanel-work-type">
+                                <i
+                                  className={`fas fa-${
+                                    work.type === "video" ? "video" : "image"
+                                  }`}
+                                ></i>
+                                {work.type === "video" ? "Video" : "Image"}
+                              </span>
+                              {work.uploadedDate && (
+                                <span className="adminpanel-work-date">
+                                  <i className="fas fa-calendar"></i>
+                                  {new Date(
+                                    work.uploadedDate
+                                  ).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
             <div className="adminpanel-modal-actions">
               {viewingRecommendedProfile.isRecommended ? (
                 <button
@@ -1875,6 +2022,8 @@ class AdminPanel extends Component {
               )}
             </div>
           </div>
+
+          {this.renderWorkPreviewModal()}
         </div>
       </div>
     );
@@ -2394,6 +2543,81 @@ class AdminPanel extends Component {
     );
   }
 
+  openWorkPreview = (work, workUrl) => {
+    this.setState({
+      previewingWork: {
+        ...work,
+        url: workUrl,
+      },
+    });
+  };
+
+  closeWorkPreview = () => {
+    this.setState({ previewingWork: null });
+  };
+
+  renderWorkPreviewModal() {
+    const { previewingWork } = this.state;
+    if (!previewingWork) return null;
+
+    return (
+      <div
+        className="adminpanel-work-preview-overlay"
+        onClick={this.closeWorkPreview}
+      >
+        <div
+          className="adminpanel-work-preview-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="adminpanel-work-preview-header">
+            <h3>{previewingWork.title || "Work Preview"}</h3>
+            <button
+              className="adminpanel-work-preview-close"
+              onClick={this.closeWorkPreview}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+
+          <div className="adminpanel-work-preview-content">
+            {previewingWork.type === "video" ? (
+              <video
+                src={previewingWork.url}
+                controls
+                className="adminpanel-work-preview-media"
+                autoPlay
+              />
+            ) : (
+              <img
+                src={previewingWork.url}
+                alt={previewingWork.title}
+                className="adminpanel-work-preview-media"
+              />
+            )}
+          </div>
+
+          <div className="adminpanel-work-preview-info">
+            {previewingWork.serviceName && (
+              <p>
+                <strong>Service:</strong> {previewingWork.serviceName}
+              </p>
+            )}
+            {previewingWork.uploadedDate && (
+              <p>
+                <strong>Uploaded:</strong>{" "}
+                {new Date(previewingWork.uploadedDate).toLocaleDateString()}
+              </p>
+            )}
+            <p>
+              <strong>Type:</strong>{" "}
+              {previewingWork.type === "video" ? "Video" : "Image"}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   renderSubmissionDetails() {
     const { viewingSubmission } = this.state;
     if (!viewingSubmission) return null;
@@ -2601,6 +2825,148 @@ class AdminPanel extends Component {
               )}
             </div>
 
+            {/* Works/Portfolio Gallery Section */}
+            {viewingSubmission.works && viewingSubmission.works.length > 0 && (
+              <div className="adminpanel-works-section">
+                <h3>
+                  <i className="fas fa-images"></i>
+                  Portfolio Works ({viewingSubmission.works.length})
+                </h3>
+                <div className="adminpanel-works-grid">
+                  {viewingSubmission.works.map((work, index) => {
+                    const workUrl =
+                      work.url && work.url.startsWith("/")
+                        ? `${this.state.baseUrl}${work.url}`
+                        : work.url;
+
+                    return (
+                      <div
+                        key={work._id || index}
+                        className="adminpanel-work-item"
+                      >
+                        <div className="adminpanel-work-preview">
+                          {work.type === "video" ? (
+                            <div className="adminpanel-video-container">
+                              <video
+                                src={workUrl}
+                                className="adminpanel-work-media"
+                                controls
+                                preload="metadata"
+                                onError={(e) => {
+                                  console.error(
+                                    "Video failed to load:",
+                                    e.target.src
+                                  );
+                                  e.target.style.display = "none";
+                                  e.target.nextSibling.style.display = "flex";
+                                }}
+                              />
+                              <div
+                                className="adminpanel-media-error"
+                                style={{ display: "none" }}
+                              >
+                                <i className="fas fa-video-slash"></i>
+                                <span>Video unavailable</span>
+                              </div>
+                              <div className="adminpanel-media-type-badge">
+                                <i className="fas fa-video"></i>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="adminpanel-image-container">
+                              <img
+                                src={workUrl}
+                                alt={work.title || `Work ${index + 1}`}
+                                className="adminpanel-work-media"
+                                onError={(e) => {
+                                  console.error(
+                                    "Image failed to load:",
+                                    e.target.src
+                                  );
+                                  e.target.style.display = "none";
+                                  e.target.nextSibling.style.display = "flex";
+                                }}
+                                onLoad={(e) => {
+                                  if (e.target.nextSibling) {
+                                    e.target.nextSibling.style.display = "none";
+                                  }
+                                }}
+                              />
+                              <div
+                                className="adminpanel-media-error"
+                                style={{ display: "none" }}
+                              >
+                                <i className="fas fa-image-slash"></i>
+                                <span>Image unavailable</span>
+                              </div>
+                              <div className="adminpanel-media-type-badge">
+                                <i className="fas fa-image"></i>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="adminpanel-work-overlay">
+                            <div className="adminpanel-work-actions">
+                              <button
+                                className="adminpanel-work-fullscreen-btn"
+                                onClick={() =>
+                                  this.openWorkPreview(work, workUrl)
+                                }
+                                title="View fullscreen"
+                              >
+                                <i className="fas fa-expand"></i>
+                              </button>
+                              {workUrl && (
+                                <a
+                                  href={workUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="adminpanel-work-download-btn"
+                                  title="Open in new tab"
+                                >
+                                  <i className="fas fa-external-link-alt"></i>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="adminpanel-work-details">
+                          <h4 className="adminpanel-work-title">
+                            {work.title || `Untitled Work ${index + 1}`}
+                          </h4>
+                          {work.serviceName && (
+                            <p className="adminpanel-work-service">
+                              <i className="fas fa-tag"></i>
+                              {work.serviceName}
+                            </p>
+                          )}
+                          <div className="adminpanel-work-meta">
+                            <span className="adminpanel-work-type">
+                              <i
+                                className={`fas fa-${
+                                  work.type === "video" ? "video" : "image"
+                                }`}
+                              ></i>
+                              {work.type === "video" ? "Video" : "Image"}
+                            </span>
+                            {work.uploadedDate && (
+                              <span className="adminpanel-work-date">
+                                <i className="fas fa-calendar"></i>
+                                {new Date(
+                                  work.uploadedDate
+                                ).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="adminpanel-modal-actions">
               {viewingSubmission.status === "pending" && (
                 <>
@@ -2686,6 +3052,8 @@ class AdminPanel extends Component {
               )}
             </div>
           </div>
+
+          {this.renderWorkPreviewModal()}
         </div>
       </div>
     );
