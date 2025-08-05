@@ -2558,27 +2558,18 @@ app.get("/api/user/:userId", async (req, res) => {
 
     // Extract services and works from portfolio for easier access in frontend
     const services = portfolio?.services || [];
-    const works = portfolio?.works || []; // *** ADDED THIS LINE ***
+    const works = portfolio?.works || [];
 
-    console.log("=== WORKS DATA DEBUG ===");
-    console.log("Portfolio found:", !!portfolio);
-    console.log("Works in portfolio:", works.length);
-    console.log("Works data:", works);
-
-    // *** ADDED THIS SECTION - Format works for frontend ***
+    // Format works for frontend consumption
     const formattedWorks = works.map((work) => ({
       id: work._id,
-      _id: work._id,
       url: work.url,
       thumbnail: work.thumbnail || work.url,
-      title: work.title || "Untitled Work",
-      type: work.type || "image",
-      serviceName: work.serviceName || "",
-      uploadedDate: work.uploadedDate || work.createdAt || new Date(),
+      title: work.title,
+      type: work.type,
+      serviceName: work.serviceName,
+      uploadedDate: work.uploadedDate,
     }));
-
-    console.log("=== FORMATTED WORKS ===");
-    console.log("Formatted works count:", formattedWorks.length);
 
     // Prepare complete user data response
     const userResponse = {
@@ -2599,16 +2590,14 @@ app.get("/api/user/:userId", async (req, res) => {
       userResponse.profileImage
     );
 
-    // *** UPDATED RESPONSE - Added works field ***
-    const videos = data.videos || [];
+    // Return user data with their portfolio information including works
     res.status(200).json({
       success: true,
       user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      works: formattedWorks, // *** ADDED THIS LINE ***
-      videos: videos.length > 0 ? videos : formattedWorks, // *** UPDATED THIS LINE ***
-      worksCount: formattedWorks.length, // *** ADDED THIS LINE ***
+      works: formattedWorks, // Include works in the response
+      worksCount: formattedWorks.length, // Add count for convenience
     });
   } catch (error) {
     console.error("Error fetching user data:", error);

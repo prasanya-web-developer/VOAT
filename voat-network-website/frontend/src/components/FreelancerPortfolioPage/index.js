@@ -313,12 +313,7 @@ class MyPortfolio extends Component {
         isOwnProfile: isOwnProfile,
       };
 
-      // *** UPDATED PART - Get works from API response ***
-      const videos = data.works || data.videos || [];
-      console.log("=== WORKS DEBUG ===");
-      console.log("API Response data.works:", data.works);
-      console.log("API Response data.videos:", data.videos);
-      console.log("Final videos array:", videos);
+      const videos = data.videos || [];
 
       this.setState({
         portfolioData,
@@ -895,7 +890,6 @@ class MyPortfolio extends Component {
     if (!e.target.files || !e.target.files[0]) {
       return; // No file selected
     }
-
     const file = e.target.files[0];
     const userData = JSON.parse(localStorage.getItem("user"));
 
@@ -904,130 +898,49 @@ class MyPortfolio extends Component {
       return;
     }
 
-    // Show loading state
-    const originalVideos = [...this.state.videos];
-    const tempId = Date.now().toString();
-
-    // Add temporary item to show upload progress
-    const tempWork = {
-      id: tempId,
-      url: URL.createObjectURL(file),
-      thumbnail: file.type.startsWith("image/")
-        ? URL.createObjectURL(file)
-        : "",
-      title: file.name,
-      type: file.type.startsWith("video/") ? "video" : "image",
-      uploading: true,
-    };
-
-    this.setState((prevState) => ({
-      videos: [...prevState.videos, tempWork],
-    }));
-
     const formData = new FormData();
-    formData.append("workFile", file);
+    formData.append("workFile", file); // This key matches your backend multer config
     formData.append("userId", userData.id);
-    formData.append("title", file.name.split(".")[0]); // Remove file extension
+    formData.append("title", file.name);
 
     try {
-      const response = await fetch(
-        `${this.state.baseUrl}/api/portfolio/add-work`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const response = await fetch(`${this.state.baseUrl}/api/add-work`, {
+        method: "POST",
+        body: formData,
+      });
 
       const result = await response.json();
-
       if (!response.ok || !result.success) {
         throw new Error(result.message || "File upload failed.");
       }
 
-      // Create the new work item with the server response
       const newWorkItem = {
         id: result.workId,
-        url: result.workUrl,
-        thumbnail:
-          result.workThumbnail ||
-          (file.type.startsWith("image/") ? result.workUrl : ""),
-        title: result.workTitle || file.name.split(".")[0],
-        type:
-          result.workType ||
-          (file.type.startsWith("video/") ? "video" : "image"),
+        url: `${this.state.baseUrl}${result.workUrl}`,
+        thumbnail: file.type.startsWith("image/")
+          ? `${this.state.baseUrl}${result.workUrl}`
+          : "URL_TO_A_DEFAULT_VIDEO_ICON.png",
+        title: file.name,
+        type: file.type.startsWith("video/") ? "video" : "image",
       };
 
-      // Remove the temporary item and add the real one
+      // Update the state to show the new work immediately
       this.setState((prevState) => ({
-        videos: [
-          ...prevState.videos.filter((v) => v.id !== tempId),
-          newWorkItem,
-        ],
+        videos: [...prevState.videos, newWorkItem],
       }));
 
-      // Clear the file input
-      e.target.value = "";
-
-      console.log("Work uploaded successfully:", newWorkItem);
+      alert("Work added successfully!");
     } catch (error) {
-      console.error("Error uploading work:", error);
-
-      // Remove the temporary item and restore original state
-      this.setState({ videos: originalVideos });
-
+      console.error("Error adding work:", error);
       alert(`Error: ${error.message}`);
     }
   };
 
-  handleRemoveVideo = async (workId) => {
-    if (!window.confirm("Are you sure you want to remove this work item?")) {
-      return;
-    }
-
-    try {
-      const userData = localStorage.getItem("user");
-      const userId = userData ? JSON.parse(userData).id : null;
-
-      if (!userId) {
-        alert("You must be logged in to remove work items.");
-        return;
-      }
-
-      console.log("Removing work item:", workId);
-
-      const response = await fetch(
-        `${this.state.baseUrl}/api/portfolio/remove-work`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId: userId,
-            workId: workId,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to remove work item");
-      }
-
-      // Update local state by removing the work item
-      const updatedVideos = this.state.videos.filter(
-        (video) => (video.id || video._id) !== workId
-      );
-
-      this.setState({ videos: updatedVideos });
-
-      alert("Work item removed successfully!");
-      console.log("Work item removed successfully:", result);
-    } catch (error) {
-      console.error("Error removing work item:", error);
-      alert(`Error removing work item: ${error.message}`);
-    }
+  handleRemoveVideo = (videoId) => {
+    const updatedVideos = this.state.videos.filter(
+      (video) => video.id !== videoId
+    );
+    this.setState({ videos: updatedVideos });
   };
 
   handleTabChange = (tab) => {
@@ -1595,73 +1508,24 @@ class MyPortfolio extends Component {
           </div>
 
           <div className="card-body">
-            {videos && videos.length > 0 ? (
+            {videos.length > 0 ? (
               <div className="portfolio-grid">
-                {videos.map((work) => (
-                  <div key={work.id || work._id} className="portfolio-item">
+                {videos.map((video) => (
+                  <div key={video.id} className="portfolio-item">
                     <div className="portfolio-thumbnail">
-                      {work.type === "video" ? (
-                        <video
-                          src={
-                            work.url.startsWith("http")
-                              ? work.url
-                              : `${this.state.baseUrl}${work.url}`
-                          }
-                          poster={
-                            work.thumbnail
-                              ? work.thumbnail.startsWith("http")
-                                ? work.thumbnail
-                                : `${this.state.baseUrl}${work.thumbnail}`
-                              : undefined
-                          }
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <img
-                          src={
-                            work.thumbnail || work.url.startsWith("http")
-                              ? work.thumbnail || work.url
-                              : `${this.state.baseUrl}${
-                                  work.thumbnail || work.url
-                                }`
-                          }
-                          alt={work.title || "Portfolio work"}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = "/api/placeholder/300/200";
-                          }}
-                        />
-                      )}
+                      <img src={video.thumbnail} alt="Portfolio work" />
                       <div className="portfolio-overlay">
                         <button
                           className="portfolio-play-btn"
-                          onClick={() => {
-                            const fullUrl = work.url.startsWith("http")
-                              ? work.url
-                              : `${this.state.baseUrl}${work.url}`;
-                            window.open(fullUrl, "_blank");
-                          }}
+                          onClick={() => window.open(video.url, "_blank")}
                           title="View Work"
                         >
-                          <span className="play-icon">
-                            {work.type === "video" ? "▶" : "👁"}
-                          </span>
+                          <span className="play-icon">▶</span>
                         </button>
                         {isOwnProfile && (
                           <button
                             className="portfolio-remove-btn"
-                            onClick={() =>
-                              this.handleRemoveVideo(work.id || work._id)
-                            }
+                            onClick={() => this.handleRemoveVideo(video.id)}
                             title="Remove Work"
                           >
                             <span className="remove-icon">🗑️</span>
@@ -1669,9 +1533,6 @@ class MyPortfolio extends Component {
                         )}
                       </div>
                     </div>
-                    {work.title && (
-                      <div className="portfolio-item-title">{work.title}</div>
-                    )}
                   </div>
                 ))}
               </div>
