@@ -313,7 +313,8 @@ class MyPortfolio extends Component {
         isOwnProfile: isOwnProfile,
       };
 
-      const videos = data.videos || data.works || [];
+      // *** UPDATED PART - Get works from API response ***
+      const videos = data.works || data.videos || [];
       console.log("=== WORKS DEBUG ===");
       console.log("API Response data.works:", data.works);
       console.log("API Response data.videos:", data.videos);
@@ -1621,7 +1622,13 @@ class MyPortfolio extends Component {
                         />
                       ) : (
                         <img
-                          src={work.thumbnail || work.url}
+                          src={
+                            work.thumbnail || work.url.startsWith("http")
+                              ? work.thumbnail || work.url
+                              : `${this.state.baseUrl}${
+                                  work.thumbnail || work.url
+                                }`
+                          }
                           alt={work.title || "Portfolio work"}
                           style={{
                             width: "100%",

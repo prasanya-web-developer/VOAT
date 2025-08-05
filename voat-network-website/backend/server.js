@@ -2558,10 +2558,14 @@ app.get("/api/user/:userId", async (req, res) => {
 
     // Extract services and works from portfolio for easier access in frontend
     const services = portfolio?.services || [];
-    const videos = data.videos || [];
-    const works = data.works || [];
+    const works = portfolio?.works || []; // *** ADDED THIS LINE ***
 
-    // Format works for frontend consumption
+    console.log("=== WORKS DATA DEBUG ===");
+    console.log("Portfolio found:", !!portfolio);
+    console.log("Works in portfolio:", works.length);
+    console.log("Works data:", works);
+
+    // *** ADDED THIS SECTION - Format works for frontend ***
     const formattedWorks = works.map((work) => ({
       id: work._id,
       _id: work._id,
@@ -2570,8 +2574,11 @@ app.get("/api/user/:userId", async (req, res) => {
       title: work.title || "Untitled Work",
       type: work.type || "image",
       serviceName: work.serviceName || "",
-      uploadedDate: work.uploadedDate || new Date(),
+      uploadedDate: work.uploadedDate || work.createdAt || new Date(),
     }));
+
+    console.log("=== FORMATTED WORKS ===");
+    console.log("Formatted works count:", formattedWorks.length);
 
     // Prepare complete user data response
     const userResponse = {
@@ -2592,19 +2599,16 @@ app.get("/api/user/:userId", async (req, res) => {
       userResponse.profileImage
     );
 
-    console.log("=== BACKEND WORKS DEBUG ===");
-    console.log("Portfolio works found:", works.length);
-    console.log("Formatted works:", formattedWorks.length);
-
-    // Return user data with their portfolio information including works
+    // *** UPDATED RESPONSE - Added works field ***
+    const videos = data.videos || [];
     res.status(200).json({
       success: true,
       user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      works: formattedWorks, // Include works in the response
-      videos: videos.length > 0 ? videos : formattedWorks,
-      worksCount: formattedWorks.length, // Add count for convenience
+      works: formattedWorks, // *** ADDED THIS LINE ***
+      videos: videos.length > 0 ? videos : formattedWorks, // *** UPDATED THIS LINE ***
+      worksCount: formattedWorks.length, // *** ADDED THIS LINE ***
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
