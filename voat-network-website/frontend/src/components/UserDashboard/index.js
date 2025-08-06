@@ -72,14 +72,13 @@ class UserDashboard extends Component {
         this.fetchOrders();
         this.fetchWishlist();
         this.fetchBookings();
-        this.fetchNotifications(); // New method to fetch real notifications
+        this.fetchNotifications(); // method to fetch real notifications
         this.updateStats(); // Calculate real stats
       });
     });
 
     this.checkWishlistConsistency();
 
-    // Add periodic wishlist refresh every 10 seconds
     this.wishlistRefreshInterval = setInterval(() => {
       this.fetchWishlist();
     }, 10000);
@@ -615,10 +614,9 @@ class UserDashboard extends Component {
       if (response.ok) {
         const bookings = await response.json();
 
-        // Add service level information if not present
         const enrichedBookings = bookings.map((booking) => ({
           ...booking,
-          serviceLevel: booking.serviceLevel || "Standard", // Default to Standard if not specified
+          serviceLevel: booking.serviceLevel || "Standard",
         }));
 
         this.setState({ bookings: enrichedBookings }, () => {
@@ -626,7 +624,6 @@ class UserDashboard extends Component {
         });
       } else {
         console.error("Failed to fetch bookings");
-        // Set empty array instead of dummy data
         this.setState({ bookings: [] }, () => {
           this.updateStats();
         });
@@ -1640,7 +1637,7 @@ class UserDashboard extends Component {
                       }
                     >
                       <i className="fas fa-times"></i>
-                      <span>Cancel</span>
+                      <span>Cancel Order</span>
                     </button>
                   )}
                 </div>
@@ -1652,14 +1649,12 @@ class UserDashboard extends Component {
     );
   }
 
-  // Add this method to handle order cancellation
   handleCancelOrder = async (bookingId) => {
     if (!bookingId) {
-      this.addNotification({
-        type: "system",
-        message: "Unable to cancel order: Invalid booking ID",
-        time: new Date().toISOString(),
-      });
+      this.showNotification(
+        "Unable to cancel order: Invalid booking ID",
+        "error"
+      );
       return;
     }
 
@@ -1672,11 +1667,7 @@ class UserDashboard extends Component {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
-        this.addNotification({
-          type: "system",
-          message: "Please login to cancel orders",
-          time: new Date().toISOString(),
-        });
+        this.showNotification("Please login to cancel orders", "error");
         return;
       }
 
@@ -1692,7 +1683,6 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        // Remove the order from the local state
         this.setState(
           (prevState) => ({
             orders: prevState.orders.filter(
@@ -1704,13 +1694,7 @@ class UserDashboard extends Component {
           }
         );
 
-        this.addNotification({
-          type: "system",
-          message: "Order cancelled successfully",
-          time: new Date().toISOString(),
-        });
-
-        // Refresh orders from server
+        this.showNotification("Order cancelled successfully", "success");
         this.fetchOrders();
       } else {
         const errorData = await response.json();
@@ -1718,11 +1702,10 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error cancelling order:", error);
-      this.addNotification({
-        type: "system",
-        message: error.message || "Failed to cancel order. Please try again.",
-        time: new Date().toISOString(),
-      });
+      this.showNotification(
+        error.message || "Failed to cancel order. Please try again.",
+        "error"
+      );
     }
   };
 
@@ -2840,6 +2823,13 @@ class UserDashboard extends Component {
                         <span>View Details</span>
                       </button>
                       <button
+                        className="action-btn-compact primary"
+                        onClick={() => this.addToCartFromBooking(booking)}
+                      >
+                        <i className="fas fa-shopping-cart"></i>
+                        <span>Add to Cart</span>
+                      </button>
+                      <button
                         className="action-btn-compact cancel"
                         onClick={() => this.handleCancelBooking(booking._id)}
                       >
@@ -3107,21 +3097,19 @@ class UserDashboard extends Component {
 
       if (response.ok) {
         this.fetchBookings();
-        this.addNotification({
-          type: "system",
-          message: `Booking request ${action}ed successfully!`,
-          time: new Date().toISOString(),
-        });
+        this.showNotification(
+          `Booking request ${action}ed successfully!`,
+          "success"
+        );
+        setTimeout(() => {
+          this.refreshNotifications();
+        }, 1000);
       } else {
         throw new Error(`Failed to ${action} booking`);
       }
     } catch (error) {
       console.error(`Error ${action}ing booking:`, error);
-      this.addNotification({
-        type: "system",
-        message: `Failed to ${action} booking request`,
-        time: new Date().toISOString(),
-      });
+      this.showNotification(`Failed to ${action} booking request`, "error");
     }
   };
 
@@ -3346,17 +3334,13 @@ class UserDashboard extends Component {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
-        alert("Please login to add items to cart");
+        this.showNotification("Please login to add items to cart", "error");
         return;
       }
 
       // Check if already in cart
       if (item.inCart) {
-        this.addNotification({
-          type: "system",
-          message: "This service is already in your cart",
-          time: new Date().toISOString(),
-        });
+        this.showNotification("This service is already in your cart", "info");
         return;
       }
 
@@ -3380,7 +3364,6 @@ class UserDashboard extends Component {
       });
 
       if (response.ok) {
-        // Update wishlist item to show it's in cart
         this.setState((prevState) => ({
           wishlist: prevState.wishlist.map((wishlistItem) =>
             wishlistItem.id === item.id
@@ -3389,27 +3372,21 @@ class UserDashboard extends Component {
           ),
         }));
 
-        // ✅ Refresh notifications after adding to cart
         setTimeout(() => {
           this.refreshNotifications();
         }, 1000);
 
-        this.addNotification({
-          type: "system",
-          message: "Service added to cart successfully!",
-          time: new Date().toISOString(),
-        });
+        this.showNotification("Service added to cart successfully!", "success");
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to add to cart");
       }
     } catch (error) {
       console.error("Error adding to cart:", error);
-      this.addNotification({
-        type: "system",
-        message: error.message || "Failed to add service to cart",
-        time: new Date().toISOString(),
-      });
+      this.showNotification(
+        error.message || "Failed to add service to cart",
+        "error"
+      );
     }
   };
 
@@ -3417,7 +3394,7 @@ class UserDashboard extends Component {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
-        alert("Please login to book services");
+        this.showNotification("Please login to book services", "error");
         return;
       }
 
@@ -3444,22 +3421,17 @@ class UserDashboard extends Component {
       });
 
       if (response.ok) {
-        this.addNotification({
-          type: "booking",
-          message: `Booking request sent for ${item.service}!`,
-          time: new Date().toISOString(),
-        });
+        this.showNotification(
+          `Booking request sent for ${item.service}!`,
+          "success"
+        );
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to create booking");
       }
     } catch (error) {
       console.error("Error creating booking:", error);
-      this.addNotification({
-        type: "system",
-        message: error.message || "Failed to book service",
-        time: new Date().toISOString(),
-      });
+      this.showNotification(error.message || "Failed to book service", "error");
     }
   };
 
@@ -3776,6 +3748,37 @@ class UserDashboard extends Component {
     );
   }
 
+  showNotification = (message, type = "info") => {
+    // Create notification element
+    const notification = document.createElement("div");
+    notification.className = `toast-notification toast-${type}`;
+    notification.innerHTML = `
+    <div class="toast-content">
+      <i class="fas fa-${
+        type === "success"
+          ? "check-circle"
+          : type === "error"
+          ? "exclamation-circle"
+          : "info-circle"
+      }"></i>
+      <span>${message}</span>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">
+      <i class="fas fa-times"></i>
+    </button>
+  `;
+
+    // Add to page
+    document.body.appendChild(notification);
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, 5000);
+  };
+
   renderDashboardContent() {
     const { activeTab, showPortfolioForm } = this.state;
 
@@ -3798,6 +3801,50 @@ class UserDashboard extends Component {
         return this.renderUserProfile();
     }
   }
+
+  addToCartFromBooking = async (booking) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        this.showNotification("Please login to add items to cart", "error");
+        return;
+      }
+
+      const cartData = {
+        userId: userData.id,
+        freelancerId: booking.freelancerId,
+        freelancerName: booking.freelancerName,
+        serviceName: booking.serviceName,
+        serviceLevel: "Standard",
+        basePrice: booking.servicePrice,
+        paymentType: "final",
+      };
+
+      const response = await fetch(`${this.state.baseUrl}/api/cart/add`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(cartData),
+      });
+
+      if (response.ok) {
+        this.showNotification("Service added to cart successfully!", "success");
+        setTimeout(() => {
+          this.refreshNotifications();
+        }, 1000);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to add to cart");
+      }
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      this.showNotification(
+        error.message || "Failed to add service to cart",
+        "error"
+      );
+    }
+  };
 
   render() {
     const {
@@ -3901,7 +3948,7 @@ class UserDashboard extends Component {
                   onClick={() => this.handleTabChange("bookings")}
                 >
                   <i className="fas fa-calendar-check nav-icon"></i>
-                  <span className="nav-text">Bookings</span>
+                  <span className="nav-text">Booking Requests</span>
                   {this.state.stats.pendingBookings > 0 && (
                     <span className="nav-badge">
                       {this.state.stats.pendingBookings}

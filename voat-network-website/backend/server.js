@@ -3800,6 +3800,7 @@ app.put("/api/booking/:bookingId/action", async (req, res) => {
         serviceName: booking.serviceName,
         freelancerName: booking.freelancerName,
         action: action,
+        timestamp: new Date().toISOString(),
       },
     });
 
@@ -3815,6 +3816,7 @@ app.put("/api/booking/:bookingId/action", async (req, res) => {
         serviceName: booking.serviceName,
         clientName: booking.clientName,
         action: action,
+        timestamp: new Date().toISOString(),
       },
     });
 

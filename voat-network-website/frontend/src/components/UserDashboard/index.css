@@ -5259,3 +5259,109 @@ textarea {
     font-size: 11px;
   }
 }
+
+/* Toast Notifications */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  min-width: 320px;
+  max-width: 480px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  animation: slideInRight 0.3s ease-out;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.toast-success {
+  background: linear-gradient(135deg, #10b981, #34d399);
+  color: white;
+}
+
+.toast-error {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  color: white;
+}
+
+.toast-info {
+  background: linear-gradient(135deg, var(--voat-primary), var(--voat-accent));
+  color: white;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.toast-content i {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.toast-content span {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+}
+
+.toast-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Multiple toast notifications stacking */
+.toast-notification:nth-child(n + 2) {
+  top: calc(20px + (80px * var(--toast-index, 0)));
+}
+
+/* Responsive toast notifications */
+@media (max-width: 768px) {
+  .toast-notification {
+    left: 20px;
+    right: 20px;
+    min-width: auto;
+    max-width: none;
+  }
+}
+
+.action-btn-compact.primary {
+  background: linear-gradient(135deg, var(--voat-primary), var(--voat-accent));
+  color: white;
+  box-shadow: 0 2px 8px rgba(2, 91, 165, 0.3);
+}
+
+.action-btn-compact.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(2, 91, 165, 0.4);
+}
