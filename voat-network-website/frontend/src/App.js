@@ -8,7 +8,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import UserDashboard from "./components/UserDashboard";
 import FreelancerPortfolioPage from "./components/FreelancerPortfolioPage";
 import FreelancersListPage from "./components/FreelancersListPage";
-import PaymentGatewayPage from "./components/PaymentMethod";
+import PaymentMethod from "./components/PaymentMethod";
 import PrivacyPolicyPage from "./components/PrivacyPolicyPage";
 import TermsConditionsPage from "./components/TermsandConditionPage";
 
@@ -25,7 +25,7 @@ const App = () => (
     <Route path="/my-portfolio" element={<FreelancerPortfolioPage />} />
     <Route path="/my-portfolio/:userId" element={<FreelancerPortfolioPage />} />
     <Route path="/portfolio-list" element={<FreelancersListPage />} />
-    <Route path="/payment" element={<PaymentGatewayPage />} />
+    <Route path="/payment" element={<PaymentMethod />} />
     <Route path="/cart" element={<CartPage />} />
     <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
     <Route path="/terms" element={<TermsConditionsPage />} />

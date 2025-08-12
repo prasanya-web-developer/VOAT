@@ -620,7 +620,7 @@ class UserDashboard extends Component {
         }));
 
         this.setState({ bookings: enrichedBookings }, () => {
-          this.updateStats();
+          this.updateStats(); // This is crucial for updating the sidebar count
         });
       } else {
         console.error("Failed to fetch bookings");
@@ -630,7 +630,9 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error fetching bookings:", error);
-      this.setState({ bookings: [] });
+      this.setState({ bookings: [] }, () => {
+        this.updateStats(); // Also update stats on error
+      });
     }
   };
 
@@ -1133,7 +1135,7 @@ class UserDashboard extends Component {
                       }`}
                     ></i>
                   </div>
-                  <div className="notification-content">
+                  <div className="userdashboard-notification-content">
                     <div className="notification-message">
                       {notification.message}
                     </div>
@@ -3007,7 +3009,6 @@ class UserDashboard extends Component {
     );
   }
 
-  // Add these methods to handle booking details overlay
   openBookingDetails = (booking) => {
     this.setState({
       selectedBooking: booking,
@@ -3022,7 +3023,6 @@ class UserDashboard extends Component {
     });
   };
 
-  // Add method to handle booking cancellation
   handleCancelBooking = async (bookingId) => {
     const confirmCancel = window.confirm(
       "Are you sure you want to cancel this booking? The client will be notified."
@@ -3932,7 +3932,7 @@ class UserDashboard extends Component {
                 onClick={() => this.handleTabChange("orders")}
               >
                 <i className="fas fa-clipboard-list nav-icon"></i>
-                <span className="nav-text">My Orders</span>
+                <span className="nav-text">My Bookings</span>
                 {this.state.stats.activeOrders > 0 && (
                   <span className="nav-badge">
                     {this.state.stats.activeOrders}

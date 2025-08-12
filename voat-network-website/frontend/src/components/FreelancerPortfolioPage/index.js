@@ -1,7 +1,31 @@
 import React, { Component } from "react";
-import { X } from "lucide-react";
+import {
+  X,
+  Image,
+  Video,
+  Upload,
+  Eye,
+  Trash2,
+  Tag,
+  Calendar,
+  Plus,
+  User,
+  Settings,
+  MessageCircle,
+  Phone,
+  Star,
+  Mail,
+  Briefcase,
+  DollarSign,
+  ShoppingCart,
+  Zap,
+  Lock,
+  Target,
+  Lightbulb,
+} from "lucide-react";
 import NavBar from "../Navbar";
 import Footer from "../Footer";
+
 import "./index.css";
 
 class MyPortfolio extends Component {
@@ -246,7 +270,7 @@ class MyPortfolio extends Component {
       }
 
       const data = await response.json();
-      const { user, portfolio, services = [] } = data;
+      const { user, portfolio, services = [], works = [] } = data; // Add works here
 
       if (!user) {
         throw new Error("User data not found in server response");
@@ -313,7 +337,24 @@ class MyPortfolio extends Component {
         isOwnProfile: isOwnProfile,
       };
 
-      const videos = data.videos || [];
+      // Process works data and convert to videos format for compatibility
+      const processedWorks = works.map((work) => ({
+        id: work.id || work._id,
+        url:
+          work.url && work.url.startsWith("/")
+            ? `${this.state.baseUrl}${work.url}`
+            : work.url,
+        thumbnail:
+          work.type === "image"
+            ? work.url && work.url.startsWith("/")
+              ? `${this.state.baseUrl}${work.url}`
+              : work.url
+            : work.thumbnail || "/api/placeholder/150/150",
+        title: work.title || "Untitled Work",
+        type: work.type || "image",
+        serviceName: work.serviceName || "",
+        uploadedDate: work.uploadedDate || new Date().toISOString(),
+      }));
 
       this.setState({
         portfolioData,
@@ -327,7 +368,7 @@ class MyPortfolio extends Component {
         },
         services: serviceNames,
         serviceData: serviceData,
-        videos: videos,
+        videos: processedWorks, // Use processed works data
         isLoading: false,
         activeServiceTab: firstServiceKey,
       });
@@ -338,7 +379,7 @@ class MyPortfolio extends Component {
         `serviceData_${userId}`,
         JSON.stringify(serviceData)
       );
-      localStorage.setItem(`videos_${userId}`, JSON.stringify(videos));
+      localStorage.setItem(`videos_${userId}`, JSON.stringify(processedWorks));
     } catch (error) {
       console.error("Error fetching portfolio data:", error);
       this.setState({ isLoading: false });
@@ -898,16 +939,22 @@ class MyPortfolio extends Component {
       return;
     }
 
+    // Show loading state
+    this.setState({ isLoading: true });
+
     const formData = new FormData();
     formData.append("workFile", file); // This key matches your backend multer config
     formData.append("userId", userData.id);
-    formData.append("title", file.name);
+    formData.append("title", file.name.split(".")[0]); // Remove file extension from title
 
     try {
-      const response = await fetch(`${this.state.baseUrl}/api/add-work`, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        `${this.state.baseUrl}/api/portfolio/add-work`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       const result = await response.json();
       if (!response.ok || !result.success) {
@@ -916,31 +963,82 @@ class MyPortfolio extends Component {
 
       const newWorkItem = {
         id: result.workId,
-        url: `${this.state.baseUrl}${result.workUrl}`,
-        thumbnail: file.type.startsWith("image/")
-          ? `${this.state.baseUrl}${result.workUrl}`
-          : "URL_TO_A_DEFAULT_VIDEO_ICON.png",
-        title: file.name,
-        type: file.type.startsWith("video/") ? "video" : "image",
+        url: result.workUrl.startsWith("http")
+          ? result.workUrl
+          : `${this.state.baseUrl}${result.workUrl}`,
+        thumbnail:
+          result.workType === "image"
+            ? result.workUrl.startsWith("http")
+              ? result.workUrl
+              : `${this.state.baseUrl}${result.workUrl}`
+            : result.workThumbnail || "/api/placeholder/150/150",
+        title: result.workId ? file.name.split(".")[0] : file.name,
+        type:
+          result.workType ||
+          (file.type.startsWith("video/") ? "video" : "image"),
+        serviceName: "",
+        uploadedDate: new Date().toISOString(),
       };
 
       // Update the state to show the new work immediately
       this.setState((prevState) => ({
         videos: [...prevState.videos, newWorkItem],
+        isLoading: false,
       }));
+
+      // Reset file input
+      e.target.value = "";
 
       alert("Work added successfully!");
     } catch (error) {
       console.error("Error adding work:", error);
+      this.setState({ isLoading: false });
       alert(`Error: ${error.message}`);
     }
   };
 
-  handleRemoveVideo = (videoId) => {
-    const updatedVideos = this.state.videos.filter(
-      (video) => video.id !== videoId
-    );
-    this.setState({ videos: updatedVideos });
+  handleRemoveVideo = async (workId) => {
+    if (!window.confirm("Are you sure you want to remove this work?")) {
+      return;
+    }
+
+    const userData = JSON.parse(localStorage.getItem("user"));
+    if (!userData?.id) {
+      alert("You must be logged in to remove work.");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${this.state.baseUrl}/api/portfolio/remove-work`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: userData.id,
+            workId: workId,
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to remove work.");
+      }
+
+      // Update the state to remove the work immediately
+      const updatedVideos = this.state.videos.filter(
+        (video) => video.id !== workId
+      );
+
+      this.setState({ videos: updatedVideos });
+      alert("Work removed successfully!");
+    } catch (error) {
+      console.error("Error removing work:", error);
+      alert(`Error: ${error.message}`);
+    }
   };
 
   handleTabChange = (tab) => {
@@ -1147,14 +1245,8 @@ class MyPortfolio extends Component {
               </p>
 
               <div className="hero-meta">
-                {/* <div className="meta-item">
-                  <span className="meta-icon">📧</span>
-                  <span className="meta-text">
-                    {portfolioData.email || "email@example.com"}
-                  </span>
-                </div> */}
                 <div className="meta-item">
-                  <span className="meta-icon">⭐</span>
+                  <Star className="meta-icon" size={16} />
                   <span className="meta-text">
                     {portfolioData.experience || "N/A"} years of experience
                   </span>
@@ -1389,7 +1481,7 @@ class MyPortfolio extends Component {
         <div className="modern-card about-section">
           <div className="card-header">
             <div className="header-content">
-              <span className="header-icon">👤</span>
+              <User className="header-icon" size={20} />
               <h2 className="card-title">About Me</h2>
             </div>
           </div>
@@ -1404,7 +1496,7 @@ class MyPortfolio extends Component {
         <div className="modern-card services-section">
           <div className="card-header">
             <div className="header-content">
-              <span className="header-icon">🛠️</span>
+              <Settings className="header-icon" size={20} />
               <h2 className="card-title">My Services</h2>
             </div>
             {isOwnProfile && services.length > 0 && (
@@ -1489,12 +1581,12 @@ class MyPortfolio extends Component {
         <div className="modern-card portfolio-section">
           <div className="card-header">
             <div className="header-content">
-              <span className="header-icon">🎨</span>
+              <Image className="header-icon" size={20} />
               <h2 className="card-title">Portfolio Gallery</h2>
             </div>
             {isOwnProfile && (
               <label className="header-action-btn" htmlFor="portfolio-upload">
-                <span className="btn-icon">📎</span>
+                <Upload className="btn-icon" size={16} />
                 Upload
                 <input
                   type="file"
@@ -1510,26 +1602,97 @@ class MyPortfolio extends Component {
           <div className="card-body">
             {videos.length > 0 ? (
               <div className="portfolio-grid">
-                {videos.map((video) => (
-                  <div key={video.id} className="portfolio-item">
+                {videos.map((work) => (
+                  <div key={work.id} className="portfolio-item">
                     <div className="portfolio-thumbnail">
-                      <img src={video.thumbnail} alt="Portfolio work" />
-                      <div className="portfolio-overlay">
-                        <button
-                          className="portfolio-play-btn"
-                          onClick={() => window.open(video.url, "_blank")}
-                          title="View Work"
-                        >
-                          <span className="play-icon">▶</span>
-                        </button>
-                        {isOwnProfile && (
-                          <button
-                            className="portfolio-remove-btn"
-                            onClick={() => this.handleRemoveVideo(video.id)}
-                            title="Remove Work"
+                      {work.type === "video" ? (
+                        <div className="video-container">
+                          <video
+                            src={work.url}
+                            className="portfolio-media"
+                            preload="metadata"
+                            onError={(e) => {
+                              console.error(
+                                "Video failed to load:",
+                                e.target.src
+                              );
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
+                          />
+                          <div
+                            className="media-error"
+                            style={{ display: "none" }}
                           >
-                            <span className="remove-icon">🗑️</span>
+                            <Video size={24} />
+                            <p>Video unavailable</p>
+                          </div>
+                          <div className="media-type-badge video">
+                            <Video size={12} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="image-container">
+                          <img
+                            src={work.url || work.thumbnail}
+                            alt={work.title || "Portfolio work"}
+                            className="portfolio-media"
+                            onError={(e) => {
+                              console.error(
+                                "Image failed to load:",
+                                e.target.src
+                              );
+                              e.target.onerror = null;
+                              e.target.src = "/api/placeholder/150/150";
+                            }}
+                          />
+                          <div className="media-type-badge image">
+                            <Image size={12} />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="portfolio-overlay">
+                        <div className="portfolio-actions">
+                          <button
+                            className="portfolio-action-btn view"
+                            onClick={() => window.open(work.url, "_blank")}
+                            title="View Work"
+                          >
+                            <Eye className="action-icon" size={16} />
                           </button>
+                          {isOwnProfile && (
+                            <button
+                              className="portfolio-action-btn remove"
+                              onClick={() => this.handleRemoveVideo(work.id)}
+                              title="Remove Work"
+                            >
+                              <Trash2 className="action-icon" size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="portfolio-info">
+                      <h4 className="work-title">
+                        {work.title || "Untitled Work"}
+                      </h4>
+                      {work.serviceName && (
+                        <p className="work-service">
+                          <Tag className="service-icon" size={12} />
+                          {work.serviceName}
+                        </p>
+                      )}
+                      <div className="work-meta">
+                        <span className="work-type">
+                          {work.type === "video" ? "Video" : "Image"}
+                        </span>
+                        {work.uploadedDate && (
+                          <span className="work-date">
+                            <Calendar className="date-icon" size={10} />
+                            {new Date(work.uploadedDate).toLocaleDateString()}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1538,7 +1701,9 @@ class MyPortfolio extends Component {
               </div>
             ) : (
               <div className="empty-state">
-                <div className="empty-icon">📸</div>
+                <div className="empty-icon">
+                  <Image size={48} className="empty-icon-svg" />
+                </div>
                 <h3 className="empty-title">No Portfolio Items</h3>
                 <p className="empty-text">
                   {isOwnProfile
@@ -1553,7 +1718,9 @@ class MyPortfolio extends Component {
         {/* Call to Action Section */}
         <div className="modern-card cta-section">
           <div className="cta-content">
-            <div className="cta-icon">💼</div>
+            <div className="cta-icon">
+              <Briefcase size={32} />
+            </div>
             <h2 className="cta-title">Ready to Work Together?</h2>
             <p className="cta-description">
               Let's discuss your project and bring your ideas to life with
@@ -1561,11 +1728,11 @@ class MyPortfolio extends Component {
             </p>
             <div className="cta-actions">
               <button className="cta-btn primary">
-                <span className="btn-icon">💬</span>
+                <MessageCircle className="btn-icon" size={16} />
                 Start Conversation
               </button>
               <button className="cta-btn secondary">
-                <span className="btn-icon">📞</span>
+                <Phone className="btn-icon" size={16} />
                 Schedule Call
               </button>
             </div>
@@ -1600,8 +1767,11 @@ class MyPortfolio extends Component {
           <div className="modern-pricing-card">
             <div className="pricing-header">
               <div className="header-content">
-                <span className="header-icon">💰</span>
-                <h2 className="pricing-title">Service Pricing</h2>
+                <DollarSign className="header-icon" size={20} />
+                <h2 className="pricing-title">Pricing Plans</h2>
+              </div>
+              <div className="service-badge">
+                <span className="badge-text">{serviceName}</span>
               </div>
             </div>
             <div className="pricing-body">
@@ -1676,7 +1846,7 @@ class MyPortfolio extends Component {
                                 ₹{option.price}
                               </div>
                               <div className="option-delivery">
-                                <span className="delivery-icon">📆</span>
+                                <Calendar className="delivery-icon" size={14} />
                                 <span className="delivery-text">
                                   {option.timeFrame}
                                 </span>
@@ -1707,7 +1877,9 @@ class MyPortfolio extends Component {
 
                 <div className="pricing-info">
                   <div className="info-card">
-                    <div className="info-icon">💡</div>
+                    <div className="info-icon">
+                      <Lightbulb size={20} />
+                    </div>
                     <div className="info-content">
                       <h4 className="info-title">Custom Requirements?</h4>
                       <p className="info-text">
@@ -1743,9 +1915,7 @@ class MyPortfolio extends Component {
                         onClick={this.handleAddToCart}
                         disabled={!selectedPricing || isAddingToCart}
                       >
-                        <span className="btn-icon">
-                          {isAddingToCart ? "⏳" : "🛒"}
-                        </span>
+                        <ShoppingCart className="btn-icon" size={16} />
                         {isAddingToCart ? "Adding..." : "Add to Cart"}
                       </button>
                       <button
@@ -1753,7 +1923,7 @@ class MyPortfolio extends Component {
                         onClick={this.handleBookNow}
                         disabled={!selectedPricing || isAddingToCart}
                       >
-                        <span className="btn-icon">⚡</span>
+                        <Zap className="btn-icon" size={16} />
                         Book Now
                       </button>
                     </>

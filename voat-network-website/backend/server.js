@@ -479,6 +479,62 @@ const NotificationSchema = new mongoose.Schema(
 
 const Notification = mongoose.model("Notification", NotificationSchema);
 
+const Razorpay = require("razorpay");
+const crypto = require("crypto");
+
+// Initialize Razorpay with your credentials
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+console.log(
+  "✅ Razorpay initialized with Key ID:",
+  process.env.RAZORPAY_KEY_ID ? "Present" : "Missing"
+);
+
+// Payment Transaction Schema
+const PaymentTransactionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    orderId: { type: String, required: true },
+    paymentId: { type: String },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
+    amount: { type: Number, required: true },
+    currency: { type: String, default: "INR" },
+    status: {
+      type: String,
+      enum: ["created", "attempted", "paid", "failed", "cancelled"],
+      default: "created",
+    },
+    paymentMethod: { type: String },
+    items: [
+      {
+        serviceId: String,
+        serviceName: String,
+        freelancerName: String,
+        amount: Number,
+      },
+    ],
+    upiTransactionId: { type: String },
+    qrCodeData: { type: String },
+    failureReason: { type: String },
+    metadata: { type: Object },
+  },
+  { timestamps: true }
+);
+
+const PaymentTransaction = mongoose.model(
+  "PaymentTransaction",
+  PaymentTransactionSchema
+);
+
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log("Headers:", req.headers);
@@ -2618,55 +2674,55 @@ app.get("/api/debug/users-voat", async (req, res) => {
   }
 });
 
-app.post("/api/wishlist/:userId", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const wishlistItems = req.body;
+// app.post("/api/wishlist/:userId", async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+//     const wishlistItems = req.body;
 
-    console.log("=== BACKEND WISHLIST UPDATE ===");
-    console.log("User ID received:", userId);
-    console.log("Wishlist items received:", wishlistItems);
-    console.log("Request URL:", req.originalUrl);
+//     console.log("=== BACKEND WISHLIST UPDATE ===");
+//     console.log("User ID received:", userId);
+//     console.log("Wishlist items received:", wishlistItems);
+//     console.log("Request URL:", req.originalUrl);
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      console.error("Invalid user ID format:", userId);
-      return res.status(400).json({
-        success: false,
-        error: "Invalid user ID format",
-      });
-    }
+//     if (!mongoose.Types.ObjectId.isValid(userId)) {
+//       console.error("Invalid user ID format:", userId);
+//       return res.status(400).json({
+//         success: false,
+//         error: "Invalid user ID format",
+//       });
+//     }
 
-    if (!Array.isArray(wishlistItems)) {
-      console.error("Invalid wishlist data:", typeof wishlistItems);
-      return res.status(400).json({
-        success: false,
-        error: "Wishlist data must be an array",
-      });
-    }
+//     if (!Array.isArray(wishlistItems)) {
+//       console.error("Invalid wishlist data:", typeof wishlistItems);
+//       return res.status(400).json({
+//         success: false,
+//         error: "Wishlist data must be an array",
+//       });
+//     }
 
-    // Update or create wishlist
-    const updatedWishlist = await Wishlist.findOneAndUpdate(
-      { userId: userId },
-      { $set: { items: wishlistItems } },
-      { new: true, upsert: true }
-    );
+//     // Update or create wishlist
+//     const updatedWishlist = await Wishlist.findOneAndUpdate(
+//       { userId: userId },
+//       { $set: { items: wishlistItems } },
+//       { new: true, upsert: true }
+//     );
 
-    console.log("Wishlist updated successfully:", updatedWishlist._id);
+//     console.log("Wishlist updated successfully:", updatedWishlist._id);
 
-    res.status(200).json({
-      success: true,
-      message: "Wishlist updated successfully",
-      count: updatedWishlist.items.length,
-    });
-  } catch (error) {
-    console.error("Backend wishlist error:", error);
-    res.status(500).json({
-      success: false,
-      error: "Internal Server Error",
-      details: error.message,
-    });
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Wishlist updated successfully",
+//       count: updatedWishlist.items.length,
+//     });
+//   } catch (error) {
+//     console.error("Backend wishlist error:", error);
+//     res.status(500).json({
+//       success: false,
+//       error: "Internal Server Error",
+//       details: error.message,
+//     });
+//   }
+// });
 
 app.post("/api/wishlist/:userId", async (req, res) => {
   try {
@@ -4934,6 +4990,231 @@ app.get("/api/portfolio/:userId/works/:serviceName?", async (req, res) => {
   }
 });
 
+// =====  RAZORPAY PAYMENT ENDPOINTS =====
+
+// Create Razorpay Order
+app.post("/api/payment/create-razorpay-order", async (req, res) => {
+  try {
+    const { userId, amount, currency = "INR", items } = req.body;
+
+    console.log("=== CREATE RAZORPAY ORDER ===");
+    console.log("User ID:", userId);
+    console.log("Amount:", amount);
+
+    if (!userId || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID and amount are required",
+      });
+    }
+
+    if (amount < 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Minimum payment amount is ₹1",
+      });
+    }
+
+    // Generate unique order ID
+    const orderId = `ORDER_${Date.now()}_${userId.slice(-4)}`;
+
+    // Create Razorpay order
+    const razorpayOrder = await razorpay.orders.create({
+      amount: amount, // Amount in paise
+      currency: currency,
+      receipt: orderId,
+      notes: {
+        userId: userId,
+        itemCount: items ? items.length : 0,
+      },
+    });
+
+    // Save transaction to database
+    const transaction = new PaymentTransaction({
+      userId,
+      orderId,
+      razorpayOrderId: razorpayOrder.id,
+      amount: amount / 100, // Store in rupees
+      currency,
+      status: "created",
+      paymentMethod: "razorpay",
+      items: items || [],
+    });
+
+    await transaction.save();
+
+    console.log("Razorpay order created:", razorpayOrder.id);
+
+    res.status(200).json({
+      success: true,
+      id: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      key: process.env.RAZORPAY_KEY_ID,
+      orderId: orderId,
+      transactionId: transaction._id,
+    });
+  } catch (error) {
+    console.error("Error creating Razorpay order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create payment order",
+      error: error.message,
+    });
+  }
+});
+
+// Verify Razorpay Payment
+app.post("/api/payment/verify-payment", async (req, res) => {
+  try {
+    const {
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      userId,
+    } = req.body;
+
+    console.log("=== VERIFY RAZORPAY PAYMENT ===");
+    console.log("Payment ID:", razorpay_payment_id);
+    console.log("Order ID:", razorpay_order_id);
+
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing payment verification parameters",
+      });
+    }
+
+    // Verify signature
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    const isValid = expectedSignature === razorpay_signature;
+
+    if (!isValid) {
+      await PaymentTransaction.findOneAndUpdate(
+        { razorpayOrderId: razorpay_order_id },
+        {
+          status: "failed",
+          failureReason: "Invalid signature",
+        }
+      );
+
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
+    }
+
+    // Get payment details from Razorpay
+    const payment = await razorpay.payments.fetch(razorpay_payment_id);
+
+    // Update transaction in database
+    const transaction = await PaymentTransaction.findOneAndUpdate(
+      { razorpayOrderId: razorpay_order_id },
+      {
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        status: payment.status === "captured" ? "paid" : "attempted",
+        paymentMethod: payment.method,
+        metadata: {
+          bank: payment.bank,
+          wallet: payment.wallet,
+          vpa: payment.vpa,
+        },
+      },
+      { new: true }
+    );
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found",
+      });
+    }
+
+    // Create notification for successful payment
+    await createNotification({
+      userId: userId,
+      type: "payment",
+      title: "Payment Successful",
+      message: `Your payment of ₹${transaction.amount} has been processed successfully`,
+      relatedId: transaction._id.toString(),
+      metadata: {
+        paymentId: razorpay_payment_id,
+        amount: transaction.amount,
+        method: payment.method,
+      },
+    });
+
+    console.log("Payment verified successfully:", razorpay_payment_id);
+
+    res.status(200).json({
+      success: true,
+      message: "Payment verified successfully",
+      transaction: transaction,
+    });
+  } catch (error) {
+    console.error("Error verifying payment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Payment verification failed",
+      error: error.message,
+    });
+  }
+});
+
+// Simple webhook endpoint
+app.post(
+  "/api/payment/webhook/razorpay",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      const webhookSignature = req.headers["x-razorpay-signature"];
+      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      console.log("🔔 Webhook received from Razorpay");
+
+      if (!webhookSecret) {
+        console.error("❌ Webhook secret not configured");
+        return res.status(500).send("Webhook secret not configured");
+      }
+
+      // Verify webhook signature
+      const expectedSignature = crypto
+        .createHmac("sha256", webhookSecret)
+        .update(req.body)
+        .digest("hex");
+
+      if (expectedSignature !== webhookSignature) {
+        console.error("❌ Invalid webhook signature");
+        return res.status(400).send("Invalid signature");
+      }
+
+      const event = JSON.parse(req.body);
+      console.log("✅ Webhook verified, event:", event.event);
+
+      res.status(200).send("OK");
+    } catch (error) {
+      console.error("❌ Webhook error:", error);
+      res.status(500).send("Webhook error");
+    }
+  }
+);
+
+console.log("✅ Razorpay Payment API endpoints loaded successfully");
+
+app.get("/api/test-razorpay", (req, res) => {
+  res.json({
+    razorpay_configured: !!process.env.RAZORPAY_KEY_ID,
+    key_id: process.env.RAZORPAY_KEY_ID,
+    webhook_secret_configured: !!process.env.RAZORPAY_WEBHOOK_SECRET,
+    server_time: new Date().toISOString(),
+  });
+});
+
 // Debug endpoint to check VOAT IDs for all users
 app.get("/api/debug/check-voat-ids", async (req, res) => {
   try {
@@ -5035,6 +5316,30 @@ app.get("/api/debug/routes", (req, res) => {
   });
   res.json(routes);
 });
+
+// Validate Razorpay configuration
+const validateRazorpayConfig = () => {
+  const requiredEnvVars = {
+    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
+    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
+    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
+  };
+
+  const missing = Object.entries(requiredEnvVars)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    console.error("❌ Missing Razorpay environment variables:", missing);
+    return false;
+  }
+
+  console.log("✅ Razorpay configuration validated");
+  return true;
+};
+
+// Validate on startup
+validateRazorpayConfig();
 
 //Global error handler middleware
 app.use((err, req, res, next) => {

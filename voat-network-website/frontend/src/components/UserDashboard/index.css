@@ -856,10 +856,26 @@
   color: white;
 }
 
-.notification-content {
+.userdashboard-notification-content {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
+  flex-direction: column;
+  align-items: start !important;
+  /* gap: 2px; */
+}
+
+.userdashboard-notification-content {
+  flex: 1;
+}
+
+.userdashboard-notification-content .notification-message {
+  font-size: 14px;
+  margin-bottom: var(--spacing-1);
+  font-weight: 500;
+}
+
+.userdashboard-notification-content .notification-time {
+  font-size: 12px;
+  color: var(--text-light);
 }
 
 @keyframes slideInRight {
@@ -1179,7 +1195,7 @@
 }
 
 .notification-list {
-  max-height: 300px;
+  /* max-height: 300px; */
   overflow-y: auto;
 }
 

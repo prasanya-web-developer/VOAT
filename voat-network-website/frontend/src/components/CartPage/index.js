@@ -617,12 +617,11 @@ class CartSidebar extends Component {
     }
   };
 
-  // Handle checkout for selected items only
   handleCheckout = async () => {
     const { cartItems, selectedItems, currentUserId } = this.state;
 
     if (!currentUserId) {
-      alert("Please log in to proceed with checkout");
+      alert("Please log in to proceed with payment");
       return;
     }
 
@@ -636,121 +635,15 @@ class CartSidebar extends Component {
       return;
     }
 
-    console.log("=== PROCEEDING TO CHECKOUT ===");
-    console.log("Selected items:", Array.from(selectedItems));
+    // Store selected items for payment page
+    const selectedCartItems = cartItems.filter((item) =>
+      selectedItems.has(item.id)
+    );
 
-    this.setState({ isCheckingOut: true });
+    localStorage.setItem("checkout_items", JSON.stringify(selectedCartItems));
 
-    try {
-      const baseUrl = getBaseUrl();
-      const response = await fetch(`${baseUrl}/api/cart/checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Origin: window.location.origin,
-        },
-        body: JSON.stringify({
-          userId: currentUserId,
-          selectedItems: Array.from(selectedItems),
-        }),
-        signal: AbortSignal.timeout(15000), // 15 second timeout for checkout
-      });
-
-      console.log("Checkout response status:", response.status);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(
-            "Checkout service not available. The API endpoint may be missing. Please contact support."
-          );
-        } else if (response.status >= 500) {
-          throw new Error("Server error during checkout. Please try again.");
-        } else if (response.status === 400) {
-          throw new Error(
-            "Invalid checkout request. Please check your cart items."
-          );
-        }
-
-        // Try to get error details from response
-        let errorMessage = `Checkout failed: HTTP ${response.status}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.message) {
-            errorMessage = errorData.message;
-          }
-        } catch (e) {
-          // Ignore JSON parse errors
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      // Check content type
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
-      }
-
-      const result = await response.json();
-      console.log("=== CHECKOUT SUCCESS ===", result);
-
-      if (!result.success) {
-        throw new Error(result.message || "Checkout failed");
-      }
-
-      // Remove checked out items from local state
-      this.setState((prevState) => ({
-        cartItems: prevState.cartItems.filter(
-          (item) => !selectedItems.has(item.id)
-        ),
-        selectedItems: new Set(),
-        isCheckingOut: false,
-      }));
-
-      // Show success message
-      const orderCount = result.orders
-        ? result.orders.length
-        : selectedItems.size;
-      alert(
-        `Checkout successful! ${orderCount} orders created. Check your "My Orders" section to track progress.`
-      );
-
-      // Trigger dashboard orders refresh if callback exists
-      if (this.props.onOrdersUpdate) {
-        this.props.onOrdersUpdate();
-      }
-
-      // Dispatch custom event for dashboard to listen
-      window.dispatchEvent(
-        new CustomEvent("ordersUpdated", {
-          detail: { newOrders: result.orders },
-        })
-      );
-
-      // Close cart sidebar after successful checkout
-      if (this.props.onClose) {
-        this.props.onClose();
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-
-      let errorMessage = "Checkout failed";
-      if (error.name === "TimeoutError") {
-        errorMessage = "Checkout timed out. Please try again.";
-      } else if (error.message.includes("Failed to fetch")) {
-        errorMessage =
-          "Cannot connect to server. Please check your connection.";
-      } else if (error.message.includes("API endpoint may be missing")) {
-        errorMessage =
-          "Checkout service is not available. Please contact support.";
-      } else {
-        errorMessage = error.message;
-      }
-
-      alert(errorMessage);
-      this.setState({ isCheckingOut: false });
-    }
+    // Redirect to payment page
+    window.location.href = "/payment";
   };
 
   render() {

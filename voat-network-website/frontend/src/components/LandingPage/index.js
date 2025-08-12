@@ -190,17 +190,8 @@ class LandingPage extends Component {
             (this.state.currentSlide + 1) % this.state.publicImages.length,
         });
       }, 5000);
-    } else if (userType === "freelancer") {
-      // Freelancer carousel - UPDATED
-      this.freelancerSlideInterval = setInterval(() => {
-        this.nextFreelancerSlide();
-      }, 3000);
-    } else if (userType === "client") {
-      // Client carousel - UPDATED
-      this.clientSlideInterval = setInterval(() => {
-        this.nextClientSlide();
-      }, 3000);
     }
+    // No carousel for freelancers and clients - they only get hero text
   };
 
   // Public carousel methods
@@ -222,77 +213,6 @@ class LandingPage extends Component {
           (this.state.currentSlide + 1) % this.state.publicImages.length,
       });
     }, 5000);
-  };
-
-  // Freelancer carousel methods - UPDATED
-  nextFreelancerSlide = () => {
-    const newIndex =
-      (this.state.currentFreelancerSlide + 1) %
-      this.state.freelancerImages.length;
-    this.setState({ currentFreelancerSlide: newIndex }, () => {
-      // Update slide classes after state update
-      const slides = document.querySelectorAll(
-        ".landing-page-client-banner .landing-page-carousel-slide"
-      );
-      if (slides.length > 0) {
-        this.updateSlideClasses(slides, newIndex);
-      }
-    });
-  };
-
-  setFreelancerSlide = (index) => {
-    if (this.freelancerSlideInterval) {
-      clearInterval(this.freelancerSlideInterval);
-    }
-
-    this.setState({ currentFreelancerSlide: index }, () => {
-      // Update slide classes after state update
-      const slides = document.querySelectorAll(
-        ".landing-page-client-banner .landing-page-carousel-slide"
-      );
-      if (slides.length > 0) {
-        this.updateSlideClasses(slides, index);
-      }
-    });
-
-    this.freelancerSlideInterval = setInterval(() => {
-      this.nextFreelancerSlide();
-    }, 3000);
-  };
-
-  // Client carousel methods - UPDATED
-  nextClientSlide = () => {
-    const newIndex =
-      (this.state.currentClientSlide + 1) % this.state.clientImages.length;
-    this.setState({ currentClientSlide: newIndex }, () => {
-      // Update slide classes after state update
-      const slides = document.querySelectorAll(
-        ".landing-page-client-banner .landing-page-carousel-slide"
-      );
-      if (slides.length > 0) {
-        this.updateSlideClasses(slides, newIndex);
-      }
-    });
-  };
-
-  setClientSlide = (index) => {
-    if (this.clientSlideInterval) {
-      clearInterval(this.clientSlideInterval);
-    }
-
-    this.setState({ currentClientSlide: index }, () => {
-      // Update slide classes after state update
-      const slides = document.querySelectorAll(
-        ".landing-page-client-banner .landing-page-carousel-slide"
-      );
-      if (slides.length > 0) {
-        this.updateSlideClasses(slides, index);
-      }
-    });
-
-    this.clientSlideInterval = setInterval(() => {
-      this.nextClientSlide();
-    }, 3000);
   };
 
   isElementInViewport = (el) => {
@@ -604,15 +524,69 @@ class LandingPage extends Component {
       };
     } else if (userType === "freelancer") {
       return {
-        title: null, // No title for freelancer
-        description: null, // No description for freelancer
-        buttons: null, // No buttons for freelancer
+        title: (
+          <>
+            Welcome Back,
+            <br />
+            <span className="landing-page-text-gradient">Freelancer!</span>
+            <br />
+            Showcase Your{" "}
+            <span className="landing-page-text-gradient">Skills</span>
+          </>
+        ),
+        description:
+          "Connect with clients, showcase your portfolio, and grow your freelance business with our comprehensive platform.",
+        buttons: (
+          <div className="landing-page-hero-buttons">
+            <Link
+              to="/services"
+              className="landing-page-button landing-page-button-primary"
+            >
+              Browse Projects
+              <ArrowRight className="landing-page-button-icon" />
+            </Link>
+            <Link
+              to="/user-dashboard"
+              className="landing-page-button landing-page-button-outline"
+            >
+              <Briefcase className="landing-page-button-icon" />
+              My Dashboard
+            </Link>
+          </div>
+        ),
       };
     } else if (userType === "client") {
       return {
-        title: null, // No title for client
-        description: null, // No description for client
-        buttons: null, // No buttons for client
+        title: (
+          <>
+            Welcome Back,
+            <br />
+            <span className="landing-page-text-gradient">Client!</span>
+            <br />
+            Find Perfect{" "}
+            <span className="landing-page-text-gradient">Talent</span>
+          </>
+        ),
+        description:
+          "Discover skilled professionals, manage your projects, and bring your ideas to life with our network of experts.",
+        buttons: (
+          <div className="landing-page-hero-buttons">
+            <Link
+              to="/portfolio-list"
+              className="landing-page-button landing-page-button-primary"
+            >
+              Find Freelancers
+              <Search className="landing-page-button-icon" />
+            </Link>
+            <Link
+              to="/user-dashboard"
+              className="landing-page-button landing-page-button-outline"
+            >
+              <Briefcase className="landing-page-button-icon" />
+              My Dashboard
+            </Link>
+          </div>
+        ),
       };
     } else {
       return {
@@ -854,15 +828,9 @@ class LandingPage extends Component {
           <NavBar />
         </ErrorBoundary>
         <div className="landing-page">
-          <section
-            className={`landing-page-hero ${
-              this.getUserType() === "client" ? "client-hero" : ""
-            }`}
-          >
-            {/* Conditional Banner Rendering */}
-
-            {!this.state.isLoggedIn ? (
-              // Public users - carousel slides
+          <section className="landing-page-hero">
+            {/* Only show carousel for public users */}
+            {!this.state.isLoggedIn && (
               <>
                 <div className="landing-page-carousel-slides-container">
                   {this.state.publicImages.map((image, index) => (
@@ -890,92 +858,28 @@ class LandingPage extends Component {
                   ))}
                 </div>
               </>
-            ) : this.getUserType() === "freelancer" ? (
-              // Freelancer carousel
-              <div className="landing-page-client-banner">
-                <div className="landing-page-carousel-slides-container">
-                  {this.state.freelancerImages.map((image, index) => (
-                    <div key={index} className="landing-page-carousel-slide">
-                      <img
-                        src={image}
-                        alt={`Freelancer Banner ${index + 1}`}
-                        style={{
-                          width: "100%",
-                          height: "auto",
-                          display: "block",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="landing-page-carousel-indicators">
-                  {this.state.freelancerImages.map((_, index) => (
-                    <button
-                      key={index}
-                      className={`landing-page-indicator ${
-                        index === this.state.currentFreelancerSlide
-                          ? "active"
-                          : ""
-                      }`}
-                      onClick={() => this.setFreelancerSlide(index)}
-                      aria-label={`Go to freelancer slide ${index + 1}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : this.getUserType() === "client" ? (
-              // Client carousel
-              <div className="landing-page-client-banner">
-                <div className="landing-page-carousel-slides-container">
-                  {this.state.clientImages.map((image, index) => (
-                    <div key={index} className="landing-page-carousel-slide">
-                      <img
-                        src={image}
-                        alt={`Client Banner ${index + 1}`}
-                        style={{
-                          width: "100%",
-                          height: "auto",
-                          display: "block",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="landing-page-carousel-indicators">
-                  {this.state.clientImages.map((_, index) => (
-                    <button
-                      key={index}
-                      className={`landing-page-indicator ${
-                        index === this.state.currentClientSlide ? "active" : ""
-                      }`}
-                      onClick={() => this.setClientSlide(index)}
-                      aria-label={`Go to client slide ${index + 1}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : (
-              // Default logged-in user banner
-              <div className="landing-page-single-banner">
-                <div className="landing-page-carousel-overlay"></div>
-                <img src={this.state.publicImages[0]} alt="Welcome Dashboard" />
-              </div>
             )}
 
-            {/* Hero Content - Only show for non-client users */}
-            {this.getUserType() !== "client" && (
-              <div className="landing-page-hero-content-wrapper">
-                <div className="landing-page-hero-content">
-                  <h1 className="landing-page-hero-title">
-                    {this.renderHeroContent().title}
-                  </h1>
-                  <p className="landing-page-hero-description">
-                    {this.renderHeroContent().description}
-                  </p>
-                  {this.renderHeroContent().buttons}
+            {/* For freelancers and clients, show gradient background instead of carousel */}
+            {this.state.isLoggedIn &&
+              (userType === "freelancer" || userType === "client") && (
+                <div className="landing-page-gradient-hero">
+                  <div className="landing-page-gradient-overlay"></div>
                 </div>
+              )}
+
+            {/* Hero Content - Show for all users */}
+            <div className="landing-page-hero-content-wrapper">
+              <div className="landing-page-hero-content">
+                <h1 className="landing-page-hero-title">
+                  {this.renderHeroContent().title}
+                </h1>
+                <p className="landing-page-hero-description">
+                  {this.renderHeroContent().description}
+                </p>
+                {this.renderHeroContent().buttons}
               </div>
-            )}
+            </div>
 
             {/* Service content card - only show for public users */}
             {!this.state.isLoggedIn && (

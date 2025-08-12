@@ -2635,3 +2635,108 @@ body {
     will-change: transform;
   }
 }
+
+.landing-page-gradient-hero {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #2d285e;
+  z-index: 0;
+}
+
+.landing-page-gradient-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(0, 0, 0, 0.2) 50%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+  z-index: 1;
+}
+
+/* Alternative gradient options - you can replace the main gradient with any of these */
+
+/* Option 1: Purple to Blue */
+/*
+.landing-page-gradient-hero {
+  background: linear-gradient(135deg, #5c4df4 0%, #667eea 100%);
+}
+*/
+
+/* Option 2: Sunset colors */
+/*
+.landing-page-gradient-hero {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+}
+*/
+
+/* Option 3: Ocean blue */
+/*
+.landing-page-gradient-hero {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+*/
+
+/* Option 4: Green to blue */
+/*
+.landing-page-gradient-hero {
+  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+}
+*/
+
+/* Ensure hero content appears above gradient */
+.landing-page-hero .landing-page-hero-content-wrapper {
+  z-index: 2;
+}
+
+.landing-page-hero .landing-page-hero-content {
+  position: relative;
+  z-index: 3;
+}
+
+.landing-page-hero-content-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center horizontally */
+  z-index: 2;
+  padding: 0 5%; /* Add some padding for mobile */
+}
+
+.landing-page-hero-content {
+  max-width: 800px;
+  animation: fadeInLeft 1s ease-out;
+  color: white;
+  text-align: center; /* Center align the text */
+}
+
+/* For logged-in users with gradient background, ensure proper centering */
+.landing-page-hero .landing-page-hero-content-wrapper {
+  z-index: 2;
+  justify-content: center;
+}
+
+.landing-page-hero .landing-page-hero-content {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+}
+
+/* Update hero buttons to center them as well */
+.landing-page-hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center; /* Center the buttons */
+  flex-wrap: wrap; /* Allow wrapping on mobile */
+}
