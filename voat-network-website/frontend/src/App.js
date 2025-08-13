@@ -11,6 +11,8 @@ import FreelancersListPage from "./components/FreelancersListPage";
 import PaymentMethod from "./components/PaymentMethod";
 import PrivacyPolicyPage from "./components/PrivacyPolicyPage";
 import TermsConditionsPage from "./components/TermsandConditionPage";
+import CancellationPolicy from "./components/CancellationPolicy";
+import ShippingPolicy from "./components/ShippingPolicy";
 
 import "./App.css";
 
@@ -29,6 +31,8 @@ const App = () => (
     <Route path="/cart" element={<CartPage />} />
     <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
     <Route path="/terms" element={<TermsConditionsPage />} />
+    <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+    <Route path="/shipping-policy" element={<ShippingPolicy />} />
   </Routes>
 );
 

@@ -19,7 +19,25 @@ class UserDashboard extends Component {
     selectedBooking: null,
     showBookingDetails: false,
     notifications: [],
-    stats: {},
+
+    // NEW: Orders functionality
+    myOrders: [], // Orders placed by user (as client)
+    receivedOrders: [], // Orders received by freelancer
+
+    stats: {
+      totalSpent: 0,
+      activeOrders: 0,
+      completedOrders: 0,
+      savedItems: 0,
+      totalBookings: 0,
+      pendingBookings: 0,
+      // NEW: Additional stats for freelancers
+      totalEarned: 0,
+      completedProjects: 0,
+      bookingRequestsCount: 0,
+      myOrdersCount: 0,
+    },
+
     bookingFilter: "all",
     orderFilter: "all",
     orderSearchQuery: "",
@@ -72,8 +90,13 @@ class UserDashboard extends Component {
         this.fetchOrders();
         this.fetchWishlist();
         this.fetchBookings();
-        this.fetchNotifications(); // method to fetch real notifications
-        this.updateStats(); // Calculate real stats
+        this.fetchNotifications();
+
+        // NEW: Fetch orders data
+        this.fetchMyOrders();
+        this.fetchReceivedOrders();
+
+        this.updateStats();
       });
     });
 
@@ -181,10 +204,10 @@ class UserDashboard extends Component {
     }
   };
 
-  // Update stats with real data
   updateStats = () => {
-    const { orders, wishlist, bookings } = this.state;
+    const { orders, wishlist, bookings, myOrders, receivedOrders } = this.state;
 
+    // Existing calculations
     const completedOrders = orders.filter(
       (order) => order.status === "Completed" || order.status === "completed"
     );
@@ -193,6 +216,7 @@ class UserDashboard extends Component {
       (sum, order) => sum + (order.amount || 0),
       0
     );
+
     const activeOrders = orders.filter(
       (order) =>
         order.status === "In Progress" ||
@@ -200,14 +224,41 @@ class UserDashboard extends Component {
         order.status === "pending"
     ).length;
 
+    // NEW: Calculate freelancer stats
+    const totalEarned = receivedOrders
+      .filter(
+        (order) => order.status === "accepted" || order.status === "completed"
+      )
+      .reduce((sum, order) => sum + (order.servicePrice || 0), 0);
+
+    const activeReceivedOrders = receivedOrders.filter(
+      (order) => order.status === "pending" || order.status === "accepted"
+    ).length;
+
+    const completedProjects = receivedOrders.filter(
+      (order) => order.status === "completed"
+    ).length;
+
+    const bookingRequestsCount = receivedOrders.filter(
+      (booking) => booking.status === "pending"
+    ).length;
+
+    // NEW: Calculate my orders count
+    const myOrdersCount = myOrders.length;
+
     this.setState({
       stats: {
         totalSpent,
-        activeOrders,
+        activeOrders: this.isFreelancer() ? activeReceivedOrders : activeOrders,
         completedOrders: completedOrders.length,
         savedItems: wishlist.length,
         totalBookings: bookings.length,
         pendingBookings: bookings.filter((b) => b.status === "pending").length,
+        // NEW stats
+        totalEarned,
+        completedProjects,
+        bookingRequestsCount,
+        myOrdersCount,
       },
     });
   };
@@ -1173,7 +1224,6 @@ class UserDashboard extends Component {
               onClick={this.toggleNotifications}
             >
               <i className="fas fa-bell"></i>
-              {/* ✅ Safe check before filtering */}
               {Array.isArray(notifications) &&
                 notifications.filter((n) => !n.read).length > 0 && (
                   <span className="notification-badge">
@@ -1285,46 +1335,149 @@ class UserDashboard extends Component {
               </div>
               <div className="activity-body">
                 <div className="activity-stats">
-                  <div className="activity-stat">
-                    <div className="stat-icon money">
-                      <i className="fa-solid fa-indian-rupee-sign"></i>
-                    </div>
-                    <div className="stat-details">
-                      <div className="stat-value">₹{stats.totalSpent || 0}</div>
-                      <div className="stat-label">Total Spent</div>
-                    </div>
-                  </div>
-                  <div className="activity-stat">
-                    <div className="stat-icon orders">
-                      <i className="fas fa-clipboard-list"></i>
-                    </div>
-                    <div className="stat-details">
-                      <div className="stat-value">
-                        {stats.activeOrders || 0}
+                  {/* Client Stats */}
+                  {!this.isFreelancer() && (
+                    <>
+                      <div className="activity-stat">
+                        <div className="stat-icon money">
+                          <i className="fa-solid fa-indian-rupee-sign"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            ₹{stats.totalSpent || 0}
+                          </div>
+                          <div className="stat-label">Total Spent</div>
+                        </div>
                       </div>
-                      <div className="stat-label">Active Orders</div>
-                    </div>
-                  </div>
-                  <div className="activity-stat">
-                    <div className="stat-icon completed">
-                      <i className="fas fa-check-circle"></i>
-                    </div>
-                    <div className="stat-details">
-                      <div className="stat-value">
-                        {stats.completedOrders || 0}
+                      <div className="activity-stat">
+                        <div className="stat-icon orders">
+                          <i className="fas fa-shopping-cart"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.myOrdersCount || 0}
+                          </div>
+                          <div className="stat-label">My Orders</div>
+                        </div>
                       </div>
-                      <div className="stat-label">Completed</div>
-                    </div>
-                  </div>
-                  <div className="activity-stat">
-                    <div className="stat-icon saved">
-                      <i className="fas fa-heart"></i>
-                    </div>
-                    <div className="stat-details">
-                      <div className="stat-value">{stats.savedItems || 0}</div>
-                      <div className="stat-label">Saved Items</div>
-                    </div>
-                  </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon completed">
+                          <i className="fas fa-calendar-check"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.totalBookings || 0}
+                          </div>
+                          <div className="stat-label">My Bookings</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon saved">
+                          <i className="fas fa-bookmark"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.savedItems || 0}
+                          </div>
+                          <div className="stat-label">Saved</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Freelancer Stats */}
+                  {this.isFreelancer() && (
+                    <>
+                      <div className="activity-stat">
+                        <div className="stat-icon money">
+                          <i className="fa-solid fa-indian-rupee-sign"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            ₹{stats.totalSpent || 0}
+                          </div>
+                          <div className="stat-label">Total Spent</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon earned">
+                          <i className="fas fa-chart-line"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            ₹{stats.totalEarned || 0}
+                          </div>
+                          <div className="stat-label">Total Earned</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon orders">
+                          <i className="fas fa-clipboard-list"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.activeOrders || 0}
+                          </div>
+                          <div className="stat-label">Active Orders</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon orders">
+                          <i className="fas fa-shopping-cart"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.myOrdersCount || 0}
+                          </div>
+                          <div className="stat-label">My Orders</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon requests">
+                          <i className="fas fa-inbox"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.bookingRequestsCount || 0}
+                          </div>
+                          <div className="stat-label">Booking Requests</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon completed">
+                          <i className="fas fa-calendar-check"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.totalBookings || 0}
+                          </div>
+                          <div className="stat-label">My Bookings</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon projects">
+                          <i className="fas fa-star"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.completedProjects || 0}
+                          </div>
+                          <div className="stat-label">Completed Projects</div>
+                        </div>
+                      </div>
+                      <div className="activity-stat">
+                        <div className="stat-icon saved">
+                          <i className="fas fa-heart"></i>
+                        </div>
+                        <div className="stat-details">
+                          <div className="stat-value">
+                            {stats.savedItems || 0}
+                          </div>
+                          <div className="stat-label">Wishlist</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -3797,6 +3950,11 @@ class UserDashboard extends Component {
         return this.renderBookings();
       case "wishlist":
         return this.renderWishlist();
+      // NEW cases
+      case "my-orders":
+        return this.renderMyOrders();
+      case "order-received":
+        return this.renderOrderReceived();
       default:
         return this.renderUserProfile();
     }
@@ -3845,6 +4003,525 @@ class UserDashboard extends Component {
       );
     }
   };
+
+  fetchMyOrders = async () => {
+    try {
+      if (!this.state.userData || !this.state.userData.id) {
+        return;
+      }
+
+      console.log("Fetching my orders for user:", this.state.userData.id);
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const myOrders = await response.json();
+        console.log("Fetched my orders:", myOrders);
+
+        this.setState({ myOrders }, () => {
+          this.updateStats();
+        });
+      } else {
+        console.log("No orders found or failed to fetch my orders");
+        this.setState({ myOrders: [] }, () => {
+          this.updateStats();
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch my orders:", error);
+      this.setState({ myOrders: [] });
+    }
+  };
+
+  // NEW: Fetch orders received by freelancer (Order Received)
+  fetchReceivedOrders = async () => {
+    try {
+      // Only fetch if user is a freelancer
+      if (
+        !this.isFreelancer() ||
+        !this.state.userData ||
+        !this.state.userData.id
+      ) {
+        return;
+      }
+
+      console.log(
+        "Fetching received orders for freelancer:",
+        this.state.userData.id
+      );
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/bookings/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const receivedOrders = await response.json();
+        console.log("Fetched received orders:", receivedOrders);
+
+        this.setState({ receivedOrders }, () => {
+          this.updateStats();
+        });
+      } else {
+        console.log("No received orders found");
+        this.setState({ receivedOrders: [] }, () => {
+          this.updateStats();
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch received orders:", error);
+      this.setState({ receivedOrders: [] });
+    }
+  };
+
+  renderMyOrders() {
+    const { myOrders } = this.state;
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>My Orders</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search orders..."
+                className="search-input"
+                value={this.state.orderSearchQuery}
+                onChange={this.handleOrderSearch}
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={this.state.orderFilter}
+              onChange={this.handleOrderFilter}
+            >
+              <option value="all">All Orders</option>
+              <option value="pending">Pending</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Orders Summary Stats */}
+        <div className="orders-summary-stats-compact">
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact pending">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                myOrders.filter(
+                  (order) => order.status.toLowerCase() === "pending"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Pending</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact progress">
+              <i className="fas fa-spinner"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                myOrders.filter((order) =>
+                  order.status.toLowerCase().includes("progress")
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">In Progress</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact completed">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                myOrders.filter(
+                  (order) => order.status.toLowerCase() === "completed"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Completed</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact total">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-number-compact">
+              ₹
+              {myOrders
+                .reduce((sum, order) => sum + (order.amount || 0), 0)
+                .toLocaleString()}
+            </div>
+            <div className="stat-label-compact">Total Value</div>
+          </div>
+        </div>
+
+        {myOrders.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-shopping-cart"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Orders Found</h3>
+              <p>
+                You haven't placed any orders yet. Start exploring services to
+                place your first order!
+              </p>
+              <Link to="/portfolio-list">
+                <button className="btn btn-primary">
+                  <i className="fas fa-compass"></i>
+                  Explore Services
+                </button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="compact-orders-grid">
+            {myOrders.map((order, index) => (
+              <div className="compact-order-card" key={order.id || index}>
+                {/* Order Header */}
+                <div className="compact-order-header">
+                  <div className="order-id-compact">
+                    <i className="fas fa-hashtag"></i>
+                    <span>
+                      {order.id || `ORD-${String(index + 1).padStart(3, "0")}`}
+                    </span>
+                  </div>
+                  <div
+                    className={`compact-order-status ${order.status
+                      .toLowerCase()
+                      .replace(" ", "-")}`}
+                  >
+                    <div className="status-dot"></div>
+                    <span>{order.status}</span>
+                  </div>
+                </div>
+
+                {/* Service Info */}
+                <div className="compact-order-content">
+                  <div className="service-info-compact">
+                    <h3 className="service-name-compact">{order.service}</h3>
+                  </div>
+
+                  {/* Provider Section */}
+                  <div className="provider-compact">
+                    <div className="provider-avatar-compact">
+                      {order.providerImage ? (
+                        <img
+                          src={this.getFullImageUrl(order.providerImage)}
+                          alt={order.provider}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder-compact"
+                        style={{
+                          display: order.providerImage ? "none" : "flex",
+                        }}
+                      >
+                        {order.provider?.charAt(0).toUpperCase() || "P"}
+                      </div>
+                    </div>
+                    <div className="provider-details-compact">
+                      <h4 className="provider-name-compact">
+                        {order.provider}
+                      </h4>
+                      <p className="provider-role-compact">Service Provider</p>
+                    </div>
+                  </div>
+
+                  {/* Order Meta */}
+                  <div className="order-meta-compact">
+                    <div className="meta-item-compact">
+                      <i className="fas fa-calendar-alt"></i>
+                      <span className="meta-label">Date:</span>
+                      <span className="meta-value">
+                        {new Date(order.date).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    <div className="meta-item-compact price-meta">
+                      <i className="fas fa-indian-rupee-sign"></i>
+                      <span className="meta-label">Amount:</span>
+                      <span className="meta-value price-value">
+                        ₹{order.amount?.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Actions */}
+                <div className="compact-order-actions">
+                  <button
+                    className="action-btn-compact primary"
+                    onClick={() =>
+                      (window.location.href = `/my-portfolio/${
+                        order.providerId || "unknown"
+                      }`)
+                    }
+                  >
+                    <i className="fas fa-eye"></i>
+                    <span>View Details</span>
+                  </button>
+
+                  {order.status === "Completed" && (
+                    <button className="action-btn-compact secondary">
+                      <i className="fas fa-star"></i>
+                      <span>Review</span>
+                    </button>
+                  )}
+
+                  {(order.status === "Pending" ||
+                    order.status === "In Progress") && (
+                    <button
+                      className="action-btn-compact cancel"
+                      onClick={() =>
+                        this.handleCancelOrder(order.bookingId || order.id)
+                      }
+                    >
+                      <i className="fas fa-times"></i>
+                      <span>Cancel Order</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // NEW: Render Order Received tab (for freelancers)
+  renderOrderReceived() {
+    const { receivedOrders } = this.state;
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>Orders Received</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search received orders..."
+                className="search-input"
+              />
+            </div>
+            <select className="filter-dropdown">
+              <option value="all">All Orders</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Received Orders Summary Stats */}
+        <div className="orders-summary-stats-compact">
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact pending">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                receivedOrders.filter((order) => order.status === "pending")
+                  .length
+              }
+            </div>
+            <div className="stat-label-compact">Pending</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact accepted">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                receivedOrders.filter((order) => order.status === "accepted")
+                  .length
+              }
+            </div>
+            <div className="stat-label-compact">Accepted</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact rejected">
+              <i className="fas fa-times-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                receivedOrders.filter((order) => order.status === "rejected")
+                  .length
+              }
+            </div>
+            <div className="stat-label-compact">Rejected</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact total">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-number-compact">
+              ₹
+              {receivedOrders
+                .reduce((sum, order) => sum + (order.servicePrice || 0), 0)
+                .toLocaleString()}
+            </div>
+            <div className="stat-label-compact">Total Value</div>
+          </div>
+        </div>
+
+        {receivedOrders.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-inbox"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Orders Received</h3>
+              <p>
+                You haven't received any orders yet. Make sure your services are
+                visible and attractive to clients.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="modern-bookings-grid">
+            {receivedOrders.map((order, index) => (
+              <div className="modern-booking-card" key={order._id || index}>
+                {/* Order Header */}
+                <div className="modern-booking-header">
+                  <div className="booking-id-compact">
+                    #
+                    {order._id?.slice(-6) ||
+                      `OR-${String(index + 1).padStart(3, "0")}`}
+                  </div>
+                  <div className={`modern-booking-status ${order.status}`}>
+                    <div className="status-dot"></div>
+                    <span>
+                      {order.status.charAt(0).toUpperCase() +
+                        order.status.slice(1)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Service Info */}
+                <div className="modern-booking-content">
+                  <div className="service-header-compact">
+                    <h3 className="service-name-compact">
+                      {order.serviceName}
+                    </h3>
+                  </div>
+
+                  {/* Client Section */}
+                  <div className="client-section-compact">
+                    <div className="client-avatar-compact">
+                      {order.clientProfileImage ? (
+                        <img
+                          src={
+                            order.clientProfileImage.startsWith("http")
+                              ? order.clientProfileImage
+                              : `${this.state.baseUrl}${order.clientProfileImage}`
+                          }
+                          alt={order.clientName}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder-compact"
+                        style={{
+                          display: order.clientProfileImage ? "none" : "flex",
+                        }}
+                      >
+                        {order.clientName?.charAt(0).toUpperCase() || "C"}
+                      </div>
+                    </div>
+                    <div className="client-info-compact">
+                      <h4 className="client-name-compact">
+                        {order.clientName}
+                      </h4>
+                      <p className="client-email-compact">
+                        {order.clientEmail}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Order Meta */}
+                  <div className="booking-meta-compact">
+                    <div className="meta-item-compact">
+                      <i className="fas fa-calendar-plus"></i>
+                      <span className="meta-label">Requested:</span>
+                      <span className="meta-value">
+                        {new Date(order.requestDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="meta-item-compact price-meta">
+                      <i className="fas fa-indian-rupee-sign"></i>
+                      <span className="meta-label">Amount:</span>
+                      <span className="meta-value price-value">
+                        ₹{order.servicePrice?.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Actions */}
+                <div className="modern-booking-actions">
+                  {order.status === "pending" && (
+                    <>
+                      <button
+                        className="action-btn-compact accept"
+                        onClick={() =>
+                          this.handleBookingAction(order._id, "accept")
+                        }
+                      >
+                        <i className="fas fa-check"></i>
+                        <span>Accept</span>
+                      </button>
+                      <button
+                        className="action-btn-compact reject"
+                        onClick={() =>
+                          this.handleBookingAction(order._id, "reject")
+                        }
+                      >
+                        <i className="fas fa-times"></i>
+                        <span>Decline</span>
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    className="action-btn-compact details"
+                    onClick={() => this.openBookingDetails(order)}
+                  >
+                    <i className="fas fa-eye"></i>
+                    <span>View Details</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   render() {
     const {
@@ -3909,6 +4586,7 @@ class UserDashboard extends Component {
               </div>
             </div>
 
+            {/* UPDATED: Navigation with new tabs */}
             <nav className="sidebar-nav">
               <Link to="/" className="nav-link">
                 <div className="nav-item">
@@ -3940,21 +4618,61 @@ class UserDashboard extends Component {
                 )}
               </button>
 
+              {/* NEW: My Orders tab for all users */}
+              <button
+                className={`nav-item ${
+                  activeTab === "my-orders" ? "active" : ""
+                }`}
+                onClick={() => this.handleTabChange("my-orders")}
+              >
+                <i className="fas fa-shopping-cart nav-icon"></i>
+                <span className="nav-text">My Orders</span>
+                {this.state.stats.myOrdersCount > 0 && (
+                  <span className="nav-badge">
+                    {this.state.stats.myOrdersCount}
+                  </span>
+                )}
+              </button>
+
+              {/* NEW: Freelancer-only tabs */}
               {this.isFreelancer() && (
-                <button
-                  className={`nav-item ${
-                    activeTab === "bookings" ? "active" : ""
-                  }`}
-                  onClick={() => this.handleTabChange("bookings")}
-                >
-                  <i className="fas fa-calendar-check nav-icon"></i>
-                  <span className="nav-text">Booking Requests</span>
-                  {this.state.stats.pendingBookings > 0 && (
-                    <span className="nav-badge">
-                      {this.state.stats.pendingBookings}
-                    </span>
-                  )}
-                </button>
+                <>
+                  <button
+                    className={`nav-item ${
+                      activeTab === "bookings" ? "active" : ""
+                    }`}
+                    onClick={() => this.handleTabChange("bookings")}
+                  >
+                    <i className="fas fa-calendar-check nav-icon"></i>
+                    <span className="nav-text">Booking Requests</span>
+                    {this.state.stats.bookingRequestsCount > 0 && (
+                      <span className="nav-badge">
+                        {this.state.stats.bookingRequestsCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    className={`nav-item ${
+                      activeTab === "order-received" ? "active" : ""
+                    }`}
+                    onClick={() => this.handleTabChange("order-received")}
+                  >
+                    <i className="fas fa-inbox nav-icon"></i>
+                    <span className="nav-text">Orders Received</span>
+                    {this.state.receivedOrders.filter(
+                      (order) => order.status === "pending"
+                    ).length > 0 && (
+                      <span className="nav-badge">
+                        {
+                          this.state.receivedOrders.filter(
+                            (order) => order.status === "pending"
+                          ).length
+                        }
+                      </span>
+                    )}
+                  </button>
+                </>
               )}
 
               <button

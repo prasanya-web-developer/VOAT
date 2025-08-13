@@ -1,0 +1,356 @@
+/* Shipping & Delivery Policy Page Styles */
+.shippingpage-screen {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.shippingpage-home-button {
+  position: fixed;
+  top: 2rem;
+  left: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.shippingpage-home-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.shippingpage-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8rem 2rem 4rem;
+  width: 100%;
+}
+
+.shippingpage-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.shippingpage-header-icon {
+  width: 4rem;
+  height: 4rem;
+  color: #ffd700;
+  margin-bottom: 1rem;
+}
+
+.shippingpage-title {
+  font-size: 3rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.shippingpage-subtitle {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.shippingpage-error-alert {
+  background: rgba(239, 68, 68, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  font-weight: 500;
+}
+
+.shippingpage-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  padding: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.shippingpage-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.shippingpage-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.shippingpage-section:hover {
+  box-shadow: 0 8px 25px -8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.shippingpage-section-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.shippingpage-section-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #4f46e5;
+}
+
+.shippingpage-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.shippingpage-section-content {
+  margin-left: 2.5rem;
+}
+
+.shippingpage-section-content p {
+  color: #4b5563;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.shippingpage-section-content p:last-child {
+  margin-bottom: 0;
+}
+
+.shippingpage-section-content strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.shippingpage-section-content ul {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.shippingpage-section-content li {
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+/* Special styling for the acceptance section */
+.shippingpage-acceptance-section {
+  background: rgba(79, 70, 229, 0.05);
+  border: 2px solid rgba(79, 70, 229, 0.2);
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-top: 1rem;
+}
+
+.shippingpage-checkbox-container {
+  margin-top: 0;
+}
+
+.shippingpage-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  cursor: pointer;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.shippingpage-checkbox-label:hover {
+  background: rgba(79, 70, 229, 0.05);
+  border-color: rgba(79, 70, 229, 0.1);
+}
+
+.shippingpage-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.shippingpage-checkbox:checked {
+  background: #4f46e5;
+  border-color: #4f46e5;
+}
+
+.shippingpage-checkbox:checked::after {
+  content: "✓";
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.shippingpage-checkbox-text {
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.shippingpage-submit-container {
+  text-align: center;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 1rem;
+}
+
+.shippingpage-submit-button {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 1.125rem;
+  padding: 1rem 2.5rem;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 280px;
+  box-shadow: 0 4px 15px -3px rgba(79, 70, 229, 0.4);
+}
+
+.shippingpage-submit-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -8px rgba(79, 70, 229, 0.5);
+}
+
+.shippingpage-submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.shippingpage-submit-disabled {
+  background: #9ca3af !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.shippingpage-submit-note {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 0.75rem;
+  font-weight: 500;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .shippingpage-container {
+    padding: 6rem 1rem 2rem;
+  }
+
+  .shippingpage-title {
+    font-size: 2rem;
+  }
+
+  .shippingpage-subtitle {
+    font-size: 1rem;
+  }
+
+  .shippingpage-content {
+    padding: 1.5rem;
+  }
+
+  .shippingpage-section {
+    padding: 1rem;
+  }
+
+  .shippingpage-section-content {
+    margin-left: 0;
+    margin-top: 1rem;
+  }
+
+  .shippingpage-acceptance-section {
+    padding: 1.5rem;
+  }
+
+  .shippingpage-home-button {
+    top: 1rem;
+    left: 1rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .shippingpage-submit-button {
+    min-width: 100%;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .shippingpage-title {
+    font-size: 1.75rem;
+  }
+
+  .shippingpage-header-icon {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .shippingpage-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .shippingpage-section-title {
+    font-size: 1.125rem;
+  }
+
+  .shippingpage-checkbox-label {
+    gap: 0.75rem;
+  }
+
+  .shippingpage-checkbox-text {
+    font-size: 0.95rem;
+  }
+}

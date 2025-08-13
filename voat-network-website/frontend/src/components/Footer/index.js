@@ -236,6 +236,14 @@ class Footer extends Component {
             <Link to="/terms" className="footer-bottom-link">
               Terms and Conditions
             </Link>
+            <span className="link-separator"> | </span>
+            <Link to="/cancellation-policy" className="footer-bottom-link">
+              Cancellation Policy
+            </Link>
+            <span className="link-separator"> | </span>
+            <Link to="/shipping-policy" className="footer-bottom-link">
+              Shipping & Delivery
+            </Link>
           </div>
           <p>© 2024 VOAT Network. All rights reserved.</p>
         </div>

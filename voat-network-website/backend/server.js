@@ -356,55 +356,6 @@ const CartSchema = new mongoose.Schema(
 
 const Cart = mongoose.model("Cart", CartSchema);
 
-const OrderSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    userName: { type: String, required: true },
-    userEmail: { type: String, required: true },
-    freelancerId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    freelancerName: { type: String, required: true },
-    freelancerEmail: { type: String, required: true },
-    freelancerProfileImage: { type: String },
-    serviceName: { type: String, required: true },
-    serviceLevel: { type: String, required: true }, // Basic, Standard, Premium
-    servicePrice: { type: Number, required: true },
-    paymentStructure: {
-      type: {
-        type: String,
-        enum: ["advance", "middle", "final", "custom"],
-        required: true,
-      },
-      amount: { type: Number, required: true },
-      description: { type: String, required: true },
-    },
-    status: {
-      type: String,
-      enum: ["pending", "in-progress", "completed", "cancelled"],
-      default: "pending",
-    },
-    orderDate: {
-      type: Date,
-      default: Date.now,
-    },
-    completedDate: {
-      type: Date,
-    },
-    notes: { type: String },
-    fromCart: { type: Boolean, default: true }, // Track if order came from cart
-  },
-  { timestamps: true }
-);
-
-const Order = mongoose.model("Order", OrderSchema);
-
 const QuickBookingSchema = new mongoose.Schema(
   {
     clientId: {
@@ -534,6 +485,49 @@ const PaymentTransaction = mongoose.model(
   "PaymentTransaction",
   PaymentTransactionSchema
 );
+
+const OrderSchema = new mongoose.Schema(
+  {
+    clientId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    clientName: { type: String, required: true },
+    clientEmail: { type: String, required: true },
+    freelancerId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    freelancerName: { type: String, required: true },
+    freelancerEmail: { type: String, required: true },
+    serviceName: { type: String, required: true },
+    serviceLevel: { type: String, default: "Standard" },
+    totalAmount: { type: Number, required: true },
+    status: {
+      type: String,
+      enum: ["pending", "accepted", "in-progress", "completed", "cancelled"],
+      default: "pending",
+    },
+    orderDate: {
+      type: Date,
+      default: Date.now,
+    },
+    completedDate: {
+      type: Date,
+    },
+    notes: { type: String },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "refunded"],
+      default: "pending",
+    },
+  },
+  { timestamps: true }
+);
+
+const Order = mongoose.model("Order", OrderSchema);
 
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -2674,56 +2668,6 @@ app.get("/api/debug/users-voat", async (req, res) => {
   }
 });
 
-// app.post("/api/wishlist/:userId", async (req, res) => {
-//   try {
-//     const { userId } = req.params;
-//     const wishlistItems = req.body;
-
-//     console.log("=== BACKEND WISHLIST UPDATE ===");
-//     console.log("User ID received:", userId);
-//     console.log("Wishlist items received:", wishlistItems);
-//     console.log("Request URL:", req.originalUrl);
-
-//     if (!mongoose.Types.ObjectId.isValid(userId)) {
-//       console.error("Invalid user ID format:", userId);
-//       return res.status(400).json({
-//         success: false,
-//         error: "Invalid user ID format",
-//       });
-//     }
-
-//     if (!Array.isArray(wishlistItems)) {
-//       console.error("Invalid wishlist data:", typeof wishlistItems);
-//       return res.status(400).json({
-//         success: false,
-//         error: "Wishlist data must be an array",
-//       });
-//     }
-
-//     // Update or create wishlist
-//     const updatedWishlist = await Wishlist.findOneAndUpdate(
-//       { userId: userId },
-//       { $set: { items: wishlistItems } },
-//       { new: true, upsert: true }
-//     );
-
-//     console.log("Wishlist updated successfully:", updatedWishlist._id);
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Wishlist updated successfully",
-//       count: updatedWishlist.items.length,
-//     });
-//   } catch (error) {
-//     console.error("Backend wishlist error:", error);
-//     res.status(500).json({
-//       success: false,
-//       error: "Internal Server Error",
-//       details: error.message,
-//     });
-//   }
-// });
-
 app.post("/api/wishlist/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -4497,6 +4441,251 @@ if (process.env.NODE_ENV === "development") {
     }
   });
 }
+
+// Create a new order
+app.post("/api/orders/create", async (req, res) => {
+  try {
+    const {
+      clientId,
+      freelancerId,
+      serviceName,
+      serviceLevel,
+      totalAmount,
+      clientName,
+      freelancerName,
+      freelancerEmail,
+    } = req.body;
+
+    // Validate required fields
+    if (!clientId || !freelancerId || !serviceName || !totalAmount) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+
+    const newOrder = new Order({
+      clientId,
+      clientName,
+      clientEmail: req.body.clientEmail,
+      freelancerId,
+      freelancerName,
+      freelancerEmail,
+      serviceName,
+      serviceLevel: serviceLevel || "Standard",
+      totalAmount: parseFloat(totalAmount),
+      status: "pending",
+      orderDate: new Date(),
+    });
+
+    const savedOrder = await newOrder.save();
+
+    // Create notifications
+    await createNotification({
+      userId: freelancerId,
+      type: "order",
+      title: "New Order Received",
+      message: `You have received a new order from ${clientName} for "${serviceName}"`,
+      relatedId: savedOrder._id.toString(),
+      metadata: {
+        orderId: savedOrder._id,
+        clientName,
+        serviceName,
+        totalAmount,
+      },
+    });
+
+    await createNotification({
+      userId: clientId,
+      type: "order",
+      title: "Order Placed Successfully",
+      message: `Your order for "${serviceName}" has been placed successfully`,
+      relatedId: savedOrder._id.toString(),
+      metadata: {
+        orderId: savedOrder._id,
+        freelancerName,
+        serviceName,
+        totalAmount,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      order: savedOrder,
+      message: "Order created successfully",
+    });
+  } catch (error) {
+    console.error("Error creating order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create order",
+    });
+  }
+});
+
+// Get orders for a client (My Orders)
+app.get("/api/orders/:clientId", async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    // Find all bookings where the user is the client and transform to order format
+    const bookings = await Booking.find({ clientId: clientId })
+      .sort({ requestDate: -1 })
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(`Found ${bookings.length} orders for client ${clientId}`);
+
+    // Transform bookings to order format to match existing UI
+    const orders = bookings.map((booking, index) => ({
+      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      service: booking.serviceName,
+      status:
+        booking.status === "accepted"
+          ? "In Progress"
+          : booking.status === "rejected"
+          ? "Cancelled"
+          : booking.status.charAt(0).toUpperCase() + booking.status.slice(1),
+      date: booking.requestDate.toISOString().split("T")[0],
+      amount: booking.servicePrice,
+      provider: booking.freelancerName,
+      providerImage: booking.freelancerId?.profileImage || null,
+      providerEmail: booking.freelancerEmail,
+      providerId: booking.freelancerId?._id || booking.freelancerId,
+      bookingId: booking._id,
+      requestDate: booking.requestDate,
+      responseDate: booking.responseDate,
+    }));
+
+    res.json(orders);
+  } catch (error) {
+    console.error("Error fetching client orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+    });
+  }
+});
+
+// Update order status
+app.put("/api/orders/:orderId/status", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status, notes } = req.body;
+
+    if (
+      ![
+        "pending",
+        "accepted",
+        "in-progress",
+        "completed",
+        "cancelled",
+      ].includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    order.status = status;
+    if (notes) order.notes = notes;
+    if (status === "completed") order.completedDate = new Date();
+
+    const updatedOrder = await order.save();
+
+    // Create notification for status change
+    await createNotification({
+      userId: order.clientId,
+      type: "order",
+      title: `Order ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+      message: `Your order for "${order.serviceName}" has been ${status}`,
+      relatedId: order._id.toString(),
+      metadata: {
+        orderId: order._id,
+        serviceName: order.serviceName,
+        status,
+      },
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update order status",
+    });
+  }
+});
+
+// Get order statistics
+app.get("/api/orders/stats/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { userType } = req.query; // "client" or "freelancer"
+
+    let stats = {};
+
+    if (userType === "freelancer") {
+      // Stats for freelancer (orders received)
+      const receivedOrders = await Order.find({ freelancerId: userId });
+      const totalEarned = receivedOrders
+        .filter((order) => order.status === "completed")
+        .reduce((sum, order) => sum + order.totalAmount, 0);
+
+      stats = {
+        totalReceived: receivedOrders.length,
+        activeOrders: receivedOrders.filter((order) =>
+          ["pending", "accepted", "in-progress"].includes(order.status)
+        ).length,
+        completedOrders: receivedOrders.filter(
+          (order) => order.status === "completed"
+        ).length,
+        totalEarned,
+      };
+    } else {
+      // Stats for client (orders placed)
+      const placedOrders = await Order.find({ clientId: userId });
+      const totalSpent = placedOrders
+        .filter((order) => order.status === "completed")
+        .reduce((sum, order) => sum + order.totalAmount, 0);
+
+      stats = {
+        totalPlaced: placedOrders.length,
+        activeOrders: placedOrders.filter((order) =>
+          ["pending", "accepted", "in-progress"].includes(order.status)
+        ).length,
+        completedOrders: placedOrders.filter(
+          (order) => order.status === "completed"
+        ).length,
+        totalSpent,
+      };
+    }
+
+    res.json({
+      success: true,
+      stats,
+    });
+  } catch (error) {
+    console.error("Error fetching order statistics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch order statistics",
+    });
+  }
+});
+
+console.log("✅ Orders API endpoints loaded successfully");
 
 // Set VOAT ID endpoint
 
