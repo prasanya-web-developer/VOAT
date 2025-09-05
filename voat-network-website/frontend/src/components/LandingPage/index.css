@@ -2740,3 +2740,130 @@ body {
   justify-content: center; /* Center the buttons */
   flex-wrap: wrap; /* Allow wrapping on mobile */
 }
+
+/* Background hero for logged-in users (clients and freelancers) */
+.landing-page-background-hero {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+/* Different background images for different user types */
+.landing-page-background-hero.freelancer-hero {
+  background-image: url("https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080");
+}
+
+/* .landing-page-background-hero.client-hero {
+  background-image: url("https://images.unsplash.com/photo-1560472354-b33ff0c44a43?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080");
+} */
+
+/* Dark overlay for better text readability */
+.landing-page-background-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.75) 0%,
+    rgba(0, 0, 0, 0.5) 200%,
+    rgba(0, 0, 0, 0.7) 150%
+  );
+  z-index: 1;
+}
+
+/* Alternative background images - you can replace the URLs above with any of these */
+
+/* Freelancer Alternative Options: */
+/*
+.landing-page-background-hero.freelancer-hero {
+  background-image: url('https://images.unsplash.com/photo-1519389950473-47ba0277781c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080');
+}
+*/
+
+/*
+.landing-page-background-hero.freelancer-hero {
+  background-image: url('https://images.unsplash.com/photo-1553877522-43269d4ea984?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080');
+}
+*/
+
+/* Client Alternative Options: */
+
+.landing-page-background-hero.client-hero {
+  background-image: url("https://images.unsplash.com/photo-1542744173-8e7e53415bb0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080");
+}
+
+/* Ensure hero content appears above background */
+.landing-page-hero .landing-page-hero-content-wrapper {
+  z-index: 2;
+}
+
+.landing-page-hero .landing-page-hero-content {
+  position: relative;
+  z-index: 3;
+}
+
+/* Remove the old gradient hero styles if they exist */
+.landing-page-gradient-hero,
+.landing-page-gradient-overlay {
+  display: none;
+}
+
+/* Enhanced text shadows for better readability */
+/* .landing-page-hero-title {
+  text-shadow: 2px 2px 4px rgba(39, 38, 38, 0.8);
+}
+
+.landing-page-hero-description {
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+} */
+
+/* Responsive adjustments for background hero */
+@media (max-width: 768px) {
+  .landing-page-background-hero {
+    background-position: center center;
+  }
+
+  .landing-page-background-overlay {
+    background: linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.8) 0%,
+      rgba(0, 0, 0, 0.6) 50%,
+      rgba(0, 0, 0, 0.75) 100%
+    );
+  }
+
+  .landing-page-hero-title {
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.9);
+  }
+
+  .landing-page-hero-description {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+  }
+}
+
+@media (max-width: 576px) {
+  .landing-page-background-overlay {
+    background: linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.85) 0%,
+      rgba(0, 0, 0, 0.65) 50%,
+      rgba(0, 0, 0, 0.8) 100%
+    );
+  }
+
+  .landing-page-hero-title {
+    text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.95);
+  }
+
+  .landing-page-hero-description {
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.95);
+  }
+}

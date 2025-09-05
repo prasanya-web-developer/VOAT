@@ -527,8 +527,8 @@ class LandingPage extends Component {
         title: (
           <>
             Welcome Back,
-            <br />
-            <span className="landing-page-text-gradient">Freelancer!</span>
+            {/* <br />
+            <span className="landing-page-text-gradient">Freelancer!</span> */}
             <br />
             Showcase Your{" "}
             <span className="landing-page-text-gradient">Skills</span>
@@ -560,8 +560,8 @@ class LandingPage extends Component {
         title: (
           <>
             Welcome Back,
-            <br />
-            <span className="landing-page-text-gradient">Client!</span>
+            {/* <br />
+            <span className="landing-page-text-gradient">Client!</span> */}
             <br />
             Find Perfect{" "}
             <span className="landing-page-text-gradient">Talent</span>
@@ -860,13 +860,18 @@ class LandingPage extends Component {
               </>
             )}
 
-            {/* For freelancers and clients, show gradient background instead of carousel */}
-            {this.state.isLoggedIn &&
-              (userType === "freelancer" || userType === "client") && (
-                <div className="landing-page-gradient-hero">
-                  <div className="landing-page-gradient-overlay"></div>
-                </div>
-              )}
+            {/* For freelancers and clients, show background image instead of carousel */}
+            {this.state.isLoggedIn && userType === "freelancer" && (
+              <div className="landing-page-background-hero freelancer-hero">
+                <div className="landing-page-background-overlay"></div>
+              </div>
+            )}
+
+            {this.state.isLoggedIn && userType === "client" && (
+              <div className="landing-page-background-hero client-hero">
+                <div className="landing-page-background-overlay"></div>
+              </div>
+            )}
 
             {/* Hero Content - Show for all users */}
             <div className="landing-page-hero-content-wrapper">
@@ -891,6 +896,7 @@ class LandingPage extends Component {
           </section>
 
           {/* Client Services Cards Section - Only show for clients */}
+          {/* 
           {isClient && (
             <section
               className={`landing-page-client-services-section ${
@@ -935,63 +941,61 @@ class LandingPage extends Component {
               </div>
             </section>
           )}
+          */}
 
-          {/* Services Section - Only show for non-clients */}
-          {!isClient && (
-            <section
-              className={`landing-page-services-section ${
-                this.state.servicesInView ? "in-view" : ""
-              }`}
-              ref={this.servicesRef}
-              id="services"
-            >
-              <div className="landing-page-services-blob landing-page-services-blob-1"></div>
-              <div className="landing-page-services-blob landing-page-services-blob-2"></div>
+          {/* Services Section - Show for all users */}
+          <section
+            className={`landing-page-services-section ${
+              this.state.servicesInView ? "in-view" : ""
+            }`}
+            ref={this.servicesRef}
+            id="services"
+          >
+            <div className="landing-page-services-blob landing-page-services-blob-2"></div>
 
-              <div className="landing-page-container">
-                <div className="landing-page-section-header">
-                  <h2 className="landing-page-section-title">Our Services</h2>
-                  <p className="landing-page-services-description">
-                    We offer a comprehensive range of digital services to help
-                    your business thrive in the online world and achieve
-                    sustainable growth.
-                  </p>
-                </div>
-
-                <div className="landing-page-services-grid">
-                  {servicesData.map((service, index) => (
-                    <Link
-                      key={index}
-                      to={`/portfolio-list?profession=${encodeURIComponent(
-                        service.filterValue
-                      )}`}
-                      className={`landing-page-service-card landing-page-service-card-${
-                        index + 1
-                      }`}
-                    >
-                      <div className="landing-page-service-content">
-                        <div className="landing-page-service-icon-wrapper">
-                          {service.icon}
-                        </div>
-                        <h3>{service.title}</h3>
-                        <p>{service.description}</p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-                <div className="landing-page-services-view-all">
-                  <Link
-                    to={"/services"}
-                    className="landing-page-button landing-page-button-primary"
-                  >
-                    View more
-                    <ArrowRight className="landing-page-button-icon" />
-                  </Link>
-                </div>
+            <div className="landing-page-container">
+              <div className="landing-page-section-header">
+                <h2 className="landing-page-section-title">Our Services</h2>
+                <p className="landing-page-services-description">
+                  We offer a comprehensive range of digital services to help
+                  your business thrive in the online world and achieve
+                  sustainable growth.
+                </p>
               </div>
-            </section>
-          )}
+
+              <div className="landing-page-services-grid">
+                {servicesData.map((service, index) => (
+                  <Link
+                    key={index}
+                    to={`/portfolio-list?profession=${encodeURIComponent(
+                      service.filterValue
+                    )}`}
+                    className={`landing-page-service-card landing-page-service-card-${
+                      index + 1
+                    }`}
+                  >
+                    <div className="landing-page-service-content">
+                      <div className="landing-page-service-icon-wrapper">
+                        {service.icon}
+                      </div>
+                      <h3>{service.title}</h3>
+                      <p>{service.description}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="landing-page-services-view-all">
+                <Link
+                  to={"/services"}
+                  className="landing-page-button landing-page-button-primary"
+                >
+                  View more
+                  <ArrowRight className="landing-page-button-icon" />
+                </Link>
+              </div>
+            </div>
+          </section>
 
           {/* Why Choose Us Section - Modernized */}
           <section

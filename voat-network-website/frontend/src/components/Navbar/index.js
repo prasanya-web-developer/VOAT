@@ -855,7 +855,7 @@ class NavBar extends Component {
                   </form>
                 </div>
 
-                {/* User profile when logged in with profile image or initials */}
+                {/* User profile when logged in with profile image, name, and VOAT ID */}
                 {isLoggedIn && user && (
                   <div
                     className="navbar-user-profile"
@@ -869,7 +869,7 @@ class NavBar extends Component {
                       <ShoppingCart size={20} />
                     </button>
 
-                    {/* User profile with VOAT ID - REDESIGNED */}
+                    {/* User profile with name and VOAT ID - UPDATED */}
                     <div
                       className="user-profile-container"
                       onClick={this.toggleProfileDropdown}
@@ -920,11 +920,17 @@ class NavBar extends Component {
                         )}
                       </div>
 
-                      {voatId && (
-                        <div className="navbar-voat-id">
-                          <span title="VOAT ID">{voatId}</span>
+                      {/* User name and VOAT ID container - NEW */}
+                      <div className="user-info-container">
+                        <div className="navbar-user-name">
+                          <span title={user.name}>{user.name}</span>
                         </div>
-                      )}
+                        {voatId && (
+                          <div className="navbar-voat-id">
+                            <span title="VOAT ID">{voatId}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Profile Dropdown Menu */}
@@ -993,7 +999,7 @@ class NavBar extends Component {
                   </div>
                 </div>
 
-                {/* Mobile user profile with VOAT ID */}
+                {/* Mobile user profile with name and VOAT ID */}
                 {isLoggedIn && user && (
                   <li className="mobile-user-info">
                     <div className="mobile-user-profile-container">
@@ -1045,7 +1051,13 @@ class NavBar extends Component {
                         )}
                       </div>
 
-                      {voatId && <div className="mobile-voat-id">{voatId}</div>}
+                      {/* Mobile user info - UPDATED */}
+                      <div className="mobile-user-info-text">
+                        <div className="mobile-user-name">{user.name}</div>
+                        {voatId && (
+                          <div className="mobile-voat-id">{voatId}</div>
+                        )}
+                      </div>
                     </div>
                   </li>
                 )}

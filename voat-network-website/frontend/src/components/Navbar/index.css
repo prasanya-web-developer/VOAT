@@ -245,15 +245,17 @@
   margin-right: 8px;
 }
 
-/* User profile container - NEW DESIGN */
+/* User profile container - UPDATED DESIGN */
 .user-profile-container {
   display: flex;
   align-items: center;
   cursor: pointer;
   background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 4px 4px 4px 4px;
+  border-radius: 25px;
+  padding: 6px 16px 6px 6px;
   transition: background-color 0.3s;
+  gap: 12px;
+  min-width: 200px;
 }
 
 .user-profile-container:hover {
@@ -269,16 +271,51 @@
   align-items: center;
   justify-content: center;
   background-color: #4c74af;
+  flex-shrink: 0;
 }
 
-/* Mobile user profile container */
+/* User info container - NEW */
+.user-info-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* User name styling - NEW */
+.navbar-user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  line-height: 1.5;
+}
+
+/* VOAT ID styling - UPDATED */
+.navbar-voat-id {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  line-height: 1.2;
+}
+
+/* Mobile user profile container - UPDATED */
 .mobile-user-profile-container {
   display: flex;
   align-items: center;
   background-color: transparent;
   border-radius: 0;
   padding: 0;
-  gap: 12px;
+  gap: 15px;
   width: 100%;
 }
 
@@ -293,6 +330,42 @@
   background-color: #4c74af;
   border: 2px solid #fccf2b;
   flex-shrink: 0;
+}
+
+/* Mobile user info text container - NEW */
+.mobile-user-info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Mobile user name - NEW */
+.mobile-user-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  line-height: 1.2;
+}
+
+/* Mobile VOAT ID - UPDATED */
+.mobile-voat-id {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  width: fit-content;
 }
 
 /* User initials styling */
@@ -320,33 +393,6 @@
   align-items: center;
   font-weight: bold;
   font-size: 20px;
-}
-
-/* VOAT ID styling - REDESIGNED */
-.navbar-voat-id {
-  font-size: 12px;
-  font-weight: 500;
-  color: #fff;
-  padding: 4px 10px;
-  margin-left: 8px;
-  margin-right: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-}
-
-.mobile-voat-id {
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
-  background-color: rgba(255, 255, 255, 0.1);
-  padding: 4px 8px;
-  border-radius: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
 }
 
 /* Additional styling for profile image */
@@ -777,7 +823,7 @@
   display: block;
 }
 
-/* Media queries for responsiveness */
+/* Responsive adjustments */
 @media (max-width: 1300px) {
   .navbar {
     padding: 10px 2%;
@@ -790,6 +836,22 @@
 
   .nav-logo {
     height: 45px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .user-profile-container {
+    min-width: 180px;
+  }
+
+  .navbar-user-name {
+    max-width: 120px;
+    font-size: 13px;
+  }
+
+  .navbar-voat-id {
+    max-width: 120px;
+    font-size: 10px;
   }
 }
 
@@ -834,6 +896,21 @@
 
   .navbar-search input {
     width: 120px;
+  }
+
+  .user-profile-container {
+    min-width: 160px;
+    padding: 4px 12px 4px 4px;
+  }
+
+  .navbar-user-name {
+    max-width: 100px;
+    font-size: 12px;
+  }
+
+  .navbar-voat-id {
+    max-width: 100px;
+    font-size: 10px;
   }
 }
 
@@ -915,6 +992,11 @@
     display: none;
   }
 
+  /* Hide the desktop user profile on mobile */
+  .navbar-user-profile {
+    display: none;
+  }
+
   /* Mobile notifications - Smaller, more compact */
   .notifications-container {
     top: 85px;
@@ -943,9 +1025,15 @@
     right: 8px;
   }
 
-  .navbar-voat-id {
-    color: #fff;
-    background-color: transparent;
+  /* Mobile user info adjustments */
+  .mobile-user-name {
+    max-width: 150px;
+    font-size: 15px;
+  }
+
+  .mobile-voat-id {
+    max-width: 100px;
+    font-size: 11px;
   }
 }
 

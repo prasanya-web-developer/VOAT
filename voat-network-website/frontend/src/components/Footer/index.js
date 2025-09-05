@@ -106,7 +106,7 @@ class Footer extends Component {
             <div className="section-divider"></div>
 
             <a
-              href="mailto:voatnetwork@gmail.com"
+              href="mailto:takeoff@voatnetwork.com"
               target="_blank"
               rel="noopener noreferrer"
               style={{ textDecoration: "none" }}
@@ -115,7 +115,7 @@ class Footer extends Component {
                 <div className="icon-circle">
                   <FaEnvelope />
                 </div>
-                <p>voatnetwork@gmail.com</p>
+                <p>takeoff@voatnetwork.com</p>
               </div>
             </a>
 
