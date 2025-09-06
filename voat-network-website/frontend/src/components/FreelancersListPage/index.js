@@ -706,22 +706,23 @@ class PortfolioList extends Component {
         console.log("API Response - Raw portfolio data:", portfolioData);
 
         portfolioData = portfolioData.map((portfolio) => {
-          // Normalize profession using the new robust function
+          // More lenient profession normalization
           const normalizedProfession = this.normalizeProfession(
             portfolio.profession || portfolio.headline
           );
 
           return {
             ...portfolio,
-            profession: normalizedProfession,
-            originalProfession: portfolio.profession || portfolio.headline, // Keep original for reference
+            profession:
+              normalizedProfession ||
+              portfolio.profession ||
+              portfolio.headline ||
+              "General Services", // Fallback instead of null
+            originalProfession: portfolio.profession || portfolio.headline,
           };
         });
 
-        console.log(
-          "API Response - After profession normalization:",
-          portfolioData.length
-        );
+        console.log("After profession normalization:", portfolioData.length);
       } else {
         console.log("API call failed, falling back to localStorage");
         let approvedPortfolios = JSON.parse(
@@ -739,7 +740,11 @@ class PortfolioList extends Component {
 
           return {
             ...portfolio,
-            profession: normalizedProfession,
+            profession:
+              normalizedProfession ||
+              portfolio.profession ||
+              portfolio.headline ||
+              "General Services",
             originalProfession: portfolio.profession || portfolio.headline,
           };
         });
@@ -747,19 +752,25 @@ class PortfolioList extends Component {
         console.log("LocalStorage - Raw portfolio data:", portfolioData.length);
       }
 
-      // CRITICAL: Filter out portfolios with null profession AND held portfolios
+      // UPDATED: More lenient filtering - only filter out truly invalid entries
       portfolioData = portfolioData.filter((portfolio) => {
-        // Check if profession is valid
-        if (portfolio.profession === null) {
+        // Only filter out if status is explicitly not approved
+        if (portfolio.status && portfolio.status !== "approved") {
           console.log(
-            `Filtering out portfolio with invalid profession: ${portfolio.name}`
+            `Filtering out non-approved portfolio: ${portfolio.name} (status: ${portfolio.status})`
           );
           return false;
         }
 
-        // Check if portfolio is held (should be hidden from public view)
+        // Only filter out if explicitly held (isHold === true)
         if (portfolio.isHold === true) {
           console.log(`Filtering out held portfolio: ${portfolio.name}`);
+          return false;
+        }
+
+        // Only filter out if no name (completely invalid entry)
+        if (!portfolio.name || portfolio.name.trim() === "") {
+          console.log(`Filtering out portfolio with no name`);
           return false;
         }
 
@@ -779,6 +790,9 @@ class PortfolioList extends Component {
       });
 
       console.log("Final portfolios set in state:", uniquePortfolios.length);
+
+      // Debug logging
+      this.debugPortfolioData();
     } catch (error) {
       console.error("Error fetching portfolios:", error);
 
@@ -798,15 +812,19 @@ class PortfolioList extends Component {
 
             return {
               ...portfolio,
-              profession: normalizedProfession,
+              profession:
+                normalizedProfession ||
+                portfolio.profession ||
+                portfolio.headline ||
+                "General Services",
               originalProfession: portfolio.profession || portfolio.headline,
             };
           })
           .filter((portfolio) => {
             // CRITICAL: Apply the same filtering logic in error fallback
-            if (portfolio.profession === null) {
+            if (portfolio.status && portfolio.status !== "approved") {
               console.log(
-                `Error fallback - Filtering out portfolio with invalid profession: ${portfolio.name}`
+                `Error fallback - Filtering out portfolio with invalid status: ${portfolio.name}`
               );
               return false;
             }
@@ -814,6 +832,13 @@ class PortfolioList extends Component {
             if (portfolio.isHold === true) {
               console.log(
                 `Error fallback - Filtering out held portfolio: ${portfolio.name}`
+              );
+              return false;
+            }
+
+            if (!portfolio.name || portfolio.name.trim() === "") {
+              console.log(
+                `Error fallback - Filtering out portfolio with no name`
               );
               return false;
             }
@@ -841,6 +866,26 @@ class PortfolioList extends Component {
         });
       }
     }
+  };
+
+  // Add this debugging method
+  debugPortfolioData = () => {
+    console.log("=== PORTFOLIO DEBUG INFO ===");
+    console.log("Total portfolios in state:", this.state.portfolios.length);
+
+    this.state.portfolios.forEach((portfolio, index) => {
+      console.log(`Portfolio ${index + 1}:`, {
+        name: portfolio.name,
+        status: portfolio.status,
+        profession: portfolio.profession,
+        originalProfession: portfolio.originalProfession,
+        isHold: portfolio.isHold,
+        isRecommended: portfolio.isRecommended,
+        userId: portfolio.userId,
+      });
+    });
+
+    console.log("=== END DEBUG INFO ===");
   };
 
   fetchUserData = async (portfolios) => {
@@ -1294,23 +1339,31 @@ class PortfolioList extends Component {
       this.state;
 
     const filteredPortfolios = portfolios.filter((portfolio) => {
-      if (portfolio.status !== "approved") {
+      // More lenient status check - if no status field, assume it's valid
+      if (portfolio.status && portfolio.status !== "approved") {
         return false;
       }
 
-      if (filters.profession && portfolio.profession !== filters.profession) {
-        return false;
+      // Profession filter - more flexible matching
+      if (filters.profession) {
+        const portfolioProfession = portfolio.profession || "";
+        if (
+          portfolioProfession.toLowerCase() !== filters.profession.toLowerCase()
+        ) {
+          return false;
+        }
       }
 
+      // Experience filter
       if (filters.experience) {
         const expValue = parseInt(portfolio.workExperience) || 0;
         const filterExp = parseInt(filters.experience);
-
         if (filterExp && expValue < filterExp) {
           return false;
         }
       }
 
+      // Amount filter
       if (filters.amount.length > 0) {
         const firstServicePrice = this.getFirstServicePrice(portfolio);
 
@@ -1336,7 +1389,7 @@ class PortfolioList extends Component {
         }
       }
 
-      // Add VOAT Recommended filter
+      // VOAT Recommended filter
       if (filters.voatRecommended && !portfolio.isRecommended) {
         return false;
       }
@@ -1488,30 +1541,6 @@ class PortfolioList extends Component {
                 ))}
               </select>
             </div>
-
-            {/* VOAT Recommended Filter */}
-            {/* <div className="filter-section">
-              <label className="checkbox-label voat-recommended-filter">
-                <input
-                  type="checkbox"
-                  checked={filters.voatRecommended}
-                  onChange={this.handleVoatRecommendedFilter}
-                  className="filter-checkbox"
-                />
-                <span className="checkbox-custom voat-checkbox"></span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-                </svg>
-                VOAT Recommended
-              </label>
-            </div> */}
 
             <div className="filter-section">
               <label className="filter-label">

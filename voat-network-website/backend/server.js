@@ -1343,63 +1343,148 @@ app.get("/api/portfolios", async (req, res) => {
     console.log("in /api/portfolios");
 
     const portfolios = await PortfolioSubmission.aggregate([
-      // Step 1: Find only the approved portfolios that are not held
+      // Step 1: Find approved portfolios that are not held
       {
         $match: {
           status: "approved",
-          $or: [{ isHold: { $exists: false } }, { isHold: false }],
+          // More flexible hold checking
+          $and: [
+            {
+              $or: [
+                { isHold: { $exists: false } },
+                { isHold: false },
+                { isHold: null },
+              ],
+            },
+          ],
         },
       },
       // Step 2: Sort by date, newest first
       {
         $sort: { submittedDate: -1 },
       },
-      // Step 3: Join with the 'users' collection
+      // Step 3: Join with users collection - make it optional
       {
         $lookup: {
-          from: "users", // The name of the User collection
-          localField: "userId", // Field from PortfolioSubmission
-          foreignField: "_id", // Field from User
-          as: "userDetails", // The new array field with user info
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userDetails",
         },
       },
-      // Step 4: Deconstruct the userDetails array
+      // Step 4: Unwind but preserve entries without user details
       {
         $unwind: {
           path: "$userDetails",
-          preserveNullAndEmptyArrays: true, // Keep portfolios even if user is not found
+          preserveNullAndEmptyArrays: true,
         },
       },
-      // Step 5: Shape the final output
+      // Step 5: Project with fallbacks
       {
         $project: {
           _id: 1,
           id: "$_id",
           userId: 1,
-          uservoatId: "$userDetails.voatId",
-          name: 1,
-          email: 1,
-          workExperience: 1,
-          profession: 1,
-          headline: 1,
-          profileImage: 1,
+          uservoatId: { $ifNull: ["$userDetails.voatId", null] },
+          name: { $ifNull: ["$name", "Unknown"] },
+          email: { $ifNull: ["$email", ""] },
+          workExperience: { $ifNull: ["$workExperience", "0"] },
+          profession: { $ifNull: ["$profession", "$headline"] },
+          headline: { $ifNull: ["$headline", "$profession"] },
+          profileImage: {
+            $ifNull: ["$profileImage", "$userDetails.profileImage"],
+          },
           portfolioLink: 1,
           about: 1,
           coverImage: 1,
           status: 1,
           submittedDate: 1,
           updatedDate: 1,
-          services: 1,
-          isHold: 1,
-          isRecommended: { $ifNull: ["$isRecommended", false] }, // Keep the actual value, default to false if not set
+          services: { $ifNull: ["$services", []] },
+          isHold: { $ifNull: ["$isHold", false] },
+          isRecommended: { $ifNull: ["$isRecommended", false] },
         },
       },
     ]);
 
-    res.status(200).json(portfolios);
+    console.log(`Found ${portfolios.length} approved portfolios`);
+
+    // Additional server-side filtering to ensure data quality
+    const filteredPortfolios = portfolios.filter((portfolio) => {
+      // Ensure we have basic required fields
+      if (!portfolio.name || portfolio.name.trim() === "") {
+        console.log("Filtering out portfolio with empty name");
+        return false;
+      }
+
+      // Ensure status is explicitly approved
+      if (portfolio.status !== "approved") {
+        console.log(`Filtering out portfolio with status: ${portfolio.status}`);
+        return false;
+      }
+
+      // Ensure not held
+      if (portfolio.isHold === true) {
+        console.log(`Filtering out held portfolio: ${portfolio.name}`);
+        return false;
+      }
+
+      return true;
+    });
+
+    console.log(
+      `After server-side filtering: ${filteredPortfolios.length} portfolios`
+    );
+
+    res.status(200).json(filteredPortfolios);
   } catch (error) {
     console.error("Error fetching approved portfolios:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/api/debug/portfolios", async (req, res) => {
+  try {
+    console.log("Debug: Checking all portfolio submissions");
+
+    const allPortfolios = await PortfolioSubmission.find({})
+      .sort({ submittedDate: -1 })
+      .limit(50); // Limit to last 50 for performance
+
+    const portfolioSummary = allPortfolios.map((portfolio) => ({
+      id: portfolio._id,
+      name: portfolio.name,
+      email: portfolio.email,
+      status: portfolio.status,
+      isHold: portfolio.isHold,
+      isRecommended: portfolio.isRecommended,
+      profession: portfolio.profession,
+      headline: portfolio.headline,
+      submittedDate: portfolio.submittedDate,
+      userId: portfolio.userId,
+    }));
+
+    const statusCounts = {
+      total: allPortfolios.length,
+      approved: allPortfolios.filter((p) => p.status === "approved").length,
+      pending: allPortfolios.filter((p) => p.status === "pending").length,
+      rejected: allPortfolios.filter((p) => p.status === "rejected").length,
+      held: allPortfolios.filter((p) => p.isHold === true).length,
+      recommended: allPortfolios.filter((p) => p.isRecommended === true).length,
+    };
+
+    const approvedNotHeld = allPortfolios.filter(
+      (p) => p.status === "approved" && p.isHold !== true
+    ).length;
+
+    res.json({
+      summary: statusCounts,
+      approvedNotHeld,
+      portfolios: portfolioSummary,
+    });
+  } catch (error) {
+    console.error("Debug endpoint error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -5422,6 +5507,66 @@ app.get("/api/debug/check-voat-ids", async (req, res) => {
       })),
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/admin/fix-portfolio-data", async (req, res) => {
+  try {
+    console.log("Starting portfolio data fix...");
+
+    // Fix missing isHold field
+    const holdResult = await PortfolioSubmission.updateMany(
+      { isHold: { $exists: false } },
+      { $set: { isHold: false } }
+    );
+
+    // Fix missing isRecommended field
+    const recommendedResult = await PortfolioSubmission.updateMany(
+      { isRecommended: { $exists: false } },
+      { $set: { isRecommended: false } }
+    );
+
+    // Fix missing status field (set to pending if missing)
+    const statusResult = await PortfolioSubmission.updateMany(
+      { status: { $exists: false } },
+      { $set: { status: "pending" } }
+    );
+
+    // Fix missing headline field (copy from profession)
+    const headlineResult = await PortfolioSubmission.updateMany(
+      {
+        $and: [
+          { headline: { $exists: false } },
+          { profession: { $exists: true, $ne: null, $ne: "" } },
+        ],
+      },
+      [{ $set: { headline: "$profession" } }]
+    );
+
+    // Fix missing profession field (copy from headline)
+    const professionResult = await PortfolioSubmission.updateMany(
+      {
+        $and: [
+          { profession: { $exists: false } },
+          { headline: { $exists: true, $ne: null, $ne: "" } },
+        ],
+      },
+      [{ $set: { profession: "$headline" } }]
+    );
+
+    res.json({
+      message: "Portfolio data fix completed",
+      results: {
+        holdFieldsFixed: holdResult.modifiedCount,
+        recommendedFieldsFixed: recommendedResult.modifiedCount,
+        statusFieldsFixed: statusResult.modifiedCount,
+        headlineFieldsFixed: headlineResult.modifiedCount,
+        professionFieldsFixed: professionResult.modifiedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fixing portfolio data:", error);
     res.status(500).json({ error: error.message });
   }
 });
