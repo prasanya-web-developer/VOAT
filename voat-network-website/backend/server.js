@@ -913,7 +913,7 @@ app.post(
   upload.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
-    { name: "workFiles", maxCount: 10 }, // Allow up to 10 work files
+    { name: "workFiles", maxCount: 10 }, // ✅ This matches the frontend
   ]),
   async (req, res) => {
     try {
@@ -928,6 +928,8 @@ app.post(
         portfolioLink,
         isNewSubmission,
         service,
+        hasProfileImage,
+        profileImagePath,
       } = req.body;
 
       if (!name || !profession || !email) {
@@ -942,6 +944,8 @@ app.post(
       const coverImageFile = req.files?.coverImage?.[0];
       const workFiles = req.files?.workFiles || [];
 
+      console.log("✅ Work files received:", workFiles.length);
+
       // Prepare update data
       const portfolioData = {
         name,
@@ -953,7 +957,10 @@ app.post(
         portfolioLink,
       };
 
-      if (profileImageFile) {
+      // Handle profile image - prioritize existing user profile image
+      if (hasProfileImage === "true" && profileImagePath) {
+        portfolioData.profileImage = profileImagePath;
+      } else if (profileImageFile) {
         portfolioData.profileImage = `/uploads/${profileImageFile.filename}`;
       }
 
@@ -961,31 +968,25 @@ app.post(
         portfolioData.coverImage = `/uploads/${coverImageFile.filename}`;
       }
 
-      // Process work files
+      // ✅ FIXED: Process work files correctly
       const workItems = workFiles.map((file) => {
         const isVideo = file.mimetype.startsWith("video/");
         return {
           url: `/uploads/${file.filename}`,
-          thumbnail: isVideo ? "" : `/uploads/${file.filename}`, // For images, thumbnail is the image itself
-          title: file.originalname.split(".")[0], // Use filename without extension as title
+          thumbnail: isVideo ? "" : `/uploads/${file.filename}`,
+          title: file.originalname.split(".")[0],
           type: isVideo ? "video" : "image",
           serviceName: "", // Will be filled from form data if available
           uploadedDate: new Date(),
         };
       });
 
+      console.log("✅ Processed work items:", workItems.length);
+
       // Set status to pending for new submissions
       if (isNewSubmission === "true") {
         portfolioData.status = "pending";
         portfolioData.submittedDate = new Date();
-      }
-
-      // Copy user's profile image if they have one and no new profile image was uploaded
-      if (userId && !profileImageFile) {
-        const user = await User.findById(userId);
-        if (user && user.profileImage) {
-          portfolioData.profileImage = user.profileImage;
-        }
       }
 
       // Handle service data if provided
@@ -1002,7 +1003,6 @@ app.post(
       // Find and update, or create new if doesn't exist
       let portfolio;
       if (userId) {
-        // For logged-in users, we can update existing or create new
         if (isNewSubmission === "true") {
           // If we have a service to add and it's a new submission
           if (serviceData) {
@@ -1012,31 +1012,26 @@ app.post(
               pricing: serviceData.pricing || [],
             };
 
-            // Find the existing portfolio first to check if it exists
             const existingPortfolio = await PortfolioSubmission.findOne({
               userId,
             });
 
             if (existingPortfolio) {
-              // If portfolio exists, check for duplicate services
               if (!existingPortfolio.services) {
                 existingPortfolio.services = [];
               }
 
-              // Check if a service with this name already exists
               const existingServiceIndex = existingPortfolio.services.findIndex(
                 (service) => service.name === newService.name
               );
 
               if (existingServiceIndex >= 0) {
-                // Update existing service instead of adding a duplicate
                 existingPortfolio.services[existingServiceIndex] = newService;
               } else {
-                // Add new service only if it doesn't exist
                 existingPortfolio.services.push(newService);
               }
 
-              // Add work items to existing portfolio
+              // ✅ FIXED: Add work items to existing portfolio
               if (!existingPortfolio.works) {
                 existingPortfolio.works = [];
               }
@@ -1045,13 +1040,10 @@ app.post(
               existingPortfolio.status = "pending";
               existingPortfolio.submittedDate = new Date();
 
-              // Update other portfolio fields
               Object.assign(existingPortfolio, portfolioData);
-
-              // Save the updated portfolio
               portfolio = await existingPortfolio.save();
             } else {
-              // Create a new portfolio with the service and works
+              // ✅ FIXED: Create new portfolio with works
               portfolio = new PortfolioSubmission({
                 ...portfolioData,
                 userId,
@@ -1064,19 +1056,17 @@ app.post(
               await portfolio.save();
             }
           } else {
-            // No service data, just update or create the portfolio with works
+            // ✅ FIXED: Handle portfolio without service but with works
             const existingPortfolio = await PortfolioSubmission.findOne({
               userId,
             });
 
             if (existingPortfolio) {
-              // Add works to existing portfolio
               if (!existingPortfolio.works) {
                 existingPortfolio.works = [];
               }
               existingPortfolio.works.push(...workItems);
 
-              // Update other fields
               Object.assign(existingPortfolio, {
                 ...portfolioData,
                 status: "pending",
@@ -1085,7 +1075,6 @@ app.post(
 
               portfolio = await existingPortfolio.save();
             } else {
-              // Create new portfolio with works
               portfolio = new PortfolioSubmission({
                 ...portfolioData,
                 userId,
@@ -1098,7 +1087,7 @@ app.post(
             }
           }
         } else {
-          // Normal update - don't change status, but add works if any
+          // Normal update - add works if any
           const existingPortfolio = await PortfolioSubmission.findOne({
             userId,
           });
@@ -1124,7 +1113,6 @@ app.post(
       } else {
         // For non-logged in users, always create new submission
         if (serviceData) {
-          // Include the service if provided
           portfolio = new PortfolioSubmission({
             ...portfolioData,
             services: [

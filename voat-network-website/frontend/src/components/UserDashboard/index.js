@@ -2560,7 +2560,7 @@ class UserDashboard extends Component {
         formData.append("userId", userData.id);
       }
 
-      // Add profile image handling (existing code)
+      // Add profile image handling
       if (userData.profileImage) {
         formData.append("profileImagePath", userData.profileImage);
         formData.append("hasProfileImage", "true");
@@ -2573,7 +2573,7 @@ class UserDashboard extends Component {
 
       formData.append("isNewSubmission", "true");
 
-      // Add service data (existing code)
+      // Add service data
       if (
         portfolioFormData.serviceName &&
         portfolioFormData.serviceDescription
@@ -2586,7 +2586,14 @@ class UserDashboard extends Component {
         formData.append("service", JSON.stringify(service));
       }
 
-      // Submit portfolio first
+      // ✅ FIXED: Add work files with proper field name
+      if (selectedWorkFiles && selectedWorkFiles.length > 0) {
+        selectedWorkFiles.forEach((file, index) => {
+          formData.append(`workFiles`, file); // Use 'workFiles' to match backend expectation
+        });
+      }
+
+      // Submit portfolio
       const response = await fetch(`${baseUrl}/api/portfolio`, {
         method: "POST",
         body: formData,
@@ -2607,11 +2614,6 @@ class UserDashboard extends Component {
       }
 
       const result = await response.json();
-
-      // Upload works if any files are selected
-      if (selectedWorkFiles.length > 0 && userData && userData.id) {
-        await this.uploadWorksToServer(userData.id);
-      }
 
       // Clear portfolio status timeout
       if (this.portfolioStatusTimeout) {
