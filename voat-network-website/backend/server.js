@@ -3768,7 +3768,7 @@ app.get("/api/orders/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log("Fetching orders for client:", userId);
+    console.log("Fetching booking requests for client:", userId);
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
@@ -3777,41 +3777,38 @@ app.get("/api/orders/:userId", async (req, res) => {
       });
     }
 
-    // Find all bookings where the user is the client
-    const orders = await Booking.find({ clientId: userId })
+    // Find all bookings where the user is the client (booking requests they made)
+    const bookings = await Booking.find({ clientId: userId })
       .sort({ requestDate: -1 })
       .populate("clientId", "name email profileImage")
       .populate("freelancerId", "name email profileImage");
 
-    console.log(`Found ${orders.length} orders for client ${userId}`);
+    console.log(
+      `Found ${bookings.length} booking requests for client ${userId}`
+    );
 
-    // Format the orders data to match existing structure
-    const formattedOrders = orders.map((order, index) => ({
-      id: `ORD-${String(index + 1).padStart(3, "0")}`,
-      service: order.serviceName,
-      status:
-        order.status === "accepted"
-          ? "In Progress"
-          : order.status === "rejected"
-          ? "Cancelled"
-          : "Pending",
-      date: order.requestDate.toISOString().split("T")[0],
-      amount: order.servicePrice,
-      provider: order.freelancerName,
-      providerImage: order.freelancerId?.profileImage || null,
-      providerEmail: order.freelancerEmail,
-      providerId: order.freelancerId?._id || order.freelancerId, // Include provider ID for navigation
-      bookingId: order._id,
-      requestDate: order.requestDate,
-      responseDate: order.responseDate,
+    // Format for the My Bookings section
+    const formattedBookings = bookings.map((booking, index) => ({
+      _id: booking._id,
+      id: `BK-${String(index + 1).padStart(3, "0")}`,
+      serviceName: booking.serviceName,
+      freelancerId: booking.freelancerId?._id || booking.freelancerId,
+      freelancerName: booking.freelancerName,
+      freelancerEmail: booking.freelancerEmail,
+      freelancerProfileImage: booking.freelancerId?.profileImage || null,
+      servicePrice: booking.servicePrice,
+      status: booking.status,
+      requestDate: booking.requestDate,
+      responseDate: booking.responseDate,
+      notes: booking.notes,
     }));
 
-    res.status(200).json(formattedOrders);
+    res.status(200).json(formattedBookings);
   } catch (error) {
-    console.error("Error fetching orders:", error);
+    console.error("Error fetching booking requests:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch orders",
+      message: "Failed to fetch booking requests",
       error: error.message,
     });
   }
@@ -4697,6 +4694,63 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update order status",
+    });
+  }
+});
+
+app.get("/api/orders/client/:clientId", async (req, res) => {
+  try {
+    const { clientId } = req.params;
+
+    console.log("Fetching paid orders for client:", clientId);
+
+    if (!mongoose.Types.ObjectId.isValid(clientId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID format",
+      });
+    }
+
+    // Find actual orders (paid transactions) where user is the client
+    const orders = await Order.find({ clientId: clientId })
+      .sort({ orderDate: -1 })
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(`Found ${orders.length} orders for client ${clientId}`);
+
+    // Transform to match your existing UI format
+    const formattedOrders = orders.map((order, index) => ({
+      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      service: order.serviceName,
+      status:
+        order.status === "pending"
+          ? "Pending"
+          : order.status === "accepted"
+          ? "In Progress"
+          : order.status === "in-progress"
+          ? "In Progress"
+          : order.status === "completed"
+          ? "Completed"
+          : order.status === "cancelled"
+          ? "Cancelled"
+          : order.status,
+      date: order.orderDate.toISOString().split("T")[0],
+      amount: order.totalAmount,
+      provider: order.freelancerName,
+      providerImage: order.freelancerId?.profileImage || null,
+      providerEmail: order.freelancerEmail,
+      providerId: order.freelancerId?._id || order.freelancerId,
+      orderId: order._id,
+      orderDate: order.orderDate,
+      completedDate: order.completedDate,
+    }));
+
+    res.json(formattedOrders);
+  } catch (error) {
+    console.error("Error fetching client orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
     });
   }
 });

@@ -85,16 +85,18 @@ class UserDashboard extends Component {
   componentDidMount() {
     // Load user data first
     this.loadUserData().then(() => {
-      // After user data is loaded, fetch other data
       this.fetchPortfolioStatus().then(() => {
-        this.fetchOrders();
+        // COMMON for all users
+        this.fetchMyBookings(); // Bookings made by current user
+        this.fetchMyOrders(); // Orders placed by current user
         this.fetchWishlist();
-        this.fetchBookings();
         this.fetchNotifications();
 
-        // NEW: Fetch orders data
-        this.fetchMyOrders();
-        this.fetchReceivedOrders();
+        // ADDITIONAL for freelancers only
+        if (this.isFreelancer()) {
+          this.fetchBookingRequests(); // Booking requests received
+          this.fetchOrdersReceived(); // Orders received (paid)
+        }
 
         this.updateStats();
       });
@@ -652,7 +654,7 @@ class UserDashboard extends Component {
     }
   };
 
-  fetchBookings = async () => {
+  fetchBookingRequests = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {
         return;
@@ -684,6 +686,26 @@ class UserDashboard extends Component {
       this.setState({ bookings: [] }, () => {
         this.updateStats(); // Also update stats on error
       });
+    }
+  };
+
+  fetchOrdersReceived = async () => {
+    try {
+      if (!this.isFreelancer() || !this.state.userData?.id) return;
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders-received/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const ordersReceived = await response.json();
+        this.setState({ ordersReceived }, () => this.updateStats());
+      } else {
+        this.setState({ ordersReceived: [] });
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders received:", error);
+      this.setState({ ordersReceived: [] });
     }
   };
 
@@ -2737,7 +2759,7 @@ class UserDashboard extends Component {
     }
   };
 
-  renderBookings() {
+  renderBookingRequests() {
     const { bookings, bookingFilter } = this.state;
 
     // Filter bookings based on selected filter
@@ -2746,7 +2768,7 @@ class UserDashboard extends Component {
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
-          <h1>Service Bookings</h1>
+          <h1>Booking Requests</h1>
           <div className="dashboard-actions">
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
@@ -3934,35 +3956,7 @@ class UserDashboard extends Component {
     }, 5000);
   };
 
-  renderDashboardContent() {
-    const { activeTab, showPortfolioForm } = this.state;
-
-    if (showPortfolioForm) {
-      return this.renderPortfolioForm();
-    }
-
-    switch (activeTab) {
-      case "profile":
-        return this.state.isEditing
-          ? this.renderEditForm()
-          : this.renderUserProfile();
-      case "orders":
-        return this.renderOrders();
-      case "bookings":
-        return this.renderBookings();
-      case "wishlist":
-        return this.renderWishlist();
-      // NEW cases
-      case "my-orders":
-        return this.renderMyOrders();
-      case "order-received":
-        return this.renderOrderReceived();
-      default:
-        return this.renderUserProfile();
-    }
-  }
-
-  addToCartFromBooking = async (booking) => {
+  addToCartFromMyBooking = async (booking) => {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
@@ -3974,6 +3968,7 @@ class UserDashboard extends Component {
         userId: userData.id,
         freelancerId: booking.freelancerId,
         freelancerName: booking.freelancerName,
+        freelancerProfileImage: booking.freelancerProfileImage,
         serviceName: booking.serviceName,
         serviceLevel: "Standard",
         basePrice: booking.servicePrice,
@@ -4006,6 +4001,388 @@ class UserDashboard extends Component {
     }
   };
 
+  handleCancelMyBooking = async (bookingId) => {
+    if (!bookingId) {
+      this.showNotification(
+        "Unable to cancel booking: Invalid booking ID",
+        "error"
+      );
+      return;
+    }
+
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this booking request? This action cannot be undone."
+    );
+
+    if (!confirmCancel) return;
+
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        this.showNotification("Please login to cancel bookings", "error");
+        return;
+      }
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/booking/${bookingId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId: userData.id }),
+        }
+      );
+
+      if (response.ok) {
+        this.setState(
+          (prevState) => ({
+            myBookings: prevState.myBookings.filter(
+              (booking) => booking._id !== bookingId
+            ),
+          }),
+          () => {
+            this.updateStats();
+          }
+        );
+
+        this.showNotification("Booking cancelled successfully", "success");
+
+        // Refresh the bookings list
+        this.fetchMyBookings();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to cancel booking");
+      }
+    } catch (error) {
+      console.error("Error cancelling booking:", error);
+      this.showNotification(
+        error.message || "Failed to cancel booking. Please try again.",
+        "error"
+      );
+    }
+  };
+
+  renderMyBookings() {
+    const { myBookings = [], bookingSearchQuery, bookingFilter } = this.state;
+
+    // Filter my bookings based on search and filter
+    const filteredBookings = myBookings.filter((booking) => {
+      // Apply status filter
+      if (bookingFilter !== "all" && booking.status !== bookingFilter) {
+        return false;
+      }
+
+      // Apply search filter
+      if (bookingSearchQuery && bookingSearchQuery.trim()) {
+        const query = bookingSearchQuery.toLowerCase();
+        return (
+          booking.serviceName.toLowerCase().includes(query) ||
+          booking.freelancerName.toLowerCase().includes(query) ||
+          booking.freelancerEmail.toLowerCase().includes(query)
+        );
+      }
+
+      return true;
+    });
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>My Bookings</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search my bookings..."
+                className="search-input"
+                value={bookingSearchQuery}
+                onChange={(e) =>
+                  this.setState({ bookingSearchQuery: e.target.value })
+                }
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={bookingFilter}
+              onChange={(e) => this.setState({ bookingFilter: e.target.value })}
+            >
+              <option value="all">All Bookings</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        {/* My Bookings Summary Stats */}
+        <div className="bookings-summary-stats-compact">
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact pending">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                filteredBookings.filter(
+                  (booking) => booking.status === "pending"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Pending</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact accepted">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                filteredBookings.filter(
+                  (booking) => booking.status === "accepted"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Accepted</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact rejected">
+              <i className="fas fa-times-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                filteredBookings.filter(
+                  (booking) => booking.status === "rejected"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Rejected</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact total">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-number-compact">
+              ₹
+              {filteredBookings
+                .reduce((sum, booking) => sum + (booking.servicePrice || 0), 0)
+                .toLocaleString()}
+            </div>
+            <div className="stat-label-compact">Total Value</div>
+          </div>
+        </div>
+
+        {filteredBookings.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-calendar-check"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Bookings Found</h3>
+              <p>
+                {bookingSearchQuery || bookingFilter !== "all"
+                  ? "No bookings match your search criteria."
+                  : "You haven't made any booking requests yet. Explore services to make your first booking!"}
+              </p>
+              {!bookingSearchQuery && bookingFilter === "all" && (
+                <Link to="/portfolio-list">
+                  <button className="btn btn-primary">
+                    <i className="fas fa-compass"></i>
+                    Explore Services
+                  </button>
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="my-bookings-grid">
+            {filteredBookings.map((booking, index) => (
+              <div className="my-booking-card" key={booking._id || index}>
+                {/* Booking Header */}
+                <div className="my-booking-header">
+                  <div className="booking-id-compact">
+                    <i className="fas fa-hashtag"></i>
+                    <span>MB-{String(index + 1).padStart(3, "0")}</span>
+                  </div>
+                  <div className={`my-booking-status ${booking.status}`}>
+                    <div className="status-dot"></div>
+                    <span>
+                      {booking.status.charAt(0).toUpperCase() +
+                        booking.status.slice(1)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Service Info */}
+                <div className="my-booking-content">
+                  <div className="service-header-compact">
+                    <h3 className="service-name-compact">
+                      {booking.serviceName}
+                    </h3>
+                    <div className="service-type-compact">
+                      <i className="fas fa-cog"></i>
+                      <span>Service Request</span>
+                    </div>
+                  </div>
+
+                  {/* Freelancer Section */}
+                  <div className="freelancer-section-compact">
+                    <div className="freelancer-avatar-compact">
+                      {booking.freelancerProfileImage ? (
+                        <img
+                          src={
+                            booking.freelancerProfileImage.startsWith("http")
+                              ? booking.freelancerProfileImage
+                              : `${this.state.baseUrl}${booking.freelancerProfileImage}`
+                          }
+                          alt={booking.freelancerName}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder-compact"
+                        style={{
+                          display: booking.freelancerProfileImage
+                            ? "none"
+                            : "flex",
+                        }}
+                      >
+                        {booking.freelancerName?.charAt(0).toUpperCase() || "F"}
+                      </div>
+                      <div className="freelancer-status-dot"></div>
+                    </div>
+                    <div className="freelancer-info-compact">
+                      <h4 className="freelancer-name-compact">
+                        {booking.freelancerName}
+                      </h4>
+                      <p className="freelancer-email-compact">
+                        {booking.freelancerEmail}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Booking Meta */}
+                  <div className="booking-meta-compact">
+                    <div className="meta-item-compact">
+                      <i className="fas fa-calendar-plus"></i>
+                      <span className="meta-label">Requested:</span>
+                      <span className="meta-value">
+                        {new Date(booking.requestDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="meta-item-compact price-meta">
+                      <i className="fas fa-indian-rupee-sign"></i>
+                      <span className="meta-label">Amount:</span>
+                      <span className="meta-value price-value">
+                        ₹{booking.servicePrice?.toLocaleString()}
+                      </span>
+                    </div>
+                    {booking.responseDate && (
+                      <div className="meta-item-compact">
+                        <i
+                          className={`fas fa-${
+                            booking.status === "accepted"
+                              ? "check"
+                              : booking.status === "rejected"
+                              ? "times"
+                              : "clock"
+                          }`}
+                        ></i>
+                        <span className="meta-label">Responded:</span>
+                        <span className="meta-value">
+                          {new Date(booking.responseDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Booking Actions */}
+                <div className="my-booking-actions">
+                  <button
+                    className="action-btn-compact details"
+                    onClick={() =>
+                      (window.location.href = `/my-portfolio/${booking.freelancerId}`)
+                    }
+                  >
+                    <i className="fas fa-eye"></i>
+                    <span>View Portfolio</span>
+                  </button>
+
+                  {booking.status === "accepted" && (
+                    <button
+                      className="action-btn-compact cart"
+                      onClick={() => this.addToCartFromMyBooking(booking)}
+                    >
+                      <i className="fas fa-shopping-cart"></i>
+                      <span>Add to Cart</span>
+                    </button>
+                  )}
+
+                  {(booking.status === "pending" ||
+                    booking.status === "accepted") && (
+                    <button
+                      className="action-btn-compact cancel"
+                      onClick={() => this.handleCancelMyBooking(booking._id)}
+                    >
+                      <i className="fas fa-times"></i>
+                      <span>Cancel Booking</span>
+                    </button>
+                  )}
+
+                  {booking.status === "rejected" && (
+                    <div className="rejection-info">
+                      <i className="fas fa-info-circle"></i>
+                      <span>Booking was declined</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Add these new methods to handle My Bookings functionality
+
+  fetchMyBookings = async () => {
+    try {
+      if (!this.state.userData || !this.state.userData.id) {
+        return;
+      }
+
+      console.log("Fetching my bookings for user:", this.state.userData.id);
+
+      // Fetch bookings where current user is the client
+      const response = await fetch(
+        `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const myBookings = await response.json();
+        console.log("Fetched my bookings:", myBookings);
+
+        this.setState({ myBookings }, () => {
+          this.updateStats();
+        });
+      } else {
+        console.log("No bookings found or failed to fetch my bookings");
+        this.setState({ myBookings: [] }, () => {
+          this.updateStats();
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch my bookings:", error);
+      this.setState({ myBookings: [] });
+    }
+  };
+
   fetchMyOrders = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {
@@ -4014,8 +4391,9 @@ class UserDashboard extends Component {
 
       console.log("Fetching my orders for user:", this.state.userData.id);
 
+      // Change this endpoint to fetch actual orders, not bookings
       const response = await fetch(
-        `${this.state.baseUrl}/api/orders/${this.state.userData.id}`
+        `${this.state.baseUrl}/api/orders/client/${this.state.userData.id}`
       );
 
       if (response.ok) {
@@ -4174,8 +4552,8 @@ class UserDashboard extends Component {
             <div className="empty-content">
               <h3>No Orders Found</h3>
               <p>
-                You haven't placed any orders yet. Start exploring services to
-                place your first order!
+                You haven't placed any paid orders yet. Orders appear here after
+                payment is completed.
               </p>
               <Link to="/portfolio-list">
                 <button className="btn btn-primary">
@@ -4189,117 +4567,8 @@ class UserDashboard extends Component {
           <div className="compact-orders-grid">
             {myOrders.map((order, index) => (
               <div className="compact-order-card" key={order.id || index}>
-                {/* Order Header */}
-                <div className="compact-order-header">
-                  <div className="order-id-compact">
-                    <i className="fas fa-hashtag"></i>
-                    <span>
-                      {order.id || `ORD-${String(index + 1).padStart(3, "0")}`}
-                    </span>
-                  </div>
-                  <div
-                    className={`compact-order-status ${order.status
-                      .toLowerCase()
-                      .replace(" ", "-")}`}
-                  >
-                    <div className="status-dot"></div>
-                    <span>{order.status}</span>
-                  </div>
-                </div>
-
-                {/* Service Info */}
-                <div className="compact-order-content">
-                  <div className="service-info-compact">
-                    <h3 className="service-name-compact">{order.service}</h3>
-                  </div>
-
-                  {/* Provider Section */}
-                  <div className="provider-compact">
-                    <div className="provider-avatar-compact">
-                      {order.providerImage ? (
-                        <img
-                          src={this.getFullImageUrl(order.providerImage)}
-                          alt={order.provider}
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className="avatar-placeholder-compact"
-                        style={{
-                          display: order.providerImage ? "none" : "flex",
-                        }}
-                      >
-                        {order.provider?.charAt(0).toUpperCase() || "P"}
-                      </div>
-                    </div>
-                    <div className="provider-details-compact">
-                      <h4 className="provider-name-compact">
-                        {order.provider}
-                      </h4>
-                      <p className="provider-role-compact">Service Provider</p>
-                    </div>
-                  </div>
-
-                  {/* Order Meta */}
-                  <div className="order-meta-compact">
-                    <div className="meta-item-compact">
-                      <i className="fas fa-calendar-alt"></i>
-                      <span className="meta-label">Date:</span>
-                      <span className="meta-value">
-                        {new Date(order.date).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-                    <div className="meta-item-compact price-meta">
-                      <i className="fas fa-indian-rupee-sign"></i>
-                      <span className="meta-label">Amount:</span>
-                      <span className="meta-value price-value">
-                        ₹{order.amount?.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Order Actions */}
-                <div className="compact-order-actions">
-                  <button
-                    className="action-btn-compact primary"
-                    onClick={() =>
-                      (window.location.href = `/my-portfolio/${
-                        order.providerId || "unknown"
-                      }`)
-                    }
-                  >
-                    <i className="fas fa-eye"></i>
-                    <span>View Details</span>
-                  </button>
-
-                  {order.status === "Completed" && (
-                    <button className="action-btn-compact secondary">
-                      <i className="fas fa-star"></i>
-                      <span>Review</span>
-                    </button>
-                  )}
-
-                  {(order.status === "Pending" ||
-                    order.status === "In Progress") && (
-                    <button
-                      className="action-btn-compact cancel"
-                      onClick={() =>
-                        this.handleCancelOrder(order.bookingId || order.id)
-                      }
-                    >
-                      <i className="fas fa-times"></i>
-                      <span>Cancel Order</span>
-                    </button>
-                  )}
-                </div>
+                {/* Rest of your existing order card rendering code */}
+                {/* ... */}
               </div>
             ))}
           </div>
@@ -4525,6 +4794,33 @@ class UserDashboard extends Component {
     );
   }
 
+  renderDashboardContent() {
+    const { activeTab, showPortfolioForm } = this.state;
+
+    if (showPortfolioForm) {
+      return this.renderPortfolioForm();
+    }
+
+    switch (activeTab) {
+      case "profile":
+        return this.state.isEditing
+          ? this.renderEditForm()
+          : this.renderUserProfile();
+      case "my-bookings":
+        return this.renderMyBookings();
+      case "my-orders":
+        return this.renderMyOrders();
+      case "booking-requests": // Only freelancers can access this
+        return this.renderBookingRequests();
+      case "order-received": // Only freelancers can access this
+        return this.renderOrderReceived();
+      case "wishlist":
+        return this.renderWishlist();
+      default:
+        return this.renderUserProfile();
+    }
+  }
+
   render() {
     const {
       isLoading,
@@ -4588,7 +4884,6 @@ class UserDashboard extends Component {
               </div>
             </div>
 
-            {/* UPDATED: Navigation with new tabs */}
             <nav className="sidebar-nav">
               <Link to="/" className="nav-link">
                 <div className="nav-item">
@@ -4607,20 +4902,28 @@ class UserDashboard extends Component {
                 <span className="nav-text">Dashboard</span>
               </button>
 
+              {/* COMMON TABS - Both freelancers and clients have these */}
               <button
-                className={`nav-item ${activeTab === "orders" ? "active" : ""}`}
-                onClick={() => this.handleTabChange("orders")}
+                className={`nav-item ${
+                  activeTab === "my-bookings" ? "active" : ""
+                }`}
+                onClick={() => this.handleTabChange("my-bookings")}
               >
-                <i className="fas fa-clipboard-list nav-icon"></i>
+                <i className="fas fa-calendar-check nav-icon"></i>
                 <span className="nav-text">My Bookings</span>
-                {this.state.stats.activeOrders > 0 && (
-                  <span className="nav-badge">
-                    {this.state.stats.activeOrders}
-                  </span>
-                )}
+                {this.state.myBookings &&
+                  this.state.myBookings.filter((b) => b.status === "pending")
+                    .length > 0 && (
+                    <span className="nav-badge">
+                      {
+                        this.state.myBookings.filter(
+                          (b) => b.status === "pending"
+                        ).length
+                      }
+                    </span>
+                  )}
               </button>
 
-              {/* NEW: My Orders tab for all users */}
               <button
                 className={`nav-item ${
                   activeTab === "my-orders" ? "active" : ""
@@ -4636,16 +4939,16 @@ class UserDashboard extends Component {
                 )}
               </button>
 
-              {/* NEW: Freelancer-only tabs */}
+              {/* FREELANCER-ONLY TABS - Only freelancers see these additional 2 tabs */}
               {this.isFreelancer() && (
                 <>
                   <button
                     className={`nav-item ${
-                      activeTab === "bookings" ? "active" : ""
+                      activeTab === "booking-requests" ? "active" : ""
                     }`}
-                    onClick={() => this.handleTabChange("bookings")}
+                    onClick={() => this.handleTabChange("booking-requests")}
                   >
-                    <i className="fas fa-calendar-check nav-icon"></i>
+                    <i className="fas fa-inbox nav-icon"></i>
                     <span className="nav-text">Booking Requests</span>
                     {this.state.stats.bookingRequestsCount > 0 && (
                       <span className="nav-badge">
@@ -4660,19 +4963,20 @@ class UserDashboard extends Component {
                     }`}
                     onClick={() => this.handleTabChange("order-received")}
                   >
-                    <i className="fas fa-inbox nav-icon"></i>
+                    <i className="fas fa-credit-card nav-icon"></i>
                     <span className="nav-text">Orders Received</span>
-                    {this.state.receivedOrders.filter(
-                      (order) => order.status === "pending"
-                    ).length > 0 && (
-                      <span className="nav-badge">
-                        {
-                          this.state.receivedOrders.filter(
-                            (order) => order.status === "pending"
-                          ).length
-                        }
-                      </span>
-                    )}
+                    {this.state.receivedOrders &&
+                      this.state.receivedOrders.filter(
+                        (o) => o.status === "pending"
+                      ).length > 0 && (
+                        <span className="nav-badge">
+                          {
+                            this.state.receivedOrders.filter(
+                              (o) => o.status === "pending"
+                            ).length
+                          }
+                        </span>
+                      )}
                   </button>
                 </>
               )}
