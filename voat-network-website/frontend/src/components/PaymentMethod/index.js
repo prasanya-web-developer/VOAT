@@ -299,6 +299,53 @@ const PaymentGateway = () => {
     }
   };
 
+  const createOrdersFromCartItems = async () => {
+    try {
+      const baseUrl = getBaseUrl();
+
+      // Create orders for each cart item
+      const orderPromises = orderData.items.map(async (item) => {
+        const orderData = {
+          clientId: currentUser.id,
+          clientName: currentUser.name,
+          clientEmail: currentUser.email,
+          freelancerId: item.freelancerId,
+          freelancerName: item.seller,
+          freelancerEmail:
+            item.freelancerEmail ||
+            `${item.seller.toLowerCase().replace(" ", "")}@example.com`,
+          serviceName: item.serviceName,
+          serviceLevel: item.serviceLevel || "Standard",
+          totalAmount: item.price,
+          status: "pending",
+          paymentStatus: "paid",
+        };
+
+        const response = await fetch(`${baseUrl}/api/orders/create`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Origin: window.location.origin,
+          },
+          body: JSON.stringify(orderData),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to create order for ${item.serviceName}`);
+        }
+
+        return response.json();
+      });
+
+      await Promise.all(orderPromises);
+      console.log("All orders created successfully");
+    } catch (error) {
+      console.error("Error creating orders:", error);
+      throw new Error("Failed to create orders after payment");
+    }
+  };
+
   const verifyPayment = async (paymentData) => {
     try {
       const baseUrl = getBaseUrl();
@@ -405,10 +452,13 @@ const PaymentGateway = () => {
             // Verify payment
             await verifyPayment(response);
 
-            // Process cart checkout (create orders)
+            // Create orders from cart items BEFORE processing checkout
+            await createOrdersFromCartItems();
+
+            // Process cart checkout (this will clear the cart)
             await processCartCheckout();
 
-            // Clear cart and checkout items after successful payment
+            // Clear local storage
             localStorage.removeItem(`cart_${currentUser.id}`);
             localStorage.removeItem("checkout_items");
 

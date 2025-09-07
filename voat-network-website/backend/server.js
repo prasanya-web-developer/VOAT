@@ -4680,8 +4680,10 @@ app.post("/api/orders/create", async (req, res) => {
       serviceLevel,
       totalAmount,
       clientName,
+      clientEmail,
       freelancerName,
       freelancerEmail,
+      paymentStatus = "pending",
     } = req.body;
 
     // Validate required fields
@@ -4692,32 +4694,44 @@ app.post("/api/orders/create", async (req, res) => {
       });
     }
 
+    // Get client and freelancer details
+    const client = await User.findById(clientId);
+    const freelancer = await User.findById(freelancerId);
+
+    if (!client || !freelancer) {
+      return res.status(404).json({
+        success: false,
+        message: "Client or freelancer not found",
+      });
+    }
+
     const newOrder = new Order({
       clientId,
-      clientName,
-      clientEmail: req.body.clientEmail,
+      clientName: clientName || client.name,
+      clientEmail: clientEmail || client.email,
       freelancerId,
-      freelancerName,
-      freelancerEmail,
+      freelancerName: freelancerName || freelancer.name,
+      freelancerEmail: freelancerEmail || freelancer.email,
       serviceName,
       serviceLevel: serviceLevel || "Standard",
       totalAmount: parseFloat(totalAmount),
       status: "pending",
+      paymentStatus: paymentStatus,
       orderDate: new Date(),
     });
 
     const savedOrder = await newOrder.save();
 
-    // Create notifications
+    // Create notifications for both parties
     await createNotification({
       userId: freelancerId,
       type: "order",
       title: "New Order Received",
-      message: `You have received a new order from ${clientName} for "${serviceName}"`,
+      message: `You have received a new order from ${client.name} for "${serviceName}"`,
       relatedId: savedOrder._id.toString(),
       metadata: {
         orderId: savedOrder._id,
-        clientName,
+        clientName: client.name,
         serviceName,
         totalAmount,
       },
@@ -4731,7 +4745,7 @@ app.post("/api/orders/create", async (req, res) => {
       relatedId: savedOrder._id.toString(),
       metadata: {
         orderId: savedOrder._id,
-        freelancerName,
+        freelancerName: freelancer.name,
         serviceName,
         totalAmount,
       },
@@ -4747,6 +4761,7 @@ app.post("/api/orders/create", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create order",
+      error: error.message,
     });
   }
 });
@@ -4756,23 +4771,56 @@ app.get("/api/orders/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
 
-    // Find all bookings where the user is the client and transform to order format
-    const bookings = await Booking.find({ clientId: clientId })
+    console.log("Fetching orders for client:", clientId);
+
+    if (!mongoose.Types.ObjectId.isValid(clientId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID format",
+      });
+    }
+
+    // First, try to find actual orders from Order collection
+    const actualOrders = await Order.find({ clientId: clientId })
+      .sort({ orderDate: -1 })
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(
+      `Found ${actualOrders.length} actual orders for client ${clientId}`
+    );
+
+    if (actualOrders.length > 0) {
+      // Transform actual orders to match UI format
+      const formattedOrders = actualOrders.map((order, index) => ({
+        id: `ORD-${String(index + 1).padStart(3, "0")}`,
+        service: order.serviceName,
+        status: order.status.charAt(0).toUpperCase() + order.status.slice(1),
+        date: order.orderDate.toISOString().split("T")[0],
+        amount: order.totalAmount,
+        provider: order.freelancerName,
+        providerImage: order.freelancerId?.profileImage || null,
+        providerEmail: order.freelancerEmail,
+        providerId: order.freelancerId?._id || order.freelancerId,
+        orderId: order._id,
+        orderType: "order",
+        paymentStatus: order.paymentStatus,
+      }));
+
+      return res.json(formattedOrders);
+    }
+
+    // Fallback to bookings if no actual orders found
+    const acceptedBookings = await Booking.find({
+      clientId: clientId,
+      status: { $in: ["accepted", "completed"] },
+    })
       .sort({ requestDate: -1 })
       .populate("freelancerId", "name email profileImage");
 
-    console.log(`Found ${bookings.length} orders for client ${clientId}`);
-
-    // Transform bookings to order format to match existing UI
-    const orders = bookings.map((booking, index) => ({
+    const formattedBookingOrders = acceptedBookings.map((booking, index) => ({
       id: `ORD-${String(index + 1).padStart(3, "0")}`,
       service: booking.serviceName,
-      status:
-        booking.status === "accepted"
-          ? "In Progress"
-          : booking.status === "rejected"
-          ? "Cancelled"
-          : booking.status.charAt(0).toUpperCase() + booking.status.slice(1),
+      status: booking.status === "accepted" ? "In Progress" : "Completed",
       date: booking.requestDate.toISOString().split("T")[0],
       amount: booking.servicePrice,
       provider: booking.freelancerName,
@@ -4780,13 +4828,60 @@ app.get("/api/orders/:clientId", async (req, res) => {
       providerEmail: booking.freelancerEmail,
       providerId: booking.freelancerId?._id || booking.freelancerId,
       bookingId: booking._id,
-      requestDate: booking.requestDate,
-      responseDate: booking.responseDate,
+      orderType: "booking",
+      paymentStatus: "pending",
     }));
 
-    res.json(orders);
+    res.json(formattedBookingOrders);
   } catch (error) {
     console.error("Error fetching client orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+    });
+  }
+});
+
+app.get("/api/orders/freelancer/:freelancerId", async (req, res) => {
+  try {
+    const { freelancerId } = req.params;
+
+    console.log("Fetching orders for freelancer:", freelancerId);
+
+    if (!mongoose.Types.ObjectId.isValid(freelancerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid freelancer ID format",
+      });
+    }
+
+    // Find orders where user is the freelancer
+    const receivedOrders = await Order.find({ freelancerId: freelancerId })
+      .sort({ orderDate: -1 })
+      .populate("clientId", "name email profileImage");
+
+    console.log(
+      `Found ${receivedOrders.length} orders for freelancer ${freelancerId}`
+    );
+
+    const formattedOrders = receivedOrders.map((order, index) => ({
+      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      service: order.serviceName,
+      status: order.status.charAt(0).toUpperCase() + order.status.slice(1),
+      date: order.orderDate.toISOString().split("T")[0],
+      amount: order.totalAmount,
+      client: order.clientName,
+      clientImage: order.clientId?.profileImage || null,
+      clientEmail: order.clientEmail,
+      clientId: order.clientId?._id || order.clientId,
+      orderId: order._id,
+      orderType: "order",
+      paymentStatus: order.paymentStatus,
+    }));
+
+    res.json(formattedOrders);
+  } catch (error) {
+    console.error("Error fetching freelancer orders:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch orders",

@@ -23,6 +23,7 @@ class UserDashboard extends Component {
     // NEW: Orders functionality
     myOrders: [], // Orders placed by user (as client)
     receivedOrders: [], // Orders received by freelancer
+    freelancerOrders: [],
 
     stats: {
       totalSpent: 0,
@@ -88,22 +89,22 @@ class UserDashboard extends Component {
     this.loadUserData().then(() => {
       this.fetchPortfolioStatus().then(() => {
         // COMMON for all users
-        this.fetchMyBookings(); // This should fetch bookings made BY current user
+        this.fetchMyBookings();
         this.fetchWishlist();
         this.fetchNotifications();
+        this.fetchOrders(); // This fetches orders as CLIENT
 
         // ADDITIONAL for freelancers only
         if (this.isFreelancer()) {
-          this.fetchBookingRequests(); // This fetches requests RECEIVED by freelancer
+          this.fetchBookingRequests();
+          this.fetchFreelancerOrders(); // ADD THIS LINE
         }
 
-        // Update stats after all data is loaded
         setTimeout(() => {
           this.updateStats();
         }, 1000);
       });
     });
-
     this.checkWishlistConsistency();
 
     this.wishlistRefreshInterval = setInterval(() => {
@@ -660,22 +661,14 @@ class UserDashboard extends Component {
           this.updateStats();
         });
       } else {
-        // No dummy data - just set empty array
         console.log("No orders found or failed to fetch orders");
-        this.setState(
-          {
-            orders: [],
-          },
-          () => {
-            this.updateStats();
-          }
-        );
+        this.setState({ orders: [] }, () => {
+          this.updateStats();
+        });
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
-      this.setState({
-        orders: [],
-      });
+      this.setState({ orders: [] });
     }
   };
 
@@ -731,6 +724,26 @@ class UserDashboard extends Component {
     } catch (error) {
       console.error("Failed to fetch orders received:", error);
       this.setState({ ordersReceived: [] });
+    }
+  };
+
+  fetchFreelancerOrders = async () => {
+    try {
+      if (!this.isFreelancer() || !this.state.userData?.id) return;
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/freelancer/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const freelancerOrders = await response.json();
+        this.setState({ freelancerOrders }, () => this.updateStats());
+      } else {
+        this.setState({ freelancerOrders: [] });
+      }
+    } catch (error) {
+      console.error("Failed to fetch freelancer orders:", error);
+      this.setState({ freelancerOrders: [] });
     }
   };
 
@@ -4685,39 +4698,6 @@ class UserDashboard extends Component {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Debug Information - Remove this in production */}
-        {process.env.NODE_ENV === "development" && (
-          <div
-            className="debug-info"
-            style={{
-              marginTop: "20px",
-              padding: "15px",
-              backgroundColor: "#f8f9fa",
-              border: "1px solid #dee2e6",
-              borderRadius: "5px",
-              fontSize: "12px",
-            }}
-          >
-            <h4>Debug Information:</h4>
-            <p>
-              <strong>Total myBookings:</strong> {myBookings.length}
-            </p>
-            <p>
-              <strong>Filtered bookings:</strong> {filteredBookings.length}
-            </p>
-            <p>
-              <strong>Current filter:</strong> {bookingFilter}
-            </p>
-            <p>
-              <strong>Search query:</strong> {bookingSearchQuery || "None"}
-            </p>
-            <details>
-              <summary>Raw booking data</summary>
-              <pre>{JSON.stringify(myBookings, null, 2)}</pre>
-            </details>
           </div>
         )}
       </div>
