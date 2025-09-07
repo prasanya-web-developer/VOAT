@@ -4683,14 +4683,29 @@ app.post("/api/orders/create", async (req, res) => {
       clientEmail,
       freelancerName,
       freelancerEmail,
-      paymentStatus = "pending",
+      paymentStatus = "paid",
     } = req.body;
+
+    console.log("Creating order with data:", req.body);
 
     // Validate required fields
     if (!clientId || !freelancerId || !serviceName || !totalAmount) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields",
+        message:
+          "Missing required fields: clientId, freelancerId, serviceName, totalAmount",
+        received: { clientId, freelancerId, serviceName, totalAmount },
+      });
+    }
+
+    // Validate ObjectIds
+    if (
+      !mongoose.Types.ObjectId.isValid(clientId) ||
+      !mongoose.Types.ObjectId.isValid(freelancerId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid client ID or freelancer ID format",
       });
     }
 
@@ -4698,10 +4713,17 @@ app.post("/api/orders/create", async (req, res) => {
     const client = await User.findById(clientId);
     const freelancer = await User.findById(freelancerId);
 
-    if (!client || !freelancer) {
+    if (!client) {
       return res.status(404).json({
         success: false,
-        message: "Client or freelancer not found",
+        message: "Client not found",
+      });
+    }
+
+    if (!freelancer) {
+      return res.status(404).json({
+        success: false,
+        message: "Freelancer not found",
       });
     }
 
@@ -4721,35 +4743,41 @@ app.post("/api/orders/create", async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
+    console.log("Order saved successfully:", savedOrder._id);
 
     // Create notifications for both parties
-    await createNotification({
-      userId: freelancerId,
-      type: "order",
-      title: "New Order Received",
-      message: `You have received a new order from ${client.name} for "${serviceName}"`,
-      relatedId: savedOrder._id.toString(),
-      metadata: {
-        orderId: savedOrder._id,
-        clientName: client.name,
-        serviceName,
-        totalAmount,
-      },
-    });
+    try {
+      await createNotification({
+        userId: freelancerId,
+        type: "order",
+        title: "New Order Received",
+        message: `You have received a new order from ${client.name} for "${serviceName}"`,
+        relatedId: savedOrder._id.toString(),
+        metadata: {
+          orderId: savedOrder._id,
+          clientName: client.name,
+          serviceName,
+          totalAmount,
+        },
+      });
 
-    await createNotification({
-      userId: clientId,
-      type: "order",
-      title: "Order Placed Successfully",
-      message: `Your order for "${serviceName}" has been placed successfully`,
-      relatedId: savedOrder._id.toString(),
-      metadata: {
-        orderId: savedOrder._id,
-        freelancerName: freelancer.name,
-        serviceName,
-        totalAmount,
-      },
-    });
+      await createNotification({
+        userId: clientId,
+        type: "order",
+        title: "Order Placed Successfully",
+        message: `Your order for "${serviceName}" has been placed successfully`,
+        relatedId: savedOrder._id.toString(),
+        metadata: {
+          orderId: savedOrder._id,
+          freelancerName: freelancer.name,
+          serviceName,
+          totalAmount,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Error creating notifications:", notificationError);
+      // Don't fail the order creation if notifications fail
+    }
 
     res.status(201).json({
       success: true,

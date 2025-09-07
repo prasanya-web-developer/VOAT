@@ -146,7 +146,7 @@ const PaymentGateway = () => {
           }
 
           return {
-            id: item.id,
+            id: item.id || item._id,
             name: item.name || `${item.serviceName} - ${item.serviceLevel}`,
             seller: item.seller || item.freelancerName || "Unknown Seller",
             sellerImage:
@@ -156,12 +156,13 @@ const PaymentGateway = () => {
             price:
               item.price || item.selectedPaymentAmount || item.basePrice || 0,
             basePrice: item.basePrice || item.price || 0,
-            deliveryTime: "5-7 days", // Default delivery time
+            deliveryTime: "5-7 days",
             category: item.category || item.serviceName || "Service",
             serviceLevel: item.serviceLevel || "Standard",
             paymentStructure: item.paymentStructure || null,
             freelancerId: item.freelancerId,
             serviceName: item.serviceName,
+            freelancerEmail: freelancerDetails?.email || item.freelancerEmail,
           };
         })
       );
@@ -301,11 +302,16 @@ const PaymentGateway = () => {
 
   const createOrdersFromCartItems = async () => {
     try {
+      console.log("=== CREATING ORDERS FROM CART ITEMS ===");
+      console.log("Order data items:", orderData.items);
+
       const baseUrl = getBaseUrl();
 
       // Create orders for each cart item
       const orderPromises = orderData.items.map(async (item) => {
-        const orderData = {
+        console.log("Creating order for item:", item);
+
+        const orderPayload = {
           clientId: currentUser.id,
           clientName: currentUser.name,
           clientEmail: currentUser.email,
@@ -313,13 +319,14 @@ const PaymentGateway = () => {
           freelancerName: item.seller,
           freelancerEmail:
             item.freelancerEmail ||
-            `${item.seller.toLowerCase().replace(" ", "")}@example.com`,
-          serviceName: item.serviceName,
+            `${item.seller.toLowerCase().replace(/\s+/g, "")}@example.com`,
+          serviceName: item.serviceName || item.category,
           serviceLevel: item.serviceLevel || "Standard",
           totalAmount: item.price,
-          status: "pending",
           paymentStatus: "paid",
         };
+
+        console.log("Order payload:", orderPayload);
 
         const response = await fetch(`${baseUrl}/api/orders/create`, {
           method: "POST",
@@ -328,21 +335,34 @@ const PaymentGateway = () => {
             Accept: "application/json",
             Origin: window.location.origin,
           },
-          body: JSON.stringify(orderData),
+          body: JSON.stringify(orderPayload),
         });
 
+        console.log("Order creation response status:", response.status);
+
         if (!response.ok) {
-          throw new Error(`Failed to create order for ${item.serviceName}`);
+          const errorText = await response.text();
+          console.error("Order creation failed:", errorText);
+          throw new Error(
+            `Failed to create order for ${item.serviceName || item.name}: ${
+              response.status
+            }`
+          );
         }
 
-        return response.json();
+        const result = await response.json();
+        console.log("Order created successfully:", result);
+        return result;
       });
 
-      await Promise.all(orderPromises);
-      console.log("All orders created successfully");
+      const createdOrders = await Promise.all(orderPromises);
+      console.log("All orders created successfully:", createdOrders);
+      return createdOrders;
     } catch (error) {
-      console.error("Error creating orders:", error);
-      throw new Error("Failed to create orders after payment");
+      console.error("Error creating orders from cart items:", error);
+      throw new Error(
+        `Failed to create orders after payment: ${error.message}`
+      );
     }
   };
 
@@ -448,15 +468,19 @@ const PaymentGateway = () => {
         handler: async function (response) {
           try {
             setIsLoading(true);
+            console.log("Payment successful, starting order creation...");
 
-            // Verify payment
+            // Verify payment first
             await verifyPayment(response);
+            console.log("Payment verified successfully");
 
-            // Create orders from cart items BEFORE processing checkout
+            // Create orders from cart items
             await createOrdersFromCartItems();
+            console.log("Orders created successfully");
 
-            // Process cart checkout (this will clear the cart)
+            // Process cart checkout (this clears the cart)
             await processCartCheckout();
+            console.log("Cart checkout processed");
 
             // Clear local storage
             localStorage.removeItem(`cart_${currentUser.id}`);
@@ -469,8 +493,13 @@ const PaymentGateway = () => {
               window.location.href = "/dashboard";
             }, 3000);
           } catch (error) {
-            console.error("Payment verification failed:", error);
-            setError(error.message);
+            console.error(
+              "Payment verification or order creation failed:",
+              error
+            );
+            setError(
+              `Payment completed but order creation failed: ${error.message}`
+            );
             setIsLoading(false);
           }
         },
