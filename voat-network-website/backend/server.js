@@ -3456,25 +3456,15 @@ app.post("/api/cart/checkout", async (req, res) => {
     // Find the user's cart
     const cart = await Cart.findOne({ userId });
     if (!cart || !cart.items.length) {
-      return res.status(404).json({
-        success: false,
-        message: "Cart not found or empty",
+      return res.status(200).json({
+        success: true,
+        message: "Cart is already empty",
+        orders: [],
+        remainingCartItems: 0,
       });
     }
 
-    // Get selected cart items
-    const itemsToCheckout = cart.items.filter((item) =>
-      selectedItems.includes(item._id.toString())
-    );
-
-    if (itemsToCheckout.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid items selected for checkout",
-      });
-    }
-
-    // Get user data for orders
+    // Get user data
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
@@ -3483,42 +3473,24 @@ app.post("/api/cart/checkout", async (req, res) => {
       });
     }
 
-    // Create orders from cart items
-    const orders = [];
-    for (const item of itemsToCheckout) {
-      const newOrder = new Order({
-        userId: userId,
-        userName: user.name,
-        userEmail: user.email,
-        freelancerId: item.freelancerId,
-        freelancerName: item.freelancerName,
-        freelancerEmail: "", // You might want to fetch this
-        freelancerProfileImage: item.freelancerProfileImage,
-        serviceName: item.serviceName,
-        serviceLevel: item.serviceLevel,
-        servicePrice: item.basePrice,
-        paymentStructure: item.paymentStructure,
-        status: "pending",
-        orderDate: new Date(),
-        fromCart: true,
-      });
-
-      const savedOrder = await newOrder.save();
-      orders.push(savedOrder);
-    }
-
     // Remove checked out items from cart
+    const originalItemCount = cart.items.length;
     cart.items = cart.items.filter(
       (item) => !selectedItems.includes(item._id.toString())
     );
+
     await cart.save();
 
-    console.log(`=== CHECKOUT SUCCESS: ${orders.length} orders created ===`);
+    const removedItemCount = originalItemCount - cart.items.length;
 
-    res.status(201).json({
+    console.log(
+      `=== CHECKOUT SUCCESS: ${removedItemCount} items removed from cart ===`
+    );
+
+    res.status(200).json({
       success: true,
-      message: `Checkout successful! ${orders.length} orders created.`,
-      orders: orders,
+      message: `Checkout successful! ${removedItemCount} items removed from cart.`,
+      removedItems: removedItemCount,
       remainingCartItems: cart.items.length,
     });
   } catch (error) {
