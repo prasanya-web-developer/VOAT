@@ -4658,26 +4658,41 @@ app.post("/api/orders/create", async (req, res) => {
       paymentStatus = "paid",
     } = req.body;
 
-    console.log("Creating order with data:", req.body);
+    console.log("=== ORDER CREATION REQUEST ===");
+    console.log("Request body:", req.body);
+    console.log("Client ID:", clientId, "Type:", typeof clientId);
+    console.log("Freelancer ID:", freelancerId, "Type:", typeof freelancerId);
 
     // Validate required fields
     if (!clientId || !freelancerId || !serviceName || !totalAmount) {
+      console.log("Missing required fields");
       return res.status(400).json({
         success: false,
         message:
           "Missing required fields: clientId, freelancerId, serviceName, totalAmount",
-        received: { clientId, freelancerId, serviceName, totalAmount },
+        received: {
+          clientId: !!clientId,
+          freelancerId: !!freelancerId,
+          serviceName: !!serviceName,
+          totalAmount: !!totalAmount,
+        },
       });
     }
 
-    // Validate ObjectIds
-    if (
-      !mongoose.Types.ObjectId.isValid(clientId) ||
-      !mongoose.Types.ObjectId.isValid(freelancerId)
-    ) {
+    // Validate ObjectIds with better error messages
+    if (!mongoose.Types.ObjectId.isValid(clientId)) {
+      console.log("Invalid client ID format:", clientId);
       return res.status(400).json({
         success: false,
-        message: "Invalid client ID or freelancer ID format",
+        message: `Invalid client ID format: ${clientId}`,
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(freelancerId)) {
+      console.log("Invalid freelancer ID format:", freelancerId);
+      return res.status(400).json({
+        success: false,
+        message: `Invalid freelancer ID format: ${freelancerId}`,
       });
     }
 
@@ -4686,18 +4701,23 @@ app.post("/api/orders/create", async (req, res) => {
     const freelancer = await User.findById(freelancerId);
 
     if (!client) {
+      console.log("Client not found:", clientId);
       return res.status(404).json({
         success: false,
-        message: "Client not found",
+        message: `Client not found with ID: ${clientId}`,
       });
     }
 
     if (!freelancer) {
+      console.log("Freelancer not found:", freelancerId);
       return res.status(404).json({
         success: false,
-        message: "Freelancer not found",
+        message: `Freelancer not found with ID: ${freelancerId}`,
       });
     }
+
+    console.log("Client found:", client.name);
+    console.log("Freelancer found:", freelancer.name);
 
     const newOrder = new Order({
       clientId,
@@ -4717,7 +4737,7 @@ app.post("/api/orders/create", async (req, res) => {
     const savedOrder = await newOrder.save();
     console.log("Order saved successfully:", savedOrder._id);
 
-    // Create notifications for both parties
+    // Create notifications
     try {
       await createNotification({
         userId: freelancerId,
@@ -4748,7 +4768,6 @@ app.post("/api/orders/create", async (req, res) => {
       });
     } catch (notificationError) {
       console.error("Error creating notifications:", notificationError);
-      // Don't fail the order creation if notifications fail
     }
 
     res.status(201).json({

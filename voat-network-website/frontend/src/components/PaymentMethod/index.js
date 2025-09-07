@@ -221,7 +221,7 @@ const PaymentGateway = () => {
         return;
       }
 
-      // Transform cart items to order format
+      // Transform cart items to order format with proper ID handling
       const orderItems = cartItems.map((item) => ({
         id: item._id,
         name: `${item.serviceName} - ${item.serviceLevel}`,
@@ -233,9 +233,12 @@ const PaymentGateway = () => {
         category: item.serviceName,
         serviceLevel: item.serviceLevel,
         paymentStructure: item.paymentStructure,
-        freelancerId: item.freelancerId,
+        freelancerId: item.freelancerId, // This should be a valid ObjectId from cart
         serviceName: item.serviceName,
+        freelancerEmail: null, // Will be fetched separately
       }));
+
+      console.log("Transformed order items:", orderItems);
 
       const total = orderItems.reduce((sum, item) => sum + item.price, 0);
 
@@ -311,6 +314,18 @@ const PaymentGateway = () => {
       const orderPromises = orderData.items.map(async (item) => {
         console.log("Creating order for item:", item);
 
+        // Validate required IDs before sending
+        if (!item.freelancerId) {
+          throw new Error(`Missing freelancerId for item: ${item.name}`);
+        }
+
+        if (!currentUser.id) {
+          throw new Error("Missing current user ID");
+        }
+
+        console.log("Freelancer ID:", item.freelancerId);
+        console.log("Client ID:", currentUser.id);
+
         const orderPayload = {
           clientId: currentUser.id,
           clientName: currentUser.name,
@@ -320,13 +335,13 @@ const PaymentGateway = () => {
           freelancerEmail:
             item.freelancerEmail ||
             `${item.seller.toLowerCase().replace(/\s+/g, "")}@example.com`,
-          serviceName: item.serviceName || item.category,
+          serviceName: item.serviceName || item.category || item.name,
           serviceLevel: item.serviceLevel || "Standard",
-          totalAmount: item.price,
+          totalAmount: parseFloat(item.price),
           paymentStatus: "paid",
         };
 
-        console.log("Order payload:", orderPayload);
+        console.log("Order payload being sent:", orderPayload);
 
         const response = await fetch(`${baseUrl}/api/orders/create`, {
           method: "POST",
@@ -346,7 +361,7 @@ const PaymentGateway = () => {
           throw new Error(
             `Failed to create order for ${item.serviceName || item.name}: ${
               response.status
-            }`
+            } - ${errorText}`
           );
         }
 
