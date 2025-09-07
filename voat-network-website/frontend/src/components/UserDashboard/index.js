@@ -87,8 +87,8 @@ class UserDashboard extends Component {
     this.loadUserData().then(() => {
       this.fetchPortfolioStatus().then(() => {
         // COMMON for all users
-        this.fetchMyBookings(); // Bookings made by current user
-        this.fetchMyOrders(); // Orders placed by current user
+        this.fetchMyBookings(); // NEW: Booking requests made by current user
+        this.fetchMyOrders(); // NEW: Paid orders made by current user
         this.fetchWishlist();
         this.fetchNotifications();
 
@@ -101,7 +101,6 @@ class UserDashboard extends Component {
         this.updateStats();
       });
     });
-
     this.checkWishlistConsistency();
 
     this.wishlistRefreshInterval = setInterval(() => {
@@ -4359,7 +4358,7 @@ class UserDashboard extends Component {
 
       console.log("Fetching my bookings for user:", this.state.userData.id);
 
-      // Fetch bookings where current user is the client
+      // Use the NEW dedicated my-bookings endpoint
       const response = await fetch(
         `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`
       );
@@ -4391,9 +4390,9 @@ class UserDashboard extends Component {
 
       console.log("Fetching my orders for user:", this.state.userData.id);
 
-      // Change this endpoint to fetch actual orders, not bookings
+      // Use a separate endpoint for actual PAID orders
       const response = await fetch(
-        `${this.state.baseUrl}/api/orders/client/${this.state.userData.id}`
+        `${this.state.baseUrl}/api/my-orders/${this.state.userData.id}`
       );
 
       if (response.ok) {

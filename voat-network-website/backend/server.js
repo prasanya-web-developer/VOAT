@@ -3763,6 +3763,103 @@ app.get("/api/bookings/:userId", async (req, res) => {
   }
 });
 
+// NEW: Get My Bookings (booking requests made by current user as client)
+app.get("/api/my-bookings/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching my bookings for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find all booking requests where current user is the CLIENT (bookings they made)
+    const myBookings = await Booking.find({ clientId: userId })
+      .sort({ requestDate: -1 })
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(
+      `Found ${myBookings.length} booking requests made by user ${userId}`
+    );
+
+    // Format for My Bookings section
+    const formattedBookings = myBookings.map((booking) => ({
+      _id: booking._id,
+      serviceName: booking.serviceName,
+      freelancerId: booking.freelancerId._id || booking.freelancerId,
+      freelancerName: booking.freelancerName,
+      freelancerEmail: booking.freelancerEmail,
+      freelancerProfileImage: booking.freelancerId?.profileImage || null,
+      servicePrice: booking.servicePrice,
+      status: booking.status, // pending, accepted, rejected
+      requestDate: booking.requestDate,
+      responseDate: booking.responseDate,
+      notes: booking.notes,
+    }));
+
+    res.status(200).json(formattedBookings);
+  } catch (error) {
+    console.error("Error fetching my bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch my bookings",
+      error: error.message,
+    });
+  }
+});
+
+// NEW: Get My Orders (actual paid orders made by current user)
+app.get("/api/my-orders/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching my orders for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find actual PAID orders where current user is the client
+    const myOrders = await Order.find({ clientId: userId })
+      .sort({ orderDate: -1 })
+      .populate("freelancerId", "name email profileImage");
+
+    console.log(`Found ${myOrders.length} paid orders made by user ${userId}`);
+
+    // Format for My Orders section
+    const formattedOrders = myOrders.map((order, index) => ({
+      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      service: order.serviceName,
+      status: order.status, // pending, in-progress, completed, cancelled
+      date: order.orderDate.toISOString().split("T")[0],
+      amount: order.totalAmount,
+      provider: order.freelancerName,
+      providerImage: order.freelancerId?.profileImage || null,
+      providerEmail: order.freelancerEmail,
+      providerId: order.freelancerId?._id || order.freelancerId,
+      orderId: order._id,
+      orderDate: order.orderDate,
+      completedDate: order.completedDate,
+    }));
+
+    res.status(200).json(formattedOrders);
+  } catch (error) {
+    console.error("Error fetching my orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch my orders",
+      error: error.message,
+    });
+  }
+});
+
 // Get Bookings for Client (orders)
 app.get("/api/orders/:userId", async (req, res) => {
   try {
