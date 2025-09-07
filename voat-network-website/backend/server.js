@@ -4589,6 +4589,27 @@ app.post("/api/check-booking-eligibility", async (req, res) => {
 //   }
 // });
 
+// Test endpoint for my-bookings
+app.get("/api/test-my-bookings/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const bookingCount = await Booking.countDocuments({ clientId: userId });
+
+    res.json({
+      success: true,
+      message: "My bookings endpoint is working",
+      userId: userId,
+      bookingCount: bookingCount,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 console.log("✅ Booking API endpoints loaded successfully");
 
 // debugging routes

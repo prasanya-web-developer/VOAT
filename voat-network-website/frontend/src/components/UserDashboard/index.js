@@ -87,19 +87,20 @@ class UserDashboard extends Component {
 
     this.loadUserData().then(() => {
       this.fetchPortfolioStatus().then(() => {
-        // COMMON for ALL users (both clients and freelancers)
-        this.fetchMyBookings(); // Bookings made BY current user (as client)
-        this.fetchMyOrders(); // Orders/payments made BY current user
+        // COMMON for all users
+        this.fetchMyBookings(); // This should fetch bookings made BY current user
         this.fetchWishlist();
         this.fetchNotifications();
 
-        // ADDITIONAL for freelancers only (requests they receive)
+        // ADDITIONAL for freelancers only
         if (this.isFreelancer()) {
-          this.fetchBookingRequests(); // Booking requests RECEIVED by freelancer
-          this.fetchOrdersReceived(); // Orders RECEIVED by freelancer (paid)
+          this.fetchBookingRequests(); // This fetches requests RECEIVED by freelancer
         }
 
-        this.updateStats();
+        // Update stats after all data is loaded
+        setTimeout(() => {
+          this.updateStats();
+        }, 1000);
       });
     });
 
@@ -213,17 +214,20 @@ class UserDashboard extends Component {
       wishlist,
       bookings,
       myBookings = [],
-      myOrders,
-      receivedOrders,
+      receivedOrders = [],
     } = this.state;
 
-    // Calculate total bookings made by current user (regardless of role)
-    const totalMyBookings = myBookings.length;
-    const pendingMyBookings = myBookings.filter(
-      (b) => b.status === "pending"
-    ).length;
+    console.log("=== UPDATING STATS ===");
+    console.log("myBookings:", myBookings);
+    console.log("receivedOrders (bookings):", bookings);
 
-    // Existing calculations
+    // Calculate stats for My Bookings (bookings made BY current user)
+    const totalMyBookings = Array.isArray(myBookings) ? myBookings.length : 0;
+    const pendingMyBookings = Array.isArray(myBookings)
+      ? myBookings.filter((b) => b.status === "pending").length
+      : 0;
+
+    // Calculate stats for orders
     const completedOrders = orders.filter(
       (order) => order.status === "Completed" || order.status === "completed"
     );
@@ -240,37 +244,41 @@ class UserDashboard extends Component {
         order.status === "pending"
     ).length;
 
-    // Freelancer-specific stats
+    // Freelancer-specific stats (booking requests received)
+    let bookingRequestsCount = 0;
     let totalEarned = 0;
     let completedProjects = 0;
-    let bookingRequestsCount = 0;
 
-    if (this.isFreelancer() && receivedOrders) {
-      totalEarned = receivedOrders
-        .filter(
-          (order) => order.status === "accepted" || order.status === "completed"
-        )
-        .reduce((sum, order) => sum + (order.servicePrice || 0), 0);
+    if (this.isFreelancer()) {
+      // bookings = requests received by freelancer
+      bookingRequestsCount = Array.isArray(bookings)
+        ? bookings.filter((booking) => booking.status === "pending").length
+        : 0;
 
-      completedProjects = receivedOrders.filter(
-        (order) => order.status === "completed"
-      ).length;
+      totalEarned = Array.isArray(bookings)
+        ? bookings
+            .filter(
+              (order) =>
+                order.status === "accepted" || order.status === "completed"
+            )
+            .reduce((sum, order) => sum + (order.servicePrice || 0), 0)
+        : 0;
 
-      bookingRequestsCount = receivedOrders.filter(
-        (booking) => booking.status === "pending"
-      ).length;
+      completedProjects = Array.isArray(bookings)
+        ? bookings.filter((order) => order.status === "completed").length
+        : 0;
     }
 
-    const myOrdersCount = myOrders ? myOrders.length : 0;
+    const myOrdersCount = orders.length;
 
     this.setState({
       stats: {
         totalSpent,
-        activeOrders: this.isFreelancer() ? bookingRequestsCount : activeOrders,
+        activeOrders,
         completedOrders: completedOrders.length,
         savedItems: wishlist.length,
-        totalBookings: totalMyBookings, // Total bookings made by user
-        pendingBookings: pendingMyBookings, // Pending bookings made by user
+        totalBookings: totalMyBookings, // Total bookings made by current user
+        pendingBookings: pendingMyBookings, // Pending bookings made by current user
         // Freelancer stats
         totalEarned,
         completedProjects,
@@ -278,6 +286,8 @@ class UserDashboard extends Component {
         myOrdersCount,
       },
     });
+
+    console.log("Updated stats:", this.state.stats);
   };
 
   // Toggle notification panel
@@ -4083,16 +4093,29 @@ class UserDashboard extends Component {
   fetchMyBookings = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {
-        console.log("No user data available for fetching bookings");
+        console.log("No user data available for fetching my bookings");
+        this.setState({ myBookings: [] }, () => {
+          this.updateStats();
+        });
         return;
       }
 
       console.log("=== FETCHING MY BOOKINGS FROM FRONTEND ===");
       console.log("User ID:", this.state.userData.id);
       console.log("Base URL:", this.state.baseUrl);
+      console.log(
+        "Full URL:",
+        `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`
+      );
 
       const response = await fetch(
-        `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`
+        `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
       );
 
       console.log("Response status:", response.status);
@@ -4101,7 +4124,10 @@ class UserDashboard extends Component {
         const myBookings = await response.json();
         console.log("✅ Successfully fetched my bookings:", myBookings);
 
-        this.setState({ myBookings }, () => {
+        // Ensure it's an array
+        const bookingsArray = Array.isArray(myBookings) ? myBookings : [];
+
+        this.setState({ myBookings: bookingsArray }, () => {
           console.log("✅ My bookings set in state:", this.state.myBookings);
           this.updateStats();
         });
@@ -4118,7 +4144,9 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("❌ Error fetching my bookings:", error);
-      this.setState({ myBookings: [] });
+      this.setState({ myBookings: [] }, () => {
+        this.updateStats();
+      });
     }
   };
 
@@ -4321,8 +4349,12 @@ class UserDashboard extends Component {
     const { myBookings = [], bookingSearchQuery, bookingFilter } = this.state;
 
     console.log("=== RENDERING MY BOOKINGS ===");
-    console.log("My bookings data:", myBookings);
-    console.log("Number of bookings:", myBookings.length);
+    console.log("myBookings from state:", myBookings);
+    console.log("myBookings length:", myBookings.length);
+    console.log(
+      "myBookings type:",
+      Array.isArray(myBookings) ? "array" : typeof myBookings
+    );
 
     // Filter my bookings based on search and filter
     const filteredBookings = myBookings.filter((booking) => {
@@ -4355,7 +4387,7 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>My Bookings</h1>
           <p className="section-description">
-            Bookings you have made with freelancers
+            Services you have booked with freelancers
           </p>
           <div className="dashboard-actions">
             <div className="search-container">
@@ -4381,16 +4413,6 @@ class UserDashboard extends Component {
               <option value="rejected">Rejected</option>
             </select>
           </div>
-        </div>
-
-        {/* Debug Info - Remove this after testing */}
-        <div
-          style={{ padding: "10px", background: "#f0f0f0", margin: "10px 0" }}
-        >
-          <strong>Debug Info:</strong>
-          <div>Total bookings: {myBookings.length}</div>
-          <div>Filtered bookings: {filteredBookings.length}</div>
-          <div>User ID: {this.state.userData?.id}</div>
         </div>
 
         {/* My Bookings Summary Stats */}
@@ -4503,7 +4525,7 @@ class UserDashboard extends Component {
                     </div>
                   </div>
 
-                  {/* Freelancer Section */}
+                  {/* Freelancer Section - This shows the freelancer you booked */}
                   <div className="freelancer-section-compact">
                     <div className="freelancer-avatar-compact">
                       {booking.freelancerProfileImage ? (
@@ -4539,16 +4561,27 @@ class UserDashboard extends Component {
                       <p className="freelancer-email-compact">
                         {booking.freelancerEmail}
                       </p>
+                      <div className="freelancer-role-badge">
+                        <i className="fas fa-user-tie"></i>
+                        <span>Freelancer</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Booking Meta */}
+                  {/* Booking Meta Information */}
                   <div className="booking-meta-compact">
                     <div className="meta-item-compact">
                       <i className="fas fa-calendar-plus"></i>
                       <span className="meta-label">Requested:</span>
                       <span className="meta-value">
-                        {new Date(booking.requestDate).toLocaleDateString()}
+                        {new Date(booking.requestDate).toLocaleDateString(
+                          "en-IN",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          }
+                        )}
                       </span>
                     </div>
                     <div className="meta-item-compact price-meta">
@@ -4571,11 +4604,29 @@ class UserDashboard extends Component {
                         ></i>
                         <span className="meta-label">Responded:</span>
                         <span className="meta-value">
-                          {new Date(booking.responseDate).toLocaleDateString()}
+                          {new Date(booking.responseDate).toLocaleDateString(
+                            "en-IN",
+                            {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            }
+                          )}
                         </span>
                       </div>
                     )}
                   </div>
+
+                  {/* Notes Section (if any) */}
+                  {booking.notes && (
+                    <div className="booking-notes">
+                      <div className="notes-header">
+                        <i className="fas fa-sticky-note"></i>
+                        <span>Notes:</span>
+                      </div>
+                      <p className="notes-content">{booking.notes}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Booking Actions */}
@@ -4600,26 +4651,73 @@ class UserDashboard extends Component {
                     </button>
                   )}
 
-                  {(booking.status === "pending" ||
-                    booking.status === "accepted") && (
+                  {booking.status === "pending" && (
                     <button
                       className="action-btn-compact cancel"
                       onClick={() => this.handleCancelMyBooking(booking._id)}
                     >
                       <i className="fas fa-times"></i>
-                      <span>Cancel Booking</span>
+                      <span>Cancel Request</span>
+                    </button>
+                  )}
+
+                  {booking.status === "accepted" && (
+                    <button
+                      className="action-btn-compact message"
+                      onClick={() => {
+                        // You can implement messaging functionality here
+                        alert(
+                          `Contact ${booking.freelancerName} at ${booking.freelancerEmail}`
+                        );
+                      }}
+                    >
+                      <i className="fas fa-envelope"></i>
+                      <span>Contact</span>
                     </button>
                   )}
 
                   {booking.status === "rejected" && (
                     <div className="rejection-info">
                       <i className="fas fa-info-circle"></i>
-                      <span>Booking was declined</span>
+                      <span>Request was declined</span>
                     </div>
                   )}
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Debug Information - Remove this in production */}
+        {process.env.NODE_ENV === "development" && (
+          <div
+            className="debug-info"
+            style={{
+              marginTop: "20px",
+              padding: "15px",
+              backgroundColor: "#f8f9fa",
+              border: "1px solid #dee2e6",
+              borderRadius: "5px",
+              fontSize: "12px",
+            }}
+          >
+            <h4>Debug Information:</h4>
+            <p>
+              <strong>Total myBookings:</strong> {myBookings.length}
+            </p>
+            <p>
+              <strong>Filtered bookings:</strong> {filteredBookings.length}
+            </p>
+            <p>
+              <strong>Current filter:</strong> {bookingFilter}
+            </p>
+            <p>
+              <strong>Search query:</strong> {bookingSearchQuery || "None"}
+            </p>
+            <details>
+              <summary>Raw booking data</summary>
+              <pre>{JSON.stringify(myBookings, null, 2)}</pre>
+            </details>
           </div>
         )}
       </div>

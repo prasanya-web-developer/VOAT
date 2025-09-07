@@ -1206,18 +1206,18 @@ class PortfolioList extends Component {
 
     try {
       const bookingData = {
-        clientId: currentUser.id,
+        clientId: currentUser.id, // ✅ This should match your backend expectation
         clientName: currentUser.name,
         clientEmail: currentUser.email,
         clientProfileImage: currentUser.profileImage,
-        freelancerId: freelancerId,
+        freelancerId: freelancerId, // ✅ This should match your backend expectation
         freelancerName: portfolio.name,
         freelancerEmail: portfolio.email,
         serviceName: portfolio.profession || "Service",
         servicePrice: this.getFirstServicePrice(portfolio),
-        status: "pending",
-        requestDate: new Date().toISOString(),
       };
+
+      console.log("Creating booking with data:", bookingData);
 
       const response = await fetch(`${this.state.baseUrl}/api/create-booking`, {
         method: "POST",
@@ -1228,9 +1228,12 @@ class PortfolioList extends Component {
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log("Booking created successfully:", result);
         this.showNotification("Booking request sent successfully!");
       } else {
         const errorData = await response.json();
+        console.error("Booking creation failed:", errorData);
         throw new Error(errorData.message || "Failed to create booking");
       }
     } catch (error) {
