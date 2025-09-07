@@ -3764,11 +3764,13 @@ app.get("/api/bookings/:userId", async (req, res) => {
 });
 
 // NEW: Get My Bookings (booking requests made by current user as client)
+// Get My Bookings (booking requests made by current user as client)
 app.get("/api/my-bookings/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log("Fetching my bookings for user:", userId);
+    console.log("=== FETCHING MY BOOKINGS ===");
+    console.log("User ID:", userId);
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
@@ -3777,29 +3779,30 @@ app.get("/api/my-bookings/:userId", async (req, res) => {
       });
     }
 
-    // Find all booking requests where current user is the CLIENT (bookings they made)
+    // Find all bookings where the current user is the CLIENT (bookings they made)
     const myBookings = await Booking.find({ clientId: userId })
       .sort({ requestDate: -1 })
-      .populate("freelancerId", "name email profileImage");
+      .populate("freelancerId", "name email profileImage")
+      .lean();
 
-    console.log(
-      `Found ${myBookings.length} booking requests made by user ${userId}`
-    );
+    console.log(`Found ${myBookings.length} bookings made by user ${userId}`);
 
-    // Format for My Bookings section
-    const formattedBookings = myBookings.map((booking) => ({
-      _id: booking._id,
-      serviceName: booking.serviceName,
-      freelancerId: booking.freelancerId._id || booking.freelancerId,
-      freelancerName: booking.freelancerName,
-      freelancerEmail: booking.freelancerEmail,
-      freelancerProfileImage: booking.freelancerId?.profileImage || null,
-      servicePrice: booking.servicePrice,
-      status: booking.status, // pending, accepted, rejected
-      requestDate: booking.requestDate,
-      responseDate: booking.responseDate,
-      notes: booking.notes,
-    }));
+    // Format the bookings for frontend
+    const formattedBookings = myBookings.map((booking) => {
+      return {
+        _id: booking._id,
+        serviceName: booking.serviceName,
+        freelancerId: booking.freelancerId?._id || booking.freelancerId,
+        freelancerName: booking.freelancerName,
+        freelancerEmail: booking.freelancerEmail,
+        freelancerProfileImage: booking.freelancerId?.profileImage || null,
+        servicePrice: booking.servicePrice,
+        status: booking.status,
+        requestDate: booking.requestDate,
+        responseDate: booking.responseDate,
+        notes: booking.notes || "",
+      };
+    });
 
     res.status(200).json(formattedBookings);
   } catch (error) {
@@ -3861,11 +3864,12 @@ app.get("/api/my-orders/:userId", async (req, res) => {
 });
 
 // Get Bookings for Client (orders)
+// Get Orders for Client (My Orders - actual paid orders)
 app.get("/api/orders/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log("Fetching booking requests for client:", userId);
+    console.log("Fetching orders for client:", userId);
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
@@ -3874,38 +3878,74 @@ app.get("/api/orders/:userId", async (req, res) => {
       });
     }
 
-    // Find all bookings where the user is the client (booking requests they made)
-    const bookings = await Booking.find({ clientId: userId })
-      .sort({ requestDate: -1 })
-      .populate("clientId", "name email profileImage")
+    // First, try to find actual orders from the Order collection
+    let orders = await Order.find({ clientId: userId })
+      .sort({ orderDate: -1 })
       .populate("freelancerId", "name email profileImage");
 
-    console.log(
-      `Found ${bookings.length} booking requests for client ${userId}`
-    );
+    console.log(`Found ${orders.length} actual orders for client ${userId}`);
 
-    // Format for the My Bookings section
-    const formattedBookings = bookings.map((booking, index) => ({
-      _id: booking._id,
-      id: `BK-${String(index + 1).padStart(3, "0")}`,
-      serviceName: booking.serviceName,
-      freelancerId: booking.freelancerId?._id || booking.freelancerId,
-      freelancerName: booking.freelancerName,
-      freelancerEmail: booking.freelancerEmail,
-      freelancerProfileImage: booking.freelancerId?.profileImage || null,
-      servicePrice: booking.servicePrice,
-      status: booking.status,
-      requestDate: booking.requestDate,
-      responseDate: booking.responseDate,
-      notes: booking.notes,
+    // If no actual orders found, fallback to accepted bookings
+    if (orders.length === 0) {
+      console.log(
+        "No orders found, checking for accepted bookings as fallback"
+      );
+
+      const acceptedBookings = await Booking.find({
+        clientId: userId,
+        status: { $in: ["accepted", "completed"] },
+      })
+        .sort({ requestDate: -1 })
+        .populate("freelancerId", "name email profileImage");
+
+      // Transform accepted bookings to order format
+      const formattedBookingOrders = acceptedBookings.map((booking, index) => ({
+        id: `ORD-${String(index + 1).padStart(3, "0")}`,
+        service: booking.serviceName,
+        status: booking.status === "accepted" ? "In Progress" : "Completed",
+        date: booking.requestDate.toISOString().split("T")[0],
+        amount: booking.servicePrice,
+        provider: booking.freelancerName,
+        providerImage: booking.freelancerId?.profileImage || null,
+        providerEmail: booking.freelancerEmail,
+        providerId: booking.freelancerId?._id || booking.freelancerId,
+        bookingId: booking._id,
+        orderType: "booking",
+      }));
+
+      return res.status(200).json(formattedBookingOrders);
+    }
+
+    // Format actual orders
+    const formattedOrders = orders.map((order, index) => ({
+      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      service: order.serviceName,
+      status:
+        order.status === "pending"
+          ? "Pending"
+          : order.status === "in-progress"
+          ? "In Progress"
+          : order.status === "completed"
+          ? "Completed"
+          : order.status === "cancelled"
+          ? "Cancelled"
+          : order.status,
+      date: order.orderDate.toISOString().split("T")[0],
+      amount: order.totalAmount,
+      provider: order.freelancerName,
+      providerImage: order.freelancerId?.profileImage || null,
+      providerEmail: order.freelancerEmail,
+      providerId: order.freelancerId?._id || order.freelancerId,
+      orderId: order._id,
+      orderType: "order",
     }));
 
-    res.status(200).json(formattedBookings);
+    res.status(200).json(formattedOrders);
   } catch (error) {
-    console.error("Error fetching booking requests:", error);
+    console.error("Error fetching orders:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch booking requests",
+      message: "Failed to fetch orders",
       error: error.message,
     });
   }
@@ -4418,136 +4458,136 @@ app.post("/api/check-booking-eligibility", async (req, res) => {
 });
 
 // DELETE - Cancel/Delete Booking (Updated to handle client cancellation)
-app.delete("/api/booking/:bookingId", async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    const { userId } = req.body; // Either client or freelancer can cancel
+// app.delete("/api/booking/:bookingId", async (req, res) => {
+//   try {
+//     const { bookingId } = req.params;
+//     const { userId } = req.body; // Either client or freelancer can cancel
 
-    console.log("Cancelling booking:", bookingId, "by user:", userId);
+//     console.log("Cancelling booking:", bookingId, "by user:", userId);
 
-    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid booking ID format",
-      });
-    }
+//     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid booking ID format",
+//       });
+//     }
 
-    const booking = await Booking.findById(bookingId);
+//     const booking = await Booking.findById(bookingId);
 
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found",
-      });
-    }
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found",
+//       });
+//     }
 
-    // Check if user is authorized to cancel this booking
-    if (
-      booking.clientId.toString() !== userId &&
-      booking.freelancerId.toString() !== userId
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to cancel this booking",
-      });
-    }
+//     // Check if user is authorized to cancel this booking
+//     if (
+//       booking.clientId.toString() !== userId &&
+//       booking.freelancerId.toString() !== userId
+//     ) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "You are not authorized to cancel this booking",
+//       });
+//     }
 
-    // Determine who is cancelling
-    const isClientCancelling = booking.clientId.toString() === userId;
-    const isFreelancerCancelling = booking.freelancerId.toString() === userId;
+//     // Determine who is cancelling
+//     const isClientCancelling = booking.clientId.toString() === userId;
+//     const isFreelancerCancelling = booking.freelancerId.toString() === userId;
 
-    // Only allow cancellation if booking is pending or in progress
-    if (!["pending", "accepted"].includes(booking.status)) {
-      return res.status(409).json({
-        success: false,
-        message: `Cannot cancel a booking that has been ${booking.status}`,
-      });
-    }
+//     // Only allow cancellation if booking is pending or in progress
+//     if (!["pending", "accepted"].includes(booking.status)) {
+//       return res.status(409).json({
+//         success: false,
+//         message: `Cannot cancel a booking that has been ${booking.status}`,
+//       });
+//     }
 
-    // Create notifications before deleting the booking
-    if (isClientCancelling) {
-      // Notify the freelancer that client cancelled
-      await createNotification({
-        userId: booking.freelancerId,
-        type: "booking",
-        title: "Booking Cancelled by Client",
-        message: `${booking.clientName} has cancelled the booking for "${booking.serviceName}"`,
-        relatedId: booking._id.toString(),
-        metadata: {
-          bookingId: booking._id,
-          clientName: booking.clientName,
-          serviceName: booking.serviceName,
-          cancelledBy: "client",
-        },
-      });
+//     // Create notifications before deleting the booking
+//     if (isClientCancelling) {
+//       // Notify the freelancer that client cancelled
+//       await createNotification({
+//         userId: booking.freelancerId,
+//         type: "booking",
+//         title: "Booking Cancelled by Client",
+//         message: `${booking.clientName} has cancelled the booking for "${booking.serviceName}"`,
+//         relatedId: booking._id.toString(),
+//         metadata: {
+//           bookingId: booking._id,
+//           clientName: booking.clientName,
+//           serviceName: booking.serviceName,
+//           cancelledBy: "client",
+//         },
+//       });
 
-      // Confirm to client
-      await createNotification({
-        userId: booking.clientId,
-        type: "system",
-        title: "Booking Cancelled",
-        message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
-        relatedId: booking._id.toString(),
-        metadata: {
-          bookingId: booking._id,
-          serviceName: booking.serviceName,
-          cancelledBy: "client",
-        },
-      });
-    } else if (isFreelancerCancelling) {
-      // Notify the client that freelancer cancelled
-      await createNotification({
-        userId: booking.clientId,
-        type: "booking",
-        title: "Booking Cancelled by Provider",
-        message: `${booking.freelancerName} has cancelled your booking for "${booking.serviceName}"`,
-        relatedId: booking._id.toString(),
-        metadata: {
-          bookingId: booking._id,
-          freelancerName: booking.freelancerName,
-          serviceName: booking.serviceName,
-          cancelledBy: "freelancer",
-        },
-      });
+//       // Confirm to client
+//       await createNotification({
+//         userId: booking.clientId,
+//         type: "system",
+//         title: "Booking Cancelled",
+//         message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
+//         relatedId: booking._id.toString(),
+//         metadata: {
+//           bookingId: booking._id,
+//           serviceName: booking.serviceName,
+//           cancelledBy: "client",
+//         },
+//       });
+//     } else if (isFreelancerCancelling) {
+//       // Notify the client that freelancer cancelled
+//       await createNotification({
+//         userId: booking.clientId,
+//         type: "booking",
+//         title: "Booking Cancelled by Provider",
+//         message: `${booking.freelancerName} has cancelled your booking for "${booking.serviceName}"`,
+//         relatedId: booking._id.toString(),
+//         metadata: {
+//           bookingId: booking._id,
+//           freelancerName: booking.freelancerName,
+//           serviceName: booking.serviceName,
+//           cancelledBy: "freelancer",
+//         },
+//       });
 
-      // Confirm to freelancer
-      await createNotification({
-        userId: booking.freelancerId,
-        type: "system",
-        title: "Booking Cancelled",
-        message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
-        relatedId: booking._id.toString(),
-        metadata: {
-          bookingId: booking._id,
-          serviceName: booking.serviceName,
-          cancelledBy: "freelancer",
-        },
-      });
-    }
+//       // Confirm to freelancer
+//       await createNotification({
+//         userId: booking.freelancerId,
+//         type: "system",
+//         title: "Booking Cancelled",
+//         message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
+//         relatedId: booking._id.toString(),
+//         metadata: {
+//           bookingId: booking._id,
+//           serviceName: booking.serviceName,
+//           cancelledBy: "freelancer",
+//         },
+//       });
+//     }
 
-    // Delete the booking
-    await Booking.findByIdAndDelete(bookingId);
+//     // Delete the booking
+//     await Booking.findByIdAndDelete(bookingId);
 
-    console.log(
-      `Booking ${bookingId} successfully cancelled by ${
-        isClientCancelling ? "client" : "freelancer"
-      }`
-    );
+//     console.log(
+//       `Booking ${bookingId} successfully cancelled by ${
+//         isClientCancelling ? "client" : "freelancer"
+//       }`
+//     );
 
-    res.status(200).json({
-      success: true,
-      message: "Booking cancelled successfully",
-      cancelledBy: isClientCancelling ? "client" : "freelancer",
-    });
-  } catch (error) {
-    console.error("Error cancelling booking:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to cancel booking",
-      error: error.message,
-    });
-  }
-});
+//     res.status(200).json({
+//       success: true,
+//       message: "Booking cancelled successfully",
+//       cancelledBy: isClientCancelling ? "client" : "freelancer",
+//     });
+//   } catch (error) {
+//     console.error("Error cancelling booking:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to cancel booking",
+//       error: error.message,
+//     });
+//   }
+// });
 
 console.log("✅ Booking API endpoints loaded successfully");
 
@@ -4905,6 +4945,53 @@ app.get("/api/orders/stats/:userId", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch order statistics",
+    });
+  }
+});
+
+app.get("/api/orders-received/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log("Fetching orders received by freelancer:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    // Find bookings where user is the freelancer (orders they received)
+    const receivedOrders = await Booking.find({ freelancerId: userId })
+      .sort({ requestDate: -1 })
+      .populate("clientId", "name email profileImage");
+
+    console.log(
+      `Found ${receivedOrders.length} orders received by freelancer ${userId}`
+    );
+
+    const formattedOrders = receivedOrders.map((booking) => ({
+      _id: booking._id,
+      clientId: booking.clientId,
+      clientName: booking.clientName,
+      clientEmail: booking.clientEmail,
+      clientProfileImage:
+        booking.clientId?.profileImage || booking.clientProfileImage,
+      serviceName: booking.serviceName,
+      servicePrice: booking.servicePrice,
+      status: booking.status,
+      requestDate: booking.requestDate,
+      responseDate: booking.responseDate,
+    }));
+
+    res.status(200).json(formattedOrders);
+  } catch (error) {
+    console.error("Error fetching received orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch received orders",
+      error: error.message,
     });
   }
 });

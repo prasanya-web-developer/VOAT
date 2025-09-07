@@ -84,23 +84,25 @@ class UserDashboard extends Component {
 
   componentDidMount() {
     // Load user data first
+
     this.loadUserData().then(() => {
       this.fetchPortfolioStatus().then(() => {
-        // COMMON for all users
-        this.fetchMyBookings(); // NEW: Booking requests made by current user
-        this.fetchMyOrders(); // NEW: Paid orders made by current user
+        // COMMON for ALL users (both clients and freelancers)
+        this.fetchMyBookings(); // Bookings made BY current user (as client)
+        this.fetchMyOrders(); // Orders/payments made BY current user
         this.fetchWishlist();
         this.fetchNotifications();
 
-        // ADDITIONAL for freelancers only
+        // ADDITIONAL for freelancers only (requests they receive)
         if (this.isFreelancer()) {
-          this.fetchBookingRequests(); // Booking requests received
-          this.fetchOrdersReceived(); // Orders received (paid)
+          this.fetchBookingRequests(); // Booking requests RECEIVED by freelancer
+          this.fetchOrdersReceived(); // Orders RECEIVED by freelancer (paid)
         }
 
         this.updateStats();
       });
     });
+
     this.checkWishlistConsistency();
 
     this.wishlistRefreshInterval = setInterval(() => {
@@ -206,7 +208,20 @@ class UserDashboard extends Component {
   };
 
   updateStats = () => {
-    const { orders, wishlist, bookings, myOrders, receivedOrders } = this.state;
+    const {
+      orders,
+      wishlist,
+      bookings,
+      myBookings = [],
+      myOrders,
+      receivedOrders,
+    } = this.state;
+
+    // Calculate total bookings made by current user (regardless of role)
+    const totalMyBookings = myBookings.length;
+    const pendingMyBookings = myBookings.filter(
+      (b) => b.status === "pending"
+    ).length;
 
     // Existing calculations
     const completedOrders = orders.filter(
@@ -225,37 +240,38 @@ class UserDashboard extends Component {
         order.status === "pending"
     ).length;
 
-    // NEW: Calculate freelancer stats
-    const totalEarned = receivedOrders
-      .filter(
-        (order) => order.status === "accepted" || order.status === "completed"
-      )
-      .reduce((sum, order) => sum + (order.servicePrice || 0), 0);
+    // Freelancer-specific stats
+    let totalEarned = 0;
+    let completedProjects = 0;
+    let bookingRequestsCount = 0;
 
-    const activeReceivedOrders = receivedOrders.filter(
-      (order) => order.status === "pending" || order.status === "accepted"
-    ).length;
+    if (this.isFreelancer() && receivedOrders) {
+      totalEarned = receivedOrders
+        .filter(
+          (order) => order.status === "accepted" || order.status === "completed"
+        )
+        .reduce((sum, order) => sum + (order.servicePrice || 0), 0);
 
-    const completedProjects = receivedOrders.filter(
-      (order) => order.status === "completed"
-    ).length;
+      completedProjects = receivedOrders.filter(
+        (order) => order.status === "completed"
+      ).length;
 
-    const bookingRequestsCount = receivedOrders.filter(
-      (booking) => booking.status === "pending"
-    ).length;
+      bookingRequestsCount = receivedOrders.filter(
+        (booking) => booking.status === "pending"
+      ).length;
+    }
 
-    // NEW: Calculate my orders count
-    const myOrdersCount = myOrders.length;
+    const myOrdersCount = myOrders ? myOrders.length : 0;
 
     this.setState({
       stats: {
         totalSpent,
-        activeOrders: this.isFreelancer() ? activeReceivedOrders : activeOrders,
+        activeOrders: this.isFreelancer() ? bookingRequestsCount : activeOrders,
         completedOrders: completedOrders.length,
         savedItems: wishlist.length,
-        totalBookings: bookings.length,
-        pendingBookings: bookings.filter((b) => b.status === "pending").length,
-        // NEW stats
+        totalBookings: totalMyBookings, // Total bookings made by user
+        pendingBookings: pendingMyBookings, // Pending bookings made by user
+        // Freelancer stats
         totalEarned,
         completedProjects,
         bookingRequestsCount,
@@ -4062,33 +4078,285 @@ class UserDashboard extends Component {
     }
   };
 
+  // Add these new methods to handle My Bookings functionality
+
+  fetchMyBookings = async () => {
+    try {
+      if (!this.state.userData || !this.state.userData.id) {
+        console.log("No user data available for fetching bookings");
+        return;
+      }
+
+      console.log("=== FETCHING MY BOOKINGS FROM FRONTEND ===");
+      console.log("User ID:", this.state.userData.id);
+      console.log("Base URL:", this.state.baseUrl);
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`
+      );
+
+      console.log("Response status:", response.status);
+
+      if (response.ok) {
+        const myBookings = await response.json();
+        console.log("✅ Successfully fetched my bookings:", myBookings);
+
+        this.setState({ myBookings }, () => {
+          console.log("✅ My bookings set in state:", this.state.myBookings);
+          this.updateStats();
+        });
+      } else {
+        const errorText = await response.text();
+        console.error(
+          "❌ Failed to fetch my bookings:",
+          response.status,
+          errorText
+        );
+        this.setState({ myBookings: [] }, () => {
+          this.updateStats();
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error fetching my bookings:", error);
+      this.setState({ myBookings: [] });
+    }
+  };
+
+  fetchMyOrders = async () => {
+    try {
+      if (!this.state.userData || !this.state.userData.id) {
+        return;
+      }
+
+      console.log("Fetching my orders for user:", this.state.userData.id);
+
+      // Use the updated orders endpoint
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const myOrders = await response.json();
+        console.log("Fetched my orders:", myOrders);
+
+        // Set the orders in state
+        this.setState({ orders: myOrders }, () => {
+          this.updateStats();
+        });
+      } else {
+        console.log("No orders found or failed to fetch my orders");
+        this.setState({ orders: [] }, () => {
+          this.updateStats();
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch my orders:", error);
+      this.setState({ orders: [] });
+    }
+  };
+
+  // NEW: Fetch orders received by freelancer (Order Received)
+  fetchReceivedOrders = async () => {
+    try {
+      // Only fetch if user is a freelancer
+      if (
+        !this.isFreelancer() ||
+        !this.state.userData ||
+        !this.state.userData.id
+      ) {
+        return;
+      }
+
+      console.log(
+        "Fetching received orders for freelancer:",
+        this.state.userData.id
+      );
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/bookings/${this.state.userData.id}`
+      );
+
+      if (response.ok) {
+        const receivedOrders = await response.json();
+        console.log("Fetched received orders:", receivedOrders);
+
+        this.setState({ receivedOrders }, () => {
+          this.updateStats();
+        });
+      } else {
+        console.log("No received orders found");
+        this.setState({ receivedOrders: [] }, () => {
+          this.updateStats();
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch received orders:", error);
+      this.setState({ receivedOrders: [] });
+    }
+  };
+
+  renderMyOrders() {
+    const { myOrders } = this.state;
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>My Orders</h1>
+          <div className="dashboard-actions">
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search orders..."
+                className="search-input"
+                value={this.state.orderSearchQuery}
+                onChange={this.handleOrderSearch}
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={this.state.orderFilter}
+              onChange={this.handleOrderFilter}
+            >
+              <option value="all">All Orders</option>
+              <option value="pending">Pending</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Orders Summary Stats */}
+        <div className="orders-summary-stats-compact">
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact pending">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                myOrders.filter(
+                  (order) => order.status.toLowerCase() === "pending"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Pending</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact progress">
+              <i className="fas fa-spinner"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                myOrders.filter((order) =>
+                  order.status.toLowerCase().includes("progress")
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">In Progress</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact completed">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-number-compact">
+              {
+                myOrders.filter(
+                  (order) => order.status.toLowerCase() === "completed"
+                ).length
+              }
+            </div>
+            <div className="stat-label-compact">Completed</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact total">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-number-compact">
+              ₹
+              {myOrders
+                .reduce((sum, order) => sum + (order.amount || 0), 0)
+                .toLocaleString()}
+            </div>
+            <div className="stat-label-compact">Total Value</div>
+          </div>
+        </div>
+
+        {myOrders.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-shopping-cart"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Orders Found</h3>
+              <p>
+                You haven't placed any paid orders yet. Orders appear here after
+                payment is completed.
+              </p>
+              <Link to="/portfolio-list">
+                <button className="btn btn-primary">
+                  <i className="fas fa-compass"></i>
+                  Explore Services
+                </button>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="compact-orders-grid">
+            {myOrders.map((order, index) => (
+              <div className="compact-order-card" key={order.id || index}>
+                {/* Rest of your existing order card rendering code */}
+                {/* ... */}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   renderMyBookings() {
     const { myBookings = [], bookingSearchQuery, bookingFilter } = this.state;
+
+    console.log("=== RENDERING MY BOOKINGS ===");
+    console.log("My bookings data:", myBookings);
+    console.log("Number of bookings:", myBookings.length);
 
     // Filter my bookings based on search and filter
     const filteredBookings = myBookings.filter((booking) => {
       // Apply status filter
-      if (bookingFilter !== "all" && booking.status !== bookingFilter) {
-        return false;
+      if (bookingFilter !== "all") {
+        const normalizedStatus = booking.status?.toLowerCase();
+        const filterStatus = bookingFilter.toLowerCase();
+        if (normalizedStatus !== filterStatus) {
+          return false;
+        }
       }
 
       // Apply search filter
       if (bookingSearchQuery && bookingSearchQuery.trim()) {
         const query = bookingSearchQuery.toLowerCase();
         return (
-          booking.serviceName.toLowerCase().includes(query) ||
-          booking.freelancerName.toLowerCase().includes(query) ||
-          booking.freelancerEmail.toLowerCase().includes(query)
+          booking.serviceName?.toLowerCase().includes(query) ||
+          booking.freelancerName?.toLowerCase().includes(query) ||
+          booking.freelancerEmail?.toLowerCase().includes(query)
         );
       }
 
       return true;
     });
 
+    console.log("Filtered bookings:", filteredBookings);
+
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
           <h1>My Bookings</h1>
+          <p className="section-description">
+            Bookings you have made with freelancers
+          </p>
           <div className="dashboard-actions">
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
@@ -4096,7 +4364,7 @@ class UserDashboard extends Component {
                 type="text"
                 placeholder="Search my bookings..."
                 className="search-input"
-                value={bookingSearchQuery}
+                value={bookingSearchQuery || ""}
                 onChange={(e) =>
                   this.setState({ bookingSearchQuery: e.target.value })
                 }
@@ -4113,6 +4381,16 @@ class UserDashboard extends Component {
               <option value="rejected">Rejected</option>
             </select>
           </div>
+        </div>
+
+        {/* Debug Info - Remove this after testing */}
+        <div
+          style={{ padding: "10px", background: "#f0f0f0", margin: "10px 0" }}
+        >
+          <strong>Debug Info:</strong>
+          <div>Total bookings: {myBookings.length}</div>
+          <div>Filtered bookings: {filteredBookings.length}</div>
+          <div>User ID: {this.state.userData?.id}</div>
         </div>
 
         {/* My Bookings Summary Stats */}
@@ -4340,234 +4618,6 @@ class UserDashboard extends Component {
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Add these new methods to handle My Bookings functionality
-
-  fetchMyBookings = async () => {
-    try {
-      if (!this.state.userData || !this.state.userData.id) {
-        return;
-      }
-
-      console.log("Fetching my bookings for user:", this.state.userData.id);
-
-      // Use the NEW dedicated my-bookings endpoint
-      const response = await fetch(
-        `${this.state.baseUrl}/api/my-bookings/${this.state.userData.id}`
-      );
-
-      if (response.ok) {
-        const myBookings = await response.json();
-        console.log("Fetched my bookings:", myBookings);
-
-        this.setState({ myBookings }, () => {
-          this.updateStats();
-        });
-      } else {
-        console.log("No bookings found or failed to fetch my bookings");
-        this.setState({ myBookings: [] }, () => {
-          this.updateStats();
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch my bookings:", error);
-      this.setState({ myBookings: [] });
-    }
-  };
-
-  fetchMyOrders = async () => {
-    try {
-      if (!this.state.userData || !this.state.userData.id) {
-        return;
-      }
-
-      console.log("Fetching my orders for user:", this.state.userData.id);
-
-      // Use a separate endpoint for actual PAID orders
-      const response = await fetch(
-        `${this.state.baseUrl}/api/my-orders/${this.state.userData.id}`
-      );
-
-      if (response.ok) {
-        const myOrders = await response.json();
-        console.log("Fetched my orders:", myOrders);
-
-        this.setState({ myOrders }, () => {
-          this.updateStats();
-        });
-      } else {
-        console.log("No orders found or failed to fetch my orders");
-        this.setState({ myOrders: [] }, () => {
-          this.updateStats();
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch my orders:", error);
-      this.setState({ myOrders: [] });
-    }
-  };
-
-  // NEW: Fetch orders received by freelancer (Order Received)
-  fetchReceivedOrders = async () => {
-    try {
-      // Only fetch if user is a freelancer
-      if (
-        !this.isFreelancer() ||
-        !this.state.userData ||
-        !this.state.userData.id
-      ) {
-        return;
-      }
-
-      console.log(
-        "Fetching received orders for freelancer:",
-        this.state.userData.id
-      );
-
-      const response = await fetch(
-        `${this.state.baseUrl}/api/bookings/${this.state.userData.id}`
-      );
-
-      if (response.ok) {
-        const receivedOrders = await response.json();
-        console.log("Fetched received orders:", receivedOrders);
-
-        this.setState({ receivedOrders }, () => {
-          this.updateStats();
-        });
-      } else {
-        console.log("No received orders found");
-        this.setState({ receivedOrders: [] }, () => {
-          this.updateStats();
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch received orders:", error);
-      this.setState({ receivedOrders: [] });
-    }
-  };
-
-  renderMyOrders() {
-    const { myOrders } = this.state;
-
-    return (
-      <div className="dashboard-main-content">
-        <div className="dashboard-header">
-          <h1>My Orders</h1>
-          <div className="dashboard-actions">
-            <div className="search-container">
-              <i className="fas fa-search search-icon"></i>
-              <input
-                type="text"
-                placeholder="Search orders..."
-                className="search-input"
-                value={this.state.orderSearchQuery}
-                onChange={this.handleOrderSearch}
-              />
-            </div>
-            <select
-              className="filter-dropdown"
-              value={this.state.orderFilter}
-              onChange={this.handleOrderFilter}
-            >
-              <option value="all">All Orders</option>
-              <option value="pending">Pending</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Orders Summary Stats */}
-        <div className="orders-summary-stats-compact">
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact pending">
-              <i className="fas fa-clock"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                myOrders.filter(
-                  (order) => order.status.toLowerCase() === "pending"
-                ).length
-              }
-            </div>
-            <div className="stat-label-compact">Pending</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact progress">
-              <i className="fas fa-spinner"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                myOrders.filter((order) =>
-                  order.status.toLowerCase().includes("progress")
-                ).length
-              }
-            </div>
-            <div className="stat-label-compact">In Progress</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact completed">
-              <i className="fas fa-check-circle"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                myOrders.filter(
-                  (order) => order.status.toLowerCase() === "completed"
-                ).length
-              }
-            </div>
-            <div className="stat-label-compact">Completed</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact total">
-              <i className="fas fa-indian-rupee-sign"></i>
-            </div>
-            <div className="stat-number-compact">
-              ₹
-              {myOrders
-                .reduce((sum, order) => sum + (order.amount || 0), 0)
-                .toLocaleString()}
-            </div>
-            <div className="stat-label-compact">Total Value</div>
-          </div>
-        </div>
-
-        {myOrders.length === 0 ? (
-          <div className="empty-state-modern">
-            <div className="empty-illustration">
-              <div className="empty-icon">
-                <i className="fas fa-shopping-cart"></i>
-              </div>
-            </div>
-            <div className="empty-content">
-              <h3>No Orders Found</h3>
-              <p>
-                You haven't placed any paid orders yet. Orders appear here after
-                payment is completed.
-              </p>
-              <Link to="/portfolio-list">
-                <button className="btn btn-primary">
-                  <i className="fas fa-compass"></i>
-                  Explore Services
-                </button>
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="compact-orders-grid">
-            {myOrders.map((order, index) => (
-              <div className="compact-order-card" key={order.id || index}>
-                {/* Rest of your existing order card rendering code */}
-                {/* ... */}
               </div>
             ))}
           </div>
@@ -4901,7 +4951,7 @@ class UserDashboard extends Component {
                 <span className="nav-text">Dashboard</span>
               </button>
 
-              {/* COMMON TABS - Both freelancers and clients have these */}
+              {/* COMMON TABS - ALL users have these */}
               <button
                 className={`nav-item ${
                   activeTab === "my-bookings" ? "active" : ""
@@ -4938,7 +4988,7 @@ class UserDashboard extends Component {
                 )}
               </button>
 
-              {/* FREELANCER-ONLY TABS - Only freelancers see these additional 2 tabs */}
+              {/* FREELANCER-ONLY TABS - Only freelancers see these */}
               {this.isFreelancer() && (
                 <>
                   <button
