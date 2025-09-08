@@ -84,8 +84,6 @@ class UserDashboard extends Component {
   };
 
   componentDidMount() {
-    // Load user data first
-
     this.loadUserData().then(() => {
       this.fetchPortfolioStatus().then(() => {
         // COMMON for all users
@@ -97,7 +95,7 @@ class UserDashboard extends Component {
         // ADDITIONAL for freelancers only
         if (this.isFreelancer()) {
           this.fetchBookingRequests();
-          this.fetchFreelancerOrders(); // ADD THIS LINE
+          this.fetchFreelancerOrders(); // This fetches orders received as FREELANCER
         }
 
         setTimeout(() => {
@@ -105,8 +103,22 @@ class UserDashboard extends Component {
         }, 1000);
       });
     });
-    this.checkWishlistConsistency();
 
+    // Check if coming from successful payment
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("payment") === "success") {
+      // Delay refresh to allow backend processing to complete
+      setTimeout(() => {
+        this.refreshAfterPayment();
+      }, 3000);
+    }
+
+    // Auto-refresh data every 30 seconds
+    this.dataRefreshInterval = setInterval(() => {
+      this.refreshOrderData();
+    }, 30000);
+
+    this.checkWishlistConsistency();
     this.wishlistRefreshInterval = setInterval(() => {
       this.fetchWishlist();
     }, 10000);
@@ -115,7 +127,6 @@ class UserDashboard extends Component {
       this.fetchNotifications();
     }, 30000);
 
-    // Listen for wishlist updates from cart
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
 
@@ -125,7 +136,10 @@ class UserDashboard extends Component {
       }
     }, 30000);
 
-    // Close notification panel when clicking outside
+    this.dataRefreshInterval = setInterval(() => {
+      this.refreshOrderData();
+    }, 30000);
+
     document.addEventListener("click", this.handleClickOutside);
   }
 
@@ -136,14 +150,21 @@ class UserDashboard extends Component {
     if (this.portfolioStatusTimeout) {
       clearTimeout(this.portfolioStatusTimeout);
     }
-
     if (this.cartStatusInterval) {
       clearInterval(this.cartStatusInterval);
     }
-
     if (this.notificationRefreshInterval) {
       clearInterval(this.notificationRefreshInterval);
     }
+    // Add cleanup for new interval
+    if (this.dataRefreshInterval) {
+      clearInterval(this.dataRefreshInterval);
+    }
+
+    if (this.dataRefreshInterval) {
+      clearInterval(this.dataRefreshInterval);
+    }
+
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
     document.removeEventListener("click", this.handleClickOutside);
   }
@@ -649,14 +670,32 @@ class UserDashboard extends Component {
 
   fetchOrders = async () => {
     try {
+      console.log("=== FETCHING MY ORDERS ===");
+      console.log("User ID:", this.state.userData?.id);
+
+      if (!this.state.userData?.id) {
+        console.log("No user ID available");
+        this.setState({ orders: [] }, () => {
+          this.updateStats();
+        });
+        return;
+      }
+
+      // Use the client orders endpoint
       const response = await fetch(
-        `${this.state.baseUrl}/api/orders/${
-          this.state.userData?.id || "unknown"
-        }`
+        `${this.state.baseUrl}/api/orders/client/${this.state.userData.id}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
       );
 
       if (response.ok) {
         const orders = await response.json();
+        console.log("✅ Fetched orders:", orders);
+
         this.setState({ orders }, () => {
           this.updateStats();
         });
@@ -729,21 +768,49 @@ class UserDashboard extends Component {
 
   fetchFreelancerOrders = async () => {
     try {
-      if (!this.isFreelancer() || !this.state.userData?.id) return;
+      if (!this.isFreelancer() || !this.state.userData?.id) {
+        return;
+      }
 
+      console.log("=== FETCHING FREELANCER ORDERS ===");
+      console.log("Freelancer ID:", this.state.userData.id);
+
+      // Use the freelancer orders endpoint for received orders
       const response = await fetch(
-        `${this.state.baseUrl}/api/orders/freelancer/${this.state.userData.id}`
+        `${this.state.baseUrl}/api/orders/freelancer/${this.state.userData.id}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
       );
 
       if (response.ok) {
         const freelancerOrders = await response.json();
-        this.setState({ freelancerOrders }, () => this.updateStats());
+        console.log("✅ Fetched freelancer orders:", freelancerOrders);
+
+        // Store these as receivedOrders for the "Order Received" section
+        this.setState(
+          {
+            freelancerOrders,
+            receivedOrders: freelancerOrders,
+          },
+          () => this.updateStats()
+        );
       } else {
-        this.setState({ freelancerOrders: [] });
+        console.log("No freelancer orders found");
+        this.setState({
+          freelancerOrders: [],
+          receivedOrders: [],
+        });
       }
     } catch (error) {
       console.error("Failed to fetch freelancer orders:", error);
-      this.setState({ freelancerOrders: [] });
+      this.setState({
+        freelancerOrders: [],
+        receivedOrders: [],
+      });
     }
   };
 
@@ -1613,6 +1680,13 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>My Orders</h1>
           <div className="dashboard-actions">
+            <button
+              className="refresh-btn"
+              onClick={this.refreshOrderData}
+              title="Refresh Orders"
+            >
+              <i className="fas fa-sync-alt"></i> Refresh
+            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -1740,10 +1814,6 @@ class UserDashboard extends Component {
                 <div className="compact-order-content">
                   <div className="service-info-compact">
                     <h3 className="service-name-compact">{order.service}</h3>
-                    {/* <div className="service-type-compact">
-                      <i className="fas fa-tag"></i>
-                      <span>Professional Service</span>
-                    </div> */}
                   </div>
 
                   {/* Provider Section */}
@@ -2808,6 +2878,13 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>Booking Requests</h1>
           <div className="dashboard-actions">
+            <button
+              className="refresh-btn"
+              onClick={this.refreshOrderData}
+              title="Refresh Booking Requests"
+            >
+              <i className="fas fa-sync-alt"></i> Refresh
+            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -4704,15 +4781,22 @@ class UserDashboard extends Component {
     );
   }
 
-  // NEW: Render Order Received tab (for freelancers)
   renderOrderReceived() {
-    const { receivedOrders } = this.state;
+    // Use receivedOrders instead of freelancerOrders for consistency
+    const { receivedOrders = [] } = this.state;
 
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
           <h1>Orders Received</h1>
           <div className="dashboard-actions">
+            <button
+              className="refresh-btn"
+              onClick={this.refreshOrderData}
+              title="Refresh Orders"
+            >
+              <i className="fas fa-sync-alt"></i> Refresh
+            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -4725,7 +4809,7 @@ class UserDashboard extends Component {
               <option value="all">All Orders</option>
               <option value="pending">Pending</option>
               <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
         </div>
@@ -4757,16 +4841,16 @@ class UserDashboard extends Component {
             <div className="stat-label-compact">Accepted</div>
           </div>
           <div className="summary-stat-compact">
-            <div className="stat-icon-compact rejected">
-              <i className="fas fa-times-circle"></i>
+            <div className="stat-icon-compact completed">
+              <i className="fas fa-check-circle"></i>
             </div>
             <div className="stat-number-compact">
               {
-                receivedOrders.filter((order) => order.status === "rejected")
+                receivedOrders.filter((order) => order.status === "completed")
                   .length
               }
             </div>
-            <div className="stat-label-compact">Rejected</div>
+            <div className="stat-label-compact">Completed</div>
           </div>
           <div className="summary-stat-compact">
             <div className="stat-icon-compact total">
@@ -4792,8 +4876,8 @@ class UserDashboard extends Component {
             <div className="empty-content">
               <h3>No Orders Received</h3>
               <p>
-                You haven't received any orders yet. Make sure your services are
-                visible and attractive to clients.
+                You haven't received any paid orders yet. Orders will appear
+                here when clients complete payment for your services.
               </p>
             </div>
           </div>
@@ -4804,9 +4888,7 @@ class UserDashboard extends Component {
                 {/* Order Header */}
                 <div className="modern-booking-header">
                   <div className="booking-id-compact">
-                    #
-                    {order._id?.slice(-6) ||
-                      `OR-${String(index + 1).padStart(3, "0")}`}
+                    #{order.id || `OR-${String(index + 1).padStart(3, "0")}`}
                   </div>
                   <div className={`modern-booking-status ${order.status}`}>
                     <div className="status-dot"></div>
@@ -4865,7 +4947,7 @@ class UserDashboard extends Component {
                   <div className="booking-meta-compact">
                     <div className="meta-item-compact">
                       <i className="fas fa-calendar-plus"></i>
-                      <span className="meta-label">Requested:</span>
+                      <span className="meta-label">Ordered:</span>
                       <span className="meta-value">
                         {new Date(order.requestDate).toLocaleDateString()}
                       </span>
@@ -4877,41 +4959,61 @@ class UserDashboard extends Component {
                         ₹{order.servicePrice?.toLocaleString()}
                       </span>
                     </div>
+                    <div className="meta-item-compact">
+                      <i className="fas fa-credit-card"></i>
+                      <span className="meta-label">Payment:</span>
+                      <span className="meta-value">
+                        {order.paymentStatus === "paid" ? "Paid" : "Pending"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Order Actions */}
                 <div className="modern-booking-actions">
-                  {order.status === "pending" && (
-                    <>
-                      <button
-                        className="action-btn-compact accept"
-                        onClick={() =>
-                          this.handleBookingAction(order._id, "accept")
-                        }
-                      >
-                        <i className="fas fa-check"></i>
-                        <span>Accept</span>
-                      </button>
-                      <button
-                        className="action-btn-compact reject"
-                        onClick={() =>
-                          this.handleBookingAction(order._id, "reject")
-                        }
-                      >
-                        <i className="fas fa-times"></i>
-                        <span>Decline</span>
-                      </button>
-                    </>
-                  )}
-
                   <button
                     className="action-btn-compact details"
-                    onClick={() => this.openBookingDetails(order)}
+                    onClick={() => this.openOrderDetails(order)}
                   >
                     <i className="fas fa-eye"></i>
                     <span>View Details</span>
                   </button>
+
+                  {order.status === "pending" && (
+                    <button
+                      className="action-btn-compact accept"
+                      onClick={() =>
+                        this.updateOrderStatus(order._id, "accepted")
+                      }
+                    >
+                      <i className="fas fa-check"></i>
+                      <span>Accept Order</span>
+                    </button>
+                  )}
+
+                  {order.status === "accepted" && (
+                    <button
+                      className="action-btn-compact primary"
+                      onClick={() =>
+                        this.updateOrderStatus(order._id, "in-progress")
+                      }
+                    >
+                      <i className="fas fa-play"></i>
+                      <span>Start Work</span>
+                    </button>
+                  )}
+
+                  {order.status === "in-progress" && (
+                    <button
+                      className="action-btn-compact secondary"
+                      onClick={() =>
+                        this.updateOrderStatus(order._id, "completed")
+                      }
+                    >
+                      <i className="fas fa-check-circle"></i>
+                      <span>Mark Complete</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -4920,6 +5022,81 @@ class UserDashboard extends Component {
       </div>
     );
   }
+
+  updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (response.ok) {
+        // Refresh the orders after status update
+        this.fetchFreelancerOrders();
+        this.showNotification(
+          `Order status updated to ${newStatus}`,
+          "success"
+        );
+      } else {
+        throw new Error("Failed to update order status");
+      }
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      this.showNotification("Failed to update order status", "error");
+    }
+  };
+
+  refreshOrderData = () => {
+    console.log("=== AUTO REFRESHING ORDER DATA ===");
+
+    // Only refresh if user is on order-related tabs
+    const orderTabs = [
+      "my-orders",
+      "booking-requests",
+      "order-received",
+      "my-bookings",
+    ];
+    if (orderTabs.includes(this.state.activeTab)) {
+      this.fetchOrders();
+      this.fetchMyBookings();
+
+      if (this.isFreelancer()) {
+        this.fetchBookingRequests();
+        this.fetchFreelancerOrders();
+      }
+
+      setTimeout(() => {
+        this.updateStats();
+      }, 1000);
+    }
+  };
+
+  refreshAfterPayment = () => {
+    console.log("=== REFRESHING DATA AFTER PAYMENT ===");
+
+    // Refresh all order-related data
+    this.fetchOrders(); // My Orders (as client)
+    this.fetchMyBookings(); // My Bookings
+    this.fetchNotifications();
+
+    if (this.isFreelancer()) {
+      this.fetchBookingRequests(); // Booking Requests (as freelancer)
+      this.fetchFreelancerOrders(); // Orders Received (as freelancer)
+    }
+
+    // Update stats after data refresh
+    setTimeout(() => {
+      this.updateStats();
+    }, 2000);
+
+    console.log("Data refresh completed after payment");
+  };
 
   renderDashboardContent() {
     const { activeTab, showPortfolioForm } = this.state;
