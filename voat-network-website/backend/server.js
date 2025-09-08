@@ -5707,6 +5707,7 @@ app.post("/api/payment/verify-payment", async (req, res) => {
       razorpay_order_id,
       razorpay_signature,
       userId,
+      cartItems,
     } = req.body;
 
     console.log("=== VERIFY RAZORPAY PAYMENT ===");
@@ -5768,6 +5769,96 @@ app.post("/api/payment/verify-payment", async (req, res) => {
         success: false,
         message: "Transaction not found",
       });
+    }
+
+    if (payment.status === "captured" && cartItems && cartItems.length > 0) {
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const createdOrders = [];
+
+      for (const item of cartItems) {
+        try {
+          // Get freelancer details
+          const freelancer = await User.findById(item.freelancerId);
+          if (!freelancer) {
+            console.error(`Freelancer not found: ${item.freelancerId}`);
+            continue;
+          }
+
+          // Create order
+          const newOrder = new Order({
+            clientId: userId,
+            clientName: user.name,
+            clientEmail: user.email,
+            freelancerId: item.freelancerId,
+            freelancerName: item.freelancerName,
+            freelancerEmail: freelancer.email,
+            serviceName: item.serviceName,
+            serviceLevel: item.serviceLevel,
+            totalAmount: item.selectedPaymentAmount,
+            status: "pending",
+            paymentStatus: "paid",
+            orderDate: new Date(),
+          });
+
+          const savedOrder = await newOrder.save();
+          createdOrders.push(savedOrder);
+
+          // Create notification for freelancer
+          await createNotification({
+            userId: item.freelancerId,
+            type: "order",
+            title: "New Order Received",
+            message: `You have received a new paid order from ${user.name} for "${item.serviceName}"`,
+            relatedId: savedOrder._id.toString(),
+            metadata: {
+              orderId: savedOrder._id,
+              clientName: user.name,
+              serviceName: item.serviceName,
+              amount: item.selectedPaymentAmount,
+              paymentId: razorpay_payment_id,
+            },
+          });
+
+          // Create notification for client
+          await createNotification({
+            userId: userId,
+            type: "order",
+            title: "Order Placed Successfully",
+            message: `Your order for "${item.serviceName}" has been placed and payment confirmed`,
+            relatedId: savedOrder._id.toString(),
+            metadata: {
+              orderId: savedOrder._id,
+              freelancerName: item.freelancerName,
+              serviceName: item.serviceName,
+              amount: item.selectedPaymentAmount,
+            },
+          });
+
+          console.log(`Order created successfully: ${savedOrder._id}`);
+        } catch (orderError) {
+          console.error("Error creating order:", orderError);
+        }
+      }
+
+      // CLEAR CART AFTER SUCCESSFUL ORDER CREATION
+      try {
+        await Cart.findOneAndUpdate(
+          { userId: userId },
+          { $set: { items: [] } }
+        );
+        console.log(`Cart cleared for user ${userId} after successful payment`);
+      } catch (cartError) {
+        console.error("Error clearing cart:", cartError);
+      }
+
+      console.log(`Created ${createdOrders.length} orders from payment`);
     }
 
     // Create notification for successful payment
@@ -5838,6 +5929,61 @@ app.post(
     }
   }
 );
+
+// Add this endpoint to your backend
+app.post("/api/orders/create-from-payment", async (req, res) => {
+  try {
+    const { userId, cartItems, paymentId } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const createdOrders = [];
+
+    for (const item of cartItems) {
+      const freelancer = await User.findById(item.freelancerId);
+      if (!freelancer) continue;
+
+      const newOrder = new Order({
+        clientId: userId,
+        clientName: user.name,
+        clientEmail: user.email,
+        freelancerId: item.freelancerId,
+        freelancerName: item.freelancerName,
+        freelancerEmail: freelancer.email,
+        serviceName: item.serviceName,
+        serviceLevel: item.serviceLevel,
+        totalAmount: item.selectedPaymentAmount,
+        status: "pending",
+        paymentStatus: "paid",
+        orderDate: new Date(),
+      });
+
+      const savedOrder = await newOrder.save();
+      createdOrders.push(savedOrder);
+    }
+
+    // Clear cart
+    await Cart.findOneAndUpdate({ userId: userId }, { $set: { items: [] } });
+
+    res.status(200).json({
+      success: true,
+      orders: createdOrders,
+      message: "Orders created successfully",
+    });
+  } catch (error) {
+    console.error("Error creating orders from payment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create orders",
+      error: error.message,
+    });
+  }
+});
 
 console.log("✅ Razorpay Payment API endpoints loaded successfully");
 

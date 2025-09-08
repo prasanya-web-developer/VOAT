@@ -32,6 +32,13 @@ class CartSidebar extends Component {
   componentDidMount() {
     this.initializeCart();
     this.testBackendConnection();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("payment") === "success") {
+      setTimeout(() => {
+        this.refreshAfterPayment();
+      }, 2000);
+    }
   }
 
   componentDidUpdate(prevProps) {
@@ -41,7 +48,6 @@ class CartSidebar extends Component {
     }
   }
 
-  // Test backend connectivity
   testBackendConnection = async () => {
     try {
       console.log("=== TESTING BACKEND CONNECTION ===");
@@ -243,7 +249,6 @@ class CartSidebar extends Component {
     }
   };
 
-  // Retry fetch with exponential backoff
   retryFetch = () => {
     this.setState(
       (prevState) => ({
@@ -640,10 +645,76 @@ class CartSidebar extends Component {
       selectedItems.has(item.id)
     );
 
+    // Store both cart items and user ID for payment processing
     localStorage.setItem("checkout_items", JSON.stringify(selectedCartItems));
+    localStorage.setItem("checkout_user_id", currentUserId);
 
     // Redirect to payment page
     window.location.href = "/payment";
+  };
+
+  // In your Payment component
+  handlePaymentSuccess = async (paymentData) => {
+    try {
+      const checkoutItems = JSON.parse(
+        localStorage.getItem("checkout_items") || "[]"
+      );
+      const userId = localStorage.getItem("checkout_user_id");
+
+      // Verify payment with backend and create orders
+      const response = await fetch(
+        `${this.state.baseUrl}/api/payment/verify-payment`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            razorpay_payment_id: paymentData.razorpay_payment_id,
+            razorpay_order_id: paymentData.razorpay_order_id,
+            razorpay_signature: paymentData.razorpay_signature,
+            userId: userId,
+            cartItems: checkoutItems, // Pass cart items for order creation
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Clear checkout data
+        localStorage.removeItem("checkout_items");
+        localStorage.removeItem("checkout_user_id");
+
+        // Show success message
+        alert("Payment successful! Your orders have been created.");
+
+        // Redirect to dashboard
+        window.location.href = "/user-dashboard";
+      } else {
+        throw new Error(result.message || "Payment verification failed");
+      }
+    } catch (error) {
+      console.error("Payment verification error:", error);
+      alert("Payment verification failed. Please contact support.");
+    }
+  };
+
+  refreshAfterPayment = () => {
+    // Refresh all relevant data
+    this.fetchOrders();
+    this.fetchMyBookings();
+    this.fetchNotifications();
+
+    if (this.isFreelancer()) {
+      this.fetchBookingRequests();
+      this.fetchFreelancerOrders();
+    }
+
+    // Update stats
+    setTimeout(() => {
+      this.updateStats();
+    }, 1000);
   };
 
   render() {
