@@ -5707,12 +5707,14 @@ app.post("/api/payment/verify-payment", async (req, res) => {
       razorpay_order_id,
       razorpay_signature,
       userId,
-      cartItems,
+      cartItems, // Add this parameter
     } = req.body;
 
-    console.log("=== VERIFY RAZORPAY PAYMENT ===");
+    console.log("=== VERIFY PAYMENT REQUEST ===");
     console.log("Payment ID:", razorpay_payment_id);
     console.log("Order ID:", razorpay_order_id);
+    console.log("User ID:", userId);
+    console.log("Cart Items received:", cartItems);
 
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
       return res.status(400).json({
@@ -5771,94 +5773,240 @@ app.post("/api/payment/verify-payment", async (req, res) => {
       });
     }
 
+    // CREATE ORDERS FROM CART ITEMS - ONLY IF PAYMENT IS CAPTURED
     if (payment.status === "captured" && cartItems && cartItems.length > 0) {
+      console.log("=== STARTING ORDER CREATION ===");
+
       const user = await User.findById(userId);
       if (!user) {
+        console.error("User not found:", userId);
         return res.status(404).json({
           success: false,
           message: "User not found",
         });
       }
 
-      const createdOrders = [];
+      console.log("User found:", user.name);
 
-      for (const item of cartItems) {
+      const createdOrders = [];
+      const failedOrders = [];
+
+      for (let i = 0; i < cartItems.length; i++) {
+        const item = cartItems[i];
+
         try {
-          // Get freelancer details
-          const freelancer = await User.findById(item.freelancerId);
-          if (!freelancer) {
-            console.error(`Freelancer not found: ${item.freelancerId}`);
+          console.log(
+            `=== PROCESSING CART ITEM ${i + 1}/${cartItems.length} ===`
+          );
+          console.log("Raw item data:", item);
+
+          // Extract freelancer ID properly
+          let freelancerId = item.freelancerId;
+
+          // Handle different freelancerId formats
+          if (typeof freelancerId === "object" && freelancerId !== null) {
+            if (freelancerId._id) {
+              freelancerId = freelancerId._id;
+            } else if (freelancerId.id) {
+              freelancerId = freelancerId.id;
+            } else if (freelancerId.$oid) {
+              freelancerId = freelancerId.$oid;
+            } else {
+              freelancerId = freelancerId.toString();
+            }
+          }
+
+          // From originalData if available
+          if (item.originalData && item.originalData.freelancerId) {
+            freelancerId = item.originalData.freelancerId;
+          }
+
+          console.log("Extracted freelancerId:", freelancerId);
+          console.log("FreelancerId type:", typeof freelancerId);
+
+          // Validate freelancer ID format
+          if (!freelancerId || !mongoose.Types.ObjectId.isValid(freelancerId)) {
+            console.error(`Invalid freelancer ID format: ${freelancerId}`);
+            failedOrders.push({
+              item: item,
+              error: `Invalid freelancer ID format: ${freelancerId}`,
+            });
             continue;
           }
 
-          // Create order
-          const newOrder = new Order({
+          // Get freelancer details
+          const freelancer = await User.findById(freelancerId);
+          if (!freelancer) {
+            console.error(`Freelancer not found: ${freelancerId}`);
+            failedOrders.push({
+              item: item,
+              error: `Freelancer not found: ${freelancerId}`,
+            });
+            continue;
+          }
+
+          console.log("Freelancer found:", freelancer.name);
+
+          // Prepare order data
+          const serviceName =
+            item.originalData?.serviceName || item.serviceName || item.category;
+          const serviceLevel =
+            item.originalData?.serviceLevel || item.serviceLevel || "Standard";
+          const totalAmount = parseFloat(
+            item.originalData?.selectedPaymentAmount ||
+              item.selectedPaymentAmount ||
+              item.price ||
+              item.basePrice
+          );
+          const freelancerName =
+            item.originalData?.freelancerName ||
+            item.freelancerName ||
+            item.seller ||
+            freelancer.name;
+
+          // Validate required fields
+          if (!serviceName || !totalAmount || isNaN(totalAmount)) {
+            console.error("Missing required order data:", {
+              serviceName,
+              totalAmount,
+              freelancerName,
+            });
+            failedOrders.push({
+              item: item,
+              error: "Missing required order data",
+            });
+            continue;
+          }
+
+          const orderData = {
             clientId: userId,
             clientName: user.name,
             clientEmail: user.email,
-            freelancerId: item.freelancerId,
-            freelancerName: item.freelancerName,
+            freelancerId: freelancerId,
+            freelancerName: freelancerName,
             freelancerEmail: freelancer.email,
-            serviceName: item.serviceName,
-            serviceLevel: item.serviceLevel,
-            totalAmount: item.selectedPaymentAmount,
+            serviceName: serviceName,
+            serviceLevel: serviceLevel,
+            totalAmount: totalAmount,
             status: "pending",
             paymentStatus: "paid",
             orderDate: new Date(),
-          });
+          };
 
+          console.log("Creating order with data:", orderData);
+
+          // Create order
+          const newOrder = new Order(orderData);
           const savedOrder = await newOrder.save();
           createdOrders.push(savedOrder);
 
-          // Create notification for freelancer
-          await createNotification({
-            userId: item.freelancerId,
-            type: "order",
-            title: "New Order Received",
-            message: `You have received a new paid order from ${user.name} for "${item.serviceName}"`,
-            relatedId: savedOrder._id.toString(),
-            metadata: {
-              orderId: savedOrder._id,
-              clientName: user.name,
-              serviceName: item.serviceName,
-              amount: item.selectedPaymentAmount,
-              paymentId: razorpay_payment_id,
-            },
-          });
-
-          // Create notification for client
-          await createNotification({
-            userId: userId,
-            type: "order",
-            title: "Order Placed Successfully",
-            message: `Your order for "${item.serviceName}" has been placed and payment confirmed`,
-            relatedId: savedOrder._id.toString(),
-            metadata: {
-              orderId: savedOrder._id,
-              freelancerName: item.freelancerName,
-              serviceName: item.serviceName,
-              amount: item.selectedPaymentAmount,
-            },
-          });
-
           console.log(`Order created successfully: ${savedOrder._id}`);
+
+          // Create notification for freelancer
+          try {
+            await createNotification({
+              userId: freelancerId,
+              type: "order",
+              title: "New Order Received",
+              message: `You have received a new paid order from ${user.name} for "${serviceName}"`,
+              relatedId: savedOrder._id.toString(),
+              metadata: {
+                orderId: savedOrder._id,
+                clientName: user.name,
+                serviceName: serviceName,
+                amount: totalAmount,
+                paymentId: razorpay_payment_id,
+              },
+            });
+
+            // Create notification for client
+            await createNotification({
+              userId: userId,
+              type: "order",
+              title: "Order Placed Successfully",
+              message: `Your order for "${serviceName}" has been placed and payment confirmed`,
+              relatedId: savedOrder._id.toString(),
+              metadata: {
+                orderId: savedOrder._id,
+                freelancerName: freelancerName,
+                serviceName: serviceName,
+                amount: totalAmount,
+              },
+            });
+
+            console.log("Notifications created successfully");
+          } catch (notificationError) {
+            console.error("Error creating notifications:", notificationError);
+            // Don't fail the order creation for notification errors
+          }
         } catch (orderError) {
-          console.error("Error creating order:", orderError);
+          console.error("Error creating individual order:", orderError);
+          console.error("Failed item:", item);
+          failedOrders.push({
+            item: item,
+            error: orderError.message,
+          });
         }
       }
 
-      // CLEAR CART AFTER SUCCESSFUL ORDER CREATION
-      try {
-        await Cart.findOneAndUpdate(
-          { userId: userId },
-          { $set: { items: [] } }
-        );
-        console.log(`Cart cleared for user ${userId} after successful payment`);
-      } catch (cartError) {
-        console.error("Error clearing cart:", cartError);
+      console.log(`=== ORDER CREATION SUMMARY ===`);
+      console.log(`Total items: ${cartItems.length}`);
+      console.log(`Orders created: ${createdOrders.length}`);
+      console.log(`Orders failed: ${failedOrders.length}`);
+
+      if (failedOrders.length > 0) {
+        console.log("Failed orders:", failedOrders);
       }
 
-      console.log(`Created ${createdOrders.length} orders from payment`);
+      // Clear cart items that were successfully converted to orders
+      if (createdOrders.length > 0) {
+        try {
+          // Remove items from cart based on the items that were successfully processed
+          const successfulItemIds = cartItems
+            .filter(
+              (_, index) =>
+                index <
+                createdOrders.length +
+                  failedOrders.filter((f, i) => i < index).length
+            )
+            .map((item) => item.id || item._id);
+
+          console.log("Removing cart items with IDs:", successfulItemIds);
+
+          const cartUpdateResult = await Cart.findOneAndUpdate(
+            { userId: userId },
+            {
+              $pull: {
+                items: {
+                  _id: {
+                    $in: successfulItemIds.filter((id) =>
+                      mongoose.Types.ObjectId.isValid(id)
+                    ),
+                  },
+                },
+              },
+            },
+            { new: true }
+          );
+
+          console.log(
+            "Cart update result:",
+            cartUpdateResult ? "Success" : "Failed"
+          );
+        } catch (cartError) {
+          console.error("Error clearing cart:", cartError);
+          // Don't fail the entire operation for cart clearing errors
+        }
+      }
+
+      // Store order creation results in transaction metadata
+      await PaymentTransaction.findByIdAndUpdate(transaction._id, {
+        $set: {
+          "metadata.ordersCreated": createdOrders.length,
+          "metadata.ordersFailed": failedOrders.length,
+          "metadata.orderIds": createdOrders.map((order) => order._id),
+        },
+      });
     }
 
     // Create notification for successful payment
@@ -5980,6 +6128,65 @@ app.post("/api/orders/create-from-payment", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create orders",
+      error: error.message,
+    });
+  }
+});
+
+// Add this endpoint to retry order creation
+app.post("/api/orders/retry-from-payment", async (req, res) => {
+  try {
+    const { userId, paymentId } = req.body;
+
+    // Find the payment transaction
+    const transaction = await PaymentTransaction.findOne({
+      userId: userId,
+      razorpayPaymentId: paymentId,
+      status: "paid",
+    });
+
+    if (!transaction || !transaction.items) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment transaction or items not found",
+      });
+    }
+
+    // Get cart items at the time of payment
+    const cartItems = JSON.parse(
+      localStorage.getItem("checkout_items") || "[]"
+    );
+
+    if (cartItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No cart items found for order creation",
+      });
+    }
+
+    // Try to create orders again
+    const response = await fetch(
+      `${this.baseUrl}/api/orders/create-from-payment`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId,
+          cartItems,
+          paymentId,
+        }),
+      }
+    );
+
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error("Error retrying order creation:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retry order creation",
       error: error.message,
     });
   }

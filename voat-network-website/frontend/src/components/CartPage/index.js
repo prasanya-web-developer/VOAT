@@ -182,22 +182,60 @@ class CartSidebar extends Component {
 
       console.log("=== CART ITEMS TO PROCESS ===", cartItems);
 
-      // Transform the data to match the expected format
-      const transformedItems = cartItems.map((item) => ({
-        id: item._id,
-        name: `${item.serviceName} - ${item.serviceLevel}`,
-        price: item.selectedPaymentAmount || item.basePrice,
-        image: this.getProfileImageUrl(item.freelancerProfileImage),
-        seller: item.freelancerName,
-        category: item.serviceName,
-        freelancerId: item.freelancerId,
-        serviceLevel: item.serviceLevel,
-        basePrice: item.basePrice,
-        paymentStructure: item.paymentStructure,
-        addedDate: item.addedDate,
-      }));
+      // Debug each cart item's structure
+      cartItems.forEach((item, index) => {
+        console.log(`=== CART ITEM ${index} DEBUG ===`);
+        console.log("Raw item:", item);
+        console.log("FreelancerId:", item.freelancerId);
+        console.log("FreelancerId type:", typeof item.freelancerId);
+        console.log(
+          "Is ObjectId:",
+          item.freelancerId && typeof item.freelancerId === "object"
+        );
+      });
 
-      console.log("=== TRANSFORMED ITEMS ===", transformedItems);
+      // Transform the data to match the expected format with proper ID handling
+      const transformedItems = cartItems.map((item) => {
+        // Handle freelancerId - ensure it's a string
+        let freelancerId = item.freelancerId;
+        if (typeof freelancerId === "object" && freelancerId !== null) {
+          freelancerId =
+            freelancerId._id || freelancerId.id || freelancerId.toString();
+        }
+
+        const transformedItem = {
+          id: item._id,
+          name: `${item.serviceName} - ${item.serviceLevel}`,
+          price: item.selectedPaymentAmount || item.basePrice,
+          image: this.getProfileImageUrl(item.freelancerProfileImage),
+          seller: item.freelancerName,
+          category: item.serviceName,
+          freelancerId: freelancerId, // Properly formatted freelancer ID
+          serviceLevel: item.serviceLevel,
+          basePrice: item.basePrice,
+          paymentStructure: item.paymentStructure,
+          addedDate: item.addedDate,
+          // Store original data for checkout
+          originalData: {
+            freelancerId: freelancerId,
+            freelancerName: item.freelancerName,
+            freelancerProfileImage: item.freelancerProfileImage,
+            serviceName: item.serviceName,
+            serviceLevel: item.serviceLevel,
+            selectedPaymentAmount: item.selectedPaymentAmount || item.basePrice,
+            basePrice: item.basePrice,
+          },
+        };
+
+        console.log(`=== TRANSFORMED ITEM ${item._id} ===`);
+        console.log("Original freelancerId:", item.freelancerId);
+        console.log("Transformed freelancerId:", transformedItem.freelancerId);
+        console.log("Full transformed item:", transformedItem);
+
+        return transformedItem;
+      });
+
+      console.log("=== FINAL TRANSFORMED ITEMS ===", transformedItems);
 
       // Initialize all items as selected by default
       const allItemIds = new Set(transformedItems.map((item) => item.id));
@@ -209,6 +247,27 @@ class CartSidebar extends Component {
         error: null,
         retryCount: 0,
       });
+
+      // Fetch user's cart to check which items are already in cart
+      try {
+        const cartResponse = await fetch(
+          `${baseUrl}/api/cart/${currentUserId}`
+        );
+
+        let cartItems = [];
+        if (cartResponse.ok) {
+          const cartData = await cartResponse.json();
+          cartItems = cartData.data || [];
+        }
+
+        // Update wishlist items with cart status if needed
+        this.setState({
+          cartItems: transformedItems,
+        });
+      } catch (cartError) {
+        console.error("Error fetching additional cart data:", cartError);
+        // Continue with main cart data
+      }
     } catch (error) {
       console.error("=== CART FETCH ERROR ===");
       console.error("Error type:", error.constructor.name);
@@ -630,22 +689,31 @@ class CartSidebar extends Component {
       return;
     }
 
-    if (cartItems.length === 0) {
-      alert("Your cart is empty");
-      return;
-    }
-
     if (selectedItems.size === 0) {
       alert("Please select at least one item to checkout");
       return;
     }
 
-    // Store selected items for payment page
-    const selectedCartItems = cartItems.filter((item) =>
-      selectedItems.has(item.id)
-    );
+    // Store selected items with proper ID format
+    const selectedCartItems = cartItems
+      .filter((item) => selectedItems.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        freelancerId:
+          typeof item.freelancerId === "object"
+            ? item.freelancerId._id || item.freelancerId.id
+            : item.freelancerId,
+        freelancerName: item.seller || item.freelancerName,
+        freelancerProfileImage: item.image || item.freelancerProfileImage,
+        serviceName: item.category || item.serviceName,
+        serviceLevel: item.serviceLevel || "Standard",
+        selectedPaymentAmount: item.price,
+        basePrice: item.price,
+      }));
 
-    // Store both cart items and user ID for payment processing
+    console.log("=== CHECKOUT ITEMS DEBUG ===");
+    console.log("Selected cart items:", selectedCartItems);
+
     localStorage.setItem("checkout_items", JSON.stringify(selectedCartItems));
     localStorage.setItem("checkout_user_id", currentUserId);
 
