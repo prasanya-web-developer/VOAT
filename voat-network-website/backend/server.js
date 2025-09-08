@@ -4984,12 +4984,15 @@ app.get("/api/orders/client/:clientId", async (req, res) => {
       });
     }
 
-    // Fetch actual orders from Order collection
-    const orders = await Order.find({ clientId: clientId })
+    // Fetch ONLY actual paid orders from Order collection
+    const orders = await Order.find({
+      clientId: clientId,
+      paymentStatus: "paid", // Only paid orders
+    })
       .sort({ orderDate: -1 })
       .populate("freelancerId", "name email profileImage");
 
-    console.log(`Found ${orders.length} orders for client ${clientId}`);
+    console.log(`Found ${orders.length} paid orders for client ${clientId}`);
 
     // Transform orders to match UI format
     const formattedOrders = orders.map((order, index) => ({
@@ -5032,18 +5035,21 @@ app.get("/api/orders/freelancer/:freelancerId", async (req, res) => {
       });
     }
 
-    // Find orders where user is the freelancer
-    const receivedOrders = await Order.find({ freelancerId: freelancerId })
+    // Find ONLY actual paid orders where user is the freelancer
+    const receivedOrders = await Order.find({
+      freelancerId: freelancerId,
+      paymentStatus: "paid", // Only paid orders
+    })
       .sort({ orderDate: -1 })
       .populate("clientId", "name email profileImage");
 
     console.log(
-      `Found ${receivedOrders.length} orders for freelancer ${freelancerId}`
+      `Found ${receivedOrders.length} paid orders for freelancer ${freelancerId}`
     );
 
     const formattedOrders = receivedOrders.map((order, index) => ({
       _id: order._id,
-      id: `ORD-${String(index + 1).padStart(3, "0")}`,
+      id: `RCV-${String(index + 1).padStart(3, "0")}`,
       serviceName: order.serviceName,
       clientId: order.clientId?._id || order.clientId,
       clientName: order.clientName,
@@ -5055,6 +5061,7 @@ app.get("/api/orders/freelancer/:freelancerId", async (req, res) => {
       responseDate: order.updatedAt,
       orderType: "order",
       paymentStatus: order.paymentStatus,
+      serviceLevel: order.serviceLevel || "Standard",
     }));
 
     res.json(formattedOrders);
