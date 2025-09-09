@@ -4429,138 +4429,6 @@ app.post("/api/check-booking-eligibility", async (req, res) => {
   }
 });
 
-// DELETE - Cancel/Delete Booking (Updated to handle client cancellation)
-// app.delete("/api/booking/:bookingId", async (req, res) => {
-//   try {
-//     const { bookingId } = req.params;
-//     const { userId } = req.body; // Either client or freelancer can cancel
-
-//     console.log("Cancelling booking:", bookingId, "by user:", userId);
-
-//     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid booking ID format",
-//       });
-//     }
-
-//     const booking = await Booking.findById(bookingId);
-
-//     if (!booking) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Booking not found",
-//       });
-//     }
-
-//     // Check if user is authorized to cancel this booking
-//     if (
-//       booking.clientId.toString() !== userId &&
-//       booking.freelancerId.toString() !== userId
-//     ) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "You are not authorized to cancel this booking",
-//       });
-//     }
-
-//     // Determine who is cancelling
-//     const isClientCancelling = booking.clientId.toString() === userId;
-//     const isFreelancerCancelling = booking.freelancerId.toString() === userId;
-
-//     // Only allow cancellation if booking is pending or in progress
-//     if (!["pending", "accepted"].includes(booking.status)) {
-//       return res.status(409).json({
-//         success: false,
-//         message: `Cannot cancel a booking that has been ${booking.status}`,
-//       });
-//     }
-
-//     // Create notifications before deleting the booking
-//     if (isClientCancelling) {
-//       // Notify the freelancer that client cancelled
-//       await createNotification({
-//         userId: booking.freelancerId,
-//         type: "booking",
-//         title: "Booking Cancelled by Client",
-//         message: `${booking.clientName} has cancelled the booking for "${booking.serviceName}"`,
-//         relatedId: booking._id.toString(),
-//         metadata: {
-//           bookingId: booking._id,
-//           clientName: booking.clientName,
-//           serviceName: booking.serviceName,
-//           cancelledBy: "client",
-//         },
-//       });
-
-//       // Confirm to client
-//       await createNotification({
-//         userId: booking.clientId,
-//         type: "system",
-//         title: "Booking Cancelled",
-//         message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
-//         relatedId: booking._id.toString(),
-//         metadata: {
-//           bookingId: booking._id,
-//           serviceName: booking.serviceName,
-//           cancelledBy: "client",
-//         },
-//       });
-//     } else if (isFreelancerCancelling) {
-//       // Notify the client that freelancer cancelled
-//       await createNotification({
-//         userId: booking.clientId,
-//         type: "booking",
-//         title: "Booking Cancelled by Provider",
-//         message: `${booking.freelancerName} has cancelled your booking for "${booking.serviceName}"`,
-//         relatedId: booking._id.toString(),
-//         metadata: {
-//           bookingId: booking._id,
-//           freelancerName: booking.freelancerName,
-//           serviceName: booking.serviceName,
-//           cancelledBy: "freelancer",
-//         },
-//       });
-
-//       // Confirm to freelancer
-//       await createNotification({
-//         userId: booking.freelancerId,
-//         type: "system",
-//         title: "Booking Cancelled",
-//         message: `You have successfully cancelled the booking for "${booking.serviceName}"`,
-//         relatedId: booking._id.toString(),
-//         metadata: {
-//           bookingId: booking._id,
-//           serviceName: booking.serviceName,
-//           cancelledBy: "freelancer",
-//         },
-//       });
-//     }
-
-//     // Delete the booking
-//     await Booking.findByIdAndDelete(bookingId);
-
-//     console.log(
-//       `Booking ${bookingId} successfully cancelled by ${
-//         isClientCancelling ? "client" : "freelancer"
-//       }`
-//     );
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Booking cancelled successfully",
-//       cancelledBy: isClientCancelling ? "client" : "freelancer",
-//     });
-//   } catch (error) {
-//     console.error("Error cancelling booking:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to cancel booking",
-//       error: error.message,
-//     });
-//   }
-// });
-
 // Test endpoint for my-bookings
 app.get("/api/test-my-bookings/:userId", async (req, res) => {
   try {
@@ -4912,8 +4780,14 @@ app.get("/api/orders/freelancer/:freelancerId", async (req, res) => {
 app.put("/api/orders/:orderId/status", async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status, notes } = req.body;
+    const { status, notes, freelancerId } = req.body;
 
+    console.log(`=== UPDATING ORDER STATUS ===`);
+    console.log("Order ID:", orderId);
+    console.log("New Status:", status);
+    console.log("Freelancer ID:", freelancerId);
+
+    // Validate status
     if (
       ![
         "pending",
@@ -4921,11 +4795,20 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
         "in-progress",
         "completed",
         "cancelled",
+        "rejected",
       ].includes(status)
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status",
+        message:
+          "Invalid status. Must be one of: pending, accepted, in-progress, completed, cancelled, rejected",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID format",
       });
     }
 
@@ -4937,35 +4820,262 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
       });
     }
 
+    // Security check - only the freelancer can update their received orders
+    if (freelancerId && order.freelancerId.toString() !== freelancerId) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update this order",
+      });
+    }
+
+    const previousStatus = order.status;
     order.status = status;
     if (notes) order.notes = notes;
     if (status === "completed") order.completedDate = new Date();
 
     const updatedOrder = await order.save();
 
-    // Create notification for status change
-    await createNotification({
-      userId: order.clientId,
-      type: "order",
-      title: `Order ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-      message: `Your order for "${order.serviceName}" has been ${status}`,
-      relatedId: order._id.toString(),
-      metadata: {
-        orderId: order._id,
-        serviceName: order.serviceName,
-        status,
-      },
-    });
+    console.log(
+      `Order ${orderId} status updated from ${previousStatus} to ${status}`
+    );
+
+    // Create notifications for status changes
+    try {
+      // Notification for the client
+      let clientMessage = "";
+      let clientTitle = "";
+
+      switch (status) {
+        case "accepted":
+          clientTitle = "Order Accepted";
+          clientMessage = `Your order for "${order.serviceName}" has been accepted by ${order.freelancerName}`;
+          break;
+        case "rejected":
+          clientTitle = "Order Declined";
+          clientMessage = `Your order for "${order.serviceName}" has been declined by ${order.freelancerName}`;
+          break;
+        case "completed":
+          clientTitle = "Order Completed";
+          clientMessage = `Your order for "${order.serviceName}" has been marked as completed by ${order.freelancerName}`;
+          break;
+        case "in-progress":
+          clientTitle = "Order In Progress";
+          clientMessage = `Work has started on your order for "${order.serviceName}"`;
+          break;
+        default:
+          clientTitle = "Order Status Updated";
+          clientMessage = `Your order for "${order.serviceName}" status has been updated to ${status}`;
+      }
+
+      await createNotification({
+        userId: order.clientId,
+        type: "order",
+        title: clientTitle,
+        message: clientMessage,
+        relatedId: order._id.toString(),
+        metadata: {
+          orderId: order._id,
+          serviceName: order.serviceName,
+          freelancerName: order.freelancerName,
+          previousStatus,
+          newStatus: status,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      // Notification for the freelancer (confirmation)
+      let freelancerMessage = "";
+      let freelancerTitle = "";
+
+      switch (status) {
+        case "accepted":
+          freelancerTitle = "Order Accepted";
+          freelancerMessage = `You have accepted the order from ${order.clientName} for "${order.serviceName}"`;
+          break;
+        case "rejected":
+          freelancerTitle = "Order Declined";
+          freelancerMessage = `You have declined the order from ${order.clientName} for "${order.serviceName}"`;
+          break;
+        case "completed":
+          freelancerTitle = "Order Marked Complete";
+          freelancerMessage = `You have marked the order from ${order.clientName} for "${order.serviceName}" as completed`;
+          break;
+        default:
+          freelancerTitle = "Order Status Updated";
+          freelancerMessage = `You have updated the order status for "${order.serviceName}" to ${status}`;
+      }
+
+      await createNotification({
+        userId: order.freelancerId,
+        type: "system",
+        title: freelancerTitle,
+        message: freelancerMessage,
+        relatedId: order._id.toString(),
+        metadata: {
+          orderId: order._id,
+          serviceName: order.serviceName,
+          clientName: order.clientName,
+          action: status,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (notificationError) {
+      console.error("Error creating notifications:", notificationError);
+      // Don't fail the status update for notification errors
+    }
 
     res.json({
       success: true,
+      message: `Order status updated to ${status} successfully`,
       order: updatedOrder,
+      previousStatus,
+      newStatus: status,
     });
   } catch (error) {
     console.error("Error updating order status:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update order status",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/orders/:orderId/details", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { userId } = req.query;
+
+    console.log("Fetching order details:", orderId, "for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID format",
+      });
+    }
+
+    const order = await Order.findById(orderId)
+      .populate("clientId", "name email profileImage voatId phone")
+      .populate("freelancerId", "name email profileImage voatId");
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Security check - only client or freelancer can view details
+    if (
+      userId &&
+      order.clientId._id.toString() !== userId &&
+      order.freelancerId._id.toString() !== userId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view this order",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      order: order,
+    });
+  } catch (error) {
+    console.error("Error fetching order details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch order details",
+      error: error.message,
+    });
+  }
+});
+
+// Bulk status update for multiple orders (admin feature)
+app.put("/api/orders/bulk-update", async (req, res) => {
+  try {
+    const { orderIds, status, freelancerId } = req.body;
+
+    console.log(`=== BULK ORDER STATUS UPDATE ===`);
+    console.log("Order IDs:", orderIds);
+    console.log("New Status:", status);
+
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Order IDs array is required",
+      });
+    }
+
+    if (
+      ![
+        "pending",
+        "accepted",
+        "in-progress",
+        "completed",
+        "cancelled",
+        "rejected",
+      ].includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status",
+      });
+    }
+
+    // Validate all order IDs
+    const invalidIds = orderIds.filter(
+      (id) => !mongoose.Types.ObjectId.isValid(id)
+    );
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID format(s)",
+        invalidIds,
+      });
+    }
+
+    // Find all orders
+    const orders = await Order.find({
+      _id: { $in: orderIds },
+      ...(freelancerId && { freelancerId: freelancerId }),
+    });
+
+    if (orders.length !== orderIds.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Some orders not found or not authorized",
+      });
+    }
+
+    const updateData = { status };
+    if (status === "completed") {
+      updateData.completedDate = new Date();
+    }
+
+    // Bulk update
+    const result = await Order.updateMany(
+      {
+        _id: { $in: orderIds },
+        ...(freelancerId && { freelancerId: freelancerId }),
+      },
+      updateData
+    );
+
+    console.log(`Bulk updated ${result.modifiedCount} orders to ${status}`);
+
+    res.json({
+      success: true,
+      message: `${result.modifiedCount} orders updated to ${status}`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error bulk updating orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to bulk update orders",
+      error: error.message,
     });
   }
 });

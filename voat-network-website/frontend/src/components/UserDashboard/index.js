@@ -25,6 +25,9 @@ class UserDashboard extends Component {
     receivedOrders: [], // Orders received by freelancer
     freelancerOrders: [],
 
+    selectedOrder: null,
+    showOrderDetails: false,
+
     stats: {
       totalSpent: 0,
       activeOrders: 0,
@@ -1713,6 +1716,12 @@ class UserDashboard extends Component {
     const { orders = [] } = this.state; // Ensure default empty array
     const filteredOrders = this.getFilteredOrders();
 
+    console.log("=== RENDER ORDERS DEBUG ===");
+    console.log("Orders from state:", orders);
+    console.log("Filtered orders:", filteredOrders);
+    console.log("Orders length:", orders.length);
+    console.log("Filtered orders length:", filteredOrders.length);
+
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
@@ -1808,7 +1817,8 @@ class UserDashboard extends Component {
           </div>
         </div>
 
-        {filteredOrders.length === 0 ? (
+        {/* FIXED: Check the actual array length instead of a wrong condition */}
+        {orders.length === 0 ? (
           <div className="empty-state-modern">
             <div className="empty-illustration">
               <div className="empty-icon">
@@ -1836,7 +1846,10 @@ class UserDashboard extends Component {
         ) : (
           <div className="compact-orders-grid">
             {filteredOrders.map((order, index) => (
-              <div className="compact-order-card" key={order.orderId || index}>
+              <div
+                className="compact-order-card"
+                key={order.orderId || order.id || index}
+              >
                 {/* Order Header */}
                 <div className="compact-order-header">
                   <div className="order-id-compact">
@@ -1894,13 +1907,7 @@ class UserDashboard extends Component {
                     <div className="meta-item-compact">
                       <i className="fas fa-calendar-alt"></i>
                       <span className="meta-label">Date:</span>
-                      <span className="meta-value">
-                        {new Date(order.date).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
+                      <span className="meta-value">{order.date}</span>
                     </div>
                     <div className="meta-item-compact price-meta">
                       <i className="fas fa-indian-rupee-sign"></i>
@@ -4435,6 +4442,35 @@ class UserDashboard extends Component {
     );
   }
 
+  getFilteredReceivedOrders = () => {
+    const { receivedOrders = [], orderSearchQuery, orderFilter } = this.state;
+
+    let filtered = receivedOrders;
+
+    // Apply status filter
+    if (orderFilter && orderFilter !== "all") {
+      filtered = filtered.filter((order) => {
+        const normalizedStatus = order.status?.toLowerCase();
+        const filterStatus = orderFilter.toLowerCase();
+        return normalizedStatus === filterStatus;
+      });
+    }
+
+    // Apply search filter
+    if (orderSearchQuery && orderSearchQuery.trim()) {
+      const query = orderSearchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (order) =>
+          order.serviceName?.toLowerCase().includes(query) ||
+          order.clientName?.toLowerCase().includes(query) ||
+          order.clientEmail?.toLowerCase().includes(query) ||
+          (order.id && order.id.toString().toLowerCase().includes(query))
+      );
+    }
+
+    return filtered;
+  };
+
   renderReceivedOrders() {
     const { receivedOrders = [] } = this.state;
 
@@ -4460,23 +4496,30 @@ class UserDashboard extends Component {
             >
               <i className="fas fa-sync-alt"></i> Refresh
             </button>
+            <div className="search-container">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search orders..."
+                className="search-input"
+                value={this.state.orderSearchQuery || ""}
+                onChange={(e) =>
+                  this.setState({ orderSearchQuery: e.target.value })
+                }
+              />
+            </div>
+            <select
+              className="filter-dropdown"
+              value={this.state.orderFilter || "all"}
+              onChange={(e) => this.setState({ orderFilter: e.target.value })}
+            >
+              <option value="all">All Orders</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+            </select>
           </div>
-        </div>
-
-        {/* Debug info - remove in production */}
-        <div
-          style={{
-            background: "#f0f0f0",
-            padding: "10px",
-            margin: "10px 0",
-            fontSize: "12px",
-          }}
-        >
-          Debug: receivedOrders.length = {receivedOrders.length}
-          <br />
-          Is freelancer: {this.isFreelancer() ? "Yes" : "No"}
-          <br />
-          User ID: {this.state.userData?.id}
         </div>
 
         {receivedOrders.length === 0 ? (
@@ -4502,102 +4545,174 @@ class UserDashboard extends Component {
           </div>
         ) : (
           <div className="compact-orders-grid">
-            {receivedOrders.map((order, index) => (
-              <div className="compact-order-card" key={order._id || index}>
-                <div className="compact-order-header">
-                  <div className="order-id-compact">
-                    <i className="fas fa-hashtag"></i>
-                    <span>{order.id || `RCV-${index + 1}`}</span>
-                  </div>
-                  <div
-                    className={`compact-order-status ${(
-                      order.status || "pending"
-                    )
-                      .toLowerCase()
-                      .replace(" ", "-")}`}
-                  >
-                    <div className="status-dot"></div>
-                    <span>
-                      {(order.status || "Pending").charAt(0).toUpperCase() +
-                        (order.status || "pending").slice(1)}
-                    </span>
-                  </div>
-                </div>
+            {this.getFilteredReceivedOrders().map((order, index) => {
+              // Debug log for each order
+              console.log(`Order ${index + 1}:`, {
+                id: order.id,
+                status: order.status,
+                statusType: typeof order.status,
+              });
 
-                <div className="compact-order-content">
-                  <div className="service-info-compact">
-                    <h3 className="service-name-compact">
-                      {order.serviceName || "Unknown Service"}
-                    </h3>
+              return (
+                <div className="compact-order-card" key={order._id || index}>
+                  <div className="compact-order-header">
+                    <div className="order-id-compact">
+                      <i className="fas fa-hashtag"></i>
+                      <span>{order.id || `RCV-${index + 1}`}</span>
+                    </div>
+                    <div
+                      className={`compact-order-status ${(
+                        order.status || "pending"
+                      )
+                        .toLowerCase()
+                        .replace(" ", "-")}`}
+                    >
+                      <div className="status-dot"></div>
+                      <span>
+                        {(order.status || "Pending").charAt(0).toUpperCase() +
+                          (order.status || "pending").slice(1)}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="provider-compact">
-                    <div className="provider-avatar-compact">
-                      {order.clientProfileImage ? (
-                        <img
-                          src={this.getFullImageUrl(order.clientProfileImage)}
-                          alt={order.clientName}
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
+                  <div className="compact-order-content">
+                    <div className="service-info-compact">
+                      <h3 className="service-name-compact">
+                        {order.serviceName || "Unknown Service"}
+                      </h3>
+                    </div>
+
+                    <div className="provider-compact">
+                      <div className="provider-avatar-compact">
+                        {order.clientProfileImage ? (
+                          <img
+                            src={this.getFullImageUrl(order.clientProfileImage)}
+                            alt={order.clientName}
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className="avatar-placeholder-compact"
+                          style={{
+                            display: order.clientProfileImage ? "none" : "flex",
                           }}
-                        />
-                      ) : null}
-                      <div
-                        className="avatar-placeholder-compact"
-                        style={{
-                          display: order.clientProfileImage ? "none" : "flex",
-                        }}
-                      >
-                        {(order.clientName || "C").charAt(0).toUpperCase()}
+                        >
+                          {(order.clientName || "C").charAt(0).toUpperCase()}
+                        </div>
+                      </div>
+                      <div className="provider-details-compact">
+                        <h4 className="provider-name-compact">
+                          {order.clientName || "Unknown Client"}
+                        </h4>
+                        <p className="provider-role-compact">
+                          {order.clientEmail || "No email provided"}
+                        </p>
                       </div>
                     </div>
-                    <div className="provider-details-compact">
-                      <h4 className="provider-name-compact">
-                        {order.clientName || "Unknown Client"}
-                      </h4>
-                      <p className="provider-role-compact">Client</p>
+
+                    <div className="order-meta-compact">
+                      <div className="meta-item-compact">
+                        <i className="fas fa-cog"></i>
+                        <span className="meta-label">Service:</span>
+                        <span className="meta-value">{order.serviceName}</span>
+                      </div>
+                      <div className="meta-item-compact">
+                        <i className="fas fa-clock"></i>
+                        <span className="meta-label">Timeline:</span>
+                        <span className="meta-value">
+                          {order.serviceLevel || "Standard"} Package
+                        </span>
+                      </div>
+                      <div className="meta-item-compact price-meta">
+                        <i className="fas fa-indian-rupee-sign"></i>
+                        <span className="meta-label">Cost:</span>
+                        <span className="meta-value price-value">
+                          ₹{(order.servicePrice || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="meta-item-compact">
+                        <i className="fas fa-calendar-alt"></i>
+                        <span className="meta-label">Received:</span>
+                        <span className="meta-value">
+                          {order.requestDate
+                            ? new Date(order.requestDate).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                }
+                              )
+                            : "Unknown"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="order-meta-compact">
-                    <div className="meta-item-compact">
-                      <i className="fas fa-calendar-alt"></i>
-                      <span className="meta-label">Date:</span>
-                      <span className="meta-value">
-                        {order.requestDate
-                          ? new Date(order.requestDate).toLocaleDateString(
-                              "en-IN",
-                              {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              }
-                            )
-                          : "Unknown"}
-                      </span>
-                    </div>
-                    <div className="meta-item-compact price-meta">
-                      <i className="fas fa-indian-rupee-sign"></i>
-                      <span className="meta-label">Amount:</span>
-                      <span className="meta-value price-value">
-                        ₹{(order.servicePrice || 0).toLocaleString()}
-                      </span>
-                    </div>
+                  {/* FIXED ORDER ACTIONS */}
+                  <div className="compact-order-actions">
+                    {/* Always show View Details button */}
+                    <button
+                      className="action-btn-compact details"
+                      onClick={() => this.openOrderDetails(order)}
+                    >
+                      <i className="fas fa-eye"></i>
+                      <span>View Details</span>
+                    </button>
+
+                    {/* Show Accept/Reject for pending orders */}
+                    {(!order.status || order.status === "pending") && (
+                      <>
+                        <button
+                          className="action-btn-compact accept"
+                          onClick={() => this.handleAcceptOrder(order._id)}
+                        >
+                          <i className="fas fa-check"></i>
+                          <span>Accept</span>
+                        </button>
+                        <button
+                          className="action-btn-compact reject"
+                          onClick={() => this.handleRejectOrder(order._id)}
+                        >
+                          <i className="fas fa-times"></i>
+                          <span>Reject</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* Show Mark Complete for accepted orders */}
+                    {order.status === "accepted" && (
+                      <button
+                        className="action-btn-compact complete"
+                        onClick={() => this.handleMarkComplete(order._id)}
+                      >
+                        <i className="fas fa-check-circle"></i>
+                        <span>Mark Complete</span>
+                      </button>
+                    )}
+
+                    {/* Show completion badge for completed orders */}
+                    {order.status === "completed" && (
+                      <div className="order-completed-badge">
+                        <i className="fas fa-check-circle"></i>
+                        <span>Order Completed</span>
+                      </div>
+                    )}
+
+                    {/* Show rejection badge for rejected orders */}
+                    {order.status === "rejected" && (
+                      <div className="order-rejected-badge">
+                        <i className="fas fa-times-circle"></i>
+                        <span>Order Rejected</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="compact-order-actions">
-                  <button
-                    className="action-btn-compact primary"
-                    onClick={() => console.log("View order details:", order)}
-                  >
-                    <i className="fas fa-eye"></i>
-                    <span>View Details</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -4950,6 +5065,297 @@ class UserDashboard extends Component {
     );
   }
 
+  openOrderDetails = (order) => {
+    console.log("Opening order details for:", order);
+    this.setState({
+      selectedOrder: order,
+      showOrderDetails: true,
+    });
+  };
+
+  closeOrderDetails = () => {
+    this.setState({
+      selectedOrder: null,
+      showOrderDetails: false,
+    });
+  };
+
+  isAuthorizedToUpdateOrder = (order) => {
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!userData || !userData.id) return false;
+
+    // Check if current user is the freelancer for this order
+    return (
+      order.freelancerId === userData.id ||
+      (order.freelancerId && order.freelancerId._id === userData.id)
+    );
+  };
+
+  // Method to get order status badge class
+  getOrderStatusBadgeClass = (status) => {
+    const statusLower = status?.toLowerCase() || "";
+
+    switch (statusLower) {
+      case "pending":
+        return "status-pending";
+      case "accepted":
+        return "status-accepted";
+      case "in-progress":
+        return "status-in-progress";
+      case "completed":
+        return "status-completed";
+      case "rejected":
+        return "status-rejected";
+      case "cancelled":
+        return "status-cancelled";
+      default:
+        return "status-default";
+    }
+  };
+
+  // Method to get user-friendly status text
+  getOrderStatusText = (status) => {
+    const statusLower = status?.toLowerCase() || "";
+
+    switch (statusLower) {
+      case "pending":
+        return "Pending";
+      case "accepted":
+        return "Accepted";
+      case "in-progress":
+        return "In Progress";
+      case "completed":
+        return "Completed";
+      case "rejected":
+        return "Rejected";
+      case "cancelled":
+        return "Cancelled";
+      default:
+        return status || "Unknown";
+    }
+  };
+
+  // Enhanced error handling with better user feedback
+  showOrderError = (error, action = "update order") => {
+    console.error(`Error during ${action}:`, error);
+
+    let message = `Failed to ${action}. `;
+
+    if (error.message) {
+      if (error.message.includes("not authorized")) {
+        message += "You don't have permission to perform this action.";
+      } else if (error.message.includes("not found")) {
+        message += "The order was not found. It may have been deleted.";
+      } else if (error.message.includes("already")) {
+        message += "This order has already been processed.";
+      } else {
+        message += error.message;
+      }
+    } else {
+      message += "Please try again or contact support if the problem persists.";
+    }
+
+    this.showNotification(message, "error");
+  };
+
+  // Method to handle order status changes with optimistic updates
+  updateOrderStatusOptimistic = async (orderId, newStatus, action) => {
+    // Find the order in current state
+    const orderIndex = this.state.receivedOrders.findIndex(
+      (order) => order._id === orderId
+    );
+
+    if (orderIndex === -1) {
+      this.showOrderError(new Error("Order not found"), action);
+      return;
+    }
+
+    const originalOrder = { ...this.state.receivedOrders[orderIndex] };
+
+    // Optimistic update - update UI immediately
+    this.setState((prevState) => ({
+      receivedOrders: prevState.receivedOrders.map((order) =>
+        order._id === orderId ? { ...order, status: newStatus } : order
+      ),
+    }));
+
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            freelancerId: userData.id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      }
+
+      const result = await response.json();
+
+      // Success - show notification and refresh data
+      this.showNotification(
+        result.message || `Order ${action} successfully!`,
+        "success"
+      );
+
+      // Refresh data from server to ensure consistency
+      setTimeout(() => {
+        this.fetchFreelancerOrders();
+        this.refreshNotifications();
+      }, 500);
+    } catch (error) {
+      // Revert optimistic update on error
+      this.setState((prevState) => ({
+        receivedOrders: prevState.receivedOrders.map((order) =>
+          order._id === orderId ? originalOrder : order
+        ),
+      }));
+
+      this.showOrderError(error, action);
+    }
+  };
+
+  handleAcceptOrder = async (orderId) => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "accepted",
+            freelancerId: userData.id,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        this.fetchFreelancerOrders();
+        this.showNotification("Order accepted successfully!", "success");
+      }
+    } catch (error) {
+      this.showNotification("Failed to accept order", "error");
+    }
+  };
+
+  handleRejectOrder = async (orderId) => {
+    const confirmReject = window.confirm(
+      "Are you sure you want to reject this order? This action cannot be undone."
+    );
+
+    if (!confirmReject) return;
+
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        this.showNotification("Please login to reject orders", "error");
+        return;
+      }
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "rejected",
+            freelancerId: userData.id,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        this.fetchFreelancerOrders(); // Refresh the orders list
+        this.showNotification(
+          result.message || "Order rejected successfully",
+          "success"
+        );
+
+        // Refresh notifications after a short delay
+        setTimeout(() => {
+          this.refreshNotifications();
+        }, 1000);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to reject order");
+      }
+    } catch (error) {
+      console.error("Error rejecting order:", error);
+      this.showNotification(
+        error.message || "Failed to reject order. Please try again.",
+        "error"
+      );
+    }
+  };
+
+  handleMarkComplete = async (orderId) => {
+    const confirmComplete = window.confirm(
+      "Are you sure you want to mark this order as completed? This will notify the client that the work is finished."
+    );
+
+    if (!confirmComplete) return;
+
+    try {
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (!userData || !userData.id) {
+        this.showNotification("Please login to complete orders", "error");
+        return;
+      }
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "completed",
+            freelancerId: userData.id,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        this.fetchFreelancerOrders(); // Refresh the orders list
+        this.showNotification(
+          result.message || "Order marked as completed!",
+          "success"
+        );
+
+        // Refresh notifications after a short delay
+        setTimeout(() => {
+          this.refreshNotifications();
+        }, 1000);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to mark order complete");
+      }
+    } catch (error) {
+      console.error("Error marking order complete:", error);
+      this.showNotification(
+        error.message || "Failed to mark order complete. Please try again.",
+        "error"
+      );
+    }
+  };
+
   updateOrderStatus = async (orderId, newStatus) => {
     try {
       const response = await fetch(
@@ -5003,6 +5409,7 @@ class UserDashboard extends Component {
       }, 1000);
     }
   };
+
   forceRefreshOrders = () => {
     console.log("Force refreshing orders...");
     this.setState({ receivedOrders: [] }, () => {
@@ -5048,7 +5455,7 @@ class UserDashboard extends Component {
       case "my-bookings":
         return this.renderMyBookings();
       case "my-orders":
-        return this.renderMyOrders();
+        return this.renderOrders();
       case "booking-requests": // Only freelancers can access this
         return this.renderBookingRequests();
       case "order-received": // Only freelancers can access this
@@ -5267,6 +5674,133 @@ class UserDashboard extends Component {
               : this.renderDashboardContent()}
           </div>
         </div>
+
+        {/* Order Details Overlay */}
+        {this.state.selectedOrder && (
+          <div
+            className="booking-details-overlay"
+            onClick={this.closeOrderDetails}
+          >
+            <div
+              className="booking-details-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h2>Order Details</h2>
+                <button className="close-btn" onClick={this.closeOrderDetails}>
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+
+              <div className="modal-content">
+                {/* Client Information */}
+                <div className="detail-section">
+                  <h3>Client Information</h3>
+                  <div className="client-details-full">
+                    <div className="client-avatar-full">
+                      {this.state.selectedOrder.clientProfileImage ? (
+                        <img
+                          src={this.getFullImageUrl(
+                            this.state.selectedOrder.clientProfileImage
+                          )}
+                          alt={this.state.selectedOrder.clientName}
+                        />
+                      ) : (
+                        <div className="avatar-placeholder-full">
+                          {this.state.selectedOrder.clientName
+                            ?.charAt(0)
+                            .toUpperCase() || "C"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="client-info-full">
+                      <h4>{this.state.selectedOrder.clientName}</h4>
+                      <p>{this.state.selectedOrder.clientEmail}</p>
+                      <div className="client-badge">
+                        <i className="fas fa-user"></i>
+                        <span>Client</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Information */}
+                <div className="detail-section">
+                  <h3>Service Information</h3>
+                  <div className="service-details-full">
+                    <div className="detail-row">
+                      <span className="detail-label">Service Name:</span>
+                      <span className="detail-value">
+                        {this.state.selectedOrder.serviceName}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Service Package:</span>
+                      <span className="detail-value service-type">
+                        {this.state.selectedOrder.serviceLevel || "Standard"}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Amount:</span>
+                      <span className="detail-value price">
+                        ₹
+                        {this.state.selectedOrder.servicePrice?.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Status:</span>
+                      <span
+                        className={`detail-value status-badge ${this.state.selectedOrder.status}`}
+                      >
+                        {this.state.selectedOrder.status
+                          ?.charAt(0)
+                          .toUpperCase() +
+                          this.state.selectedOrder.status?.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Timeline */}
+                <div className="detail-section">
+                  <h3>Order Timeline</h3>
+                  <div className="timeline">
+                    <div className="timeline-item">
+                      <div className="timeline-dot active"></div>
+                      <div className="timeline-content">
+                        <h5>Order Received</h5>
+                        <p>
+                          {new Date(
+                            this.state.selectedOrder.requestDate
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    {this.state.selectedOrder.responseDate && (
+                      <div className="timeline-item">
+                        <div className="timeline-dot active"></div>
+                        <div className="timeline-content">
+                          <h5>
+                            {this.state.selectedOrder.status === "accepted"
+                              ? "Order Accepted"
+                              : this.state.selectedOrder.status === "rejected"
+                              ? "Order Rejected"
+                              : "Status Updated"}
+                          </h5>
+                          <p>
+                            {new Date(
+                              this.state.selectedOrder.responseDate
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
