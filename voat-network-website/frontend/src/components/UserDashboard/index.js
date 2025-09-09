@@ -4653,6 +4653,7 @@ class UserDashboard extends Component {
                   </div>
 
                   {/* FIXED ORDER ACTIONS */}
+                  {/* FIXED ORDER ACTIONS */}
                   <div className="compact-order-actions">
                     {/* Always show View Details button */}
                     <button
@@ -4664,7 +4665,7 @@ class UserDashboard extends Component {
                     </button>
 
                     {/* Show Accept/Reject for pending orders */}
-                    {(!order.status || order.status === "pending") && (
+                    {(order.status === "pending" || !order.status) && (
                       <>
                         <button
                           className="action-btn-compact accept"
@@ -5242,10 +5243,20 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        this.fetchFreelancerOrders();
+        // Immediately refresh the orders list
+        await this.fetchFreelancerOrders();
         this.showNotification("Order accepted successfully!", "success");
+
+        // Force a re-render by updating stats
+        setTimeout(() => {
+          this.updateStats();
+        }, 500);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to accept order");
       }
     } catch (error) {
+      console.error("Error accepting order:", error);
       this.showNotification("Failed to accept order", "error");
     }
   };
@@ -5259,18 +5270,12 @@ class UserDashboard extends Component {
 
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
-      if (!userData || !userData.id) {
-        this.showNotification("Please login to reject orders", "error");
-        return;
-      }
 
       const response = await fetch(
         `${this.state.baseUrl}/api/orders/${orderId}/status`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status: "rejected",
             freelancerId: userData.id,
@@ -5279,17 +5284,15 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        const result = await response.json();
-        this.fetchFreelancerOrders(); // Refresh the orders list
-        this.showNotification(
-          result.message || "Order rejected successfully",
-          "success"
-        );
+        // Immediately refresh the orders list
+        await this.fetchFreelancerOrders();
+        this.showNotification("Order rejected successfully", "success");
 
-        // Refresh notifications after a short delay
+        // Refresh notifications and stats
         setTimeout(() => {
           this.refreshNotifications();
-        }, 1000);
+          this.updateStats();
+        }, 500);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to reject order");
@@ -5297,7 +5300,7 @@ class UserDashboard extends Component {
     } catch (error) {
       console.error("Error rejecting order:", error);
       this.showNotification(
-        error.message || "Failed to reject order. Please try again.",
+        "Failed to reject order. Please try again.",
         "error"
       );
     }
@@ -5312,18 +5315,12 @@ class UserDashboard extends Component {
 
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
-      if (!userData || !userData.id) {
-        this.showNotification("Please login to complete orders", "error");
-        return;
-      }
 
       const response = await fetch(
         `${this.state.baseUrl}/api/orders/${orderId}/status`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status: "completed",
             freelancerId: userData.id,
@@ -5332,17 +5329,15 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        const result = await response.json();
-        this.fetchFreelancerOrders(); // Refresh the orders list
-        this.showNotification(
-          result.message || "Order marked as completed!",
-          "success"
-        );
+        // Immediately refresh the orders list
+        await this.fetchFreelancerOrders();
+        this.showNotification("Order marked as completed!", "success");
 
-        // Refresh notifications after a short delay
+        // Refresh notifications and stats
         setTimeout(() => {
           this.refreshNotifications();
-        }, 1000);
+          this.updateStats();
+        }, 500);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to mark order complete");
@@ -5350,7 +5345,7 @@ class UserDashboard extends Component {
     } catch (error) {
       console.error("Error marking order complete:", error);
       this.showNotification(
-        error.message || "Failed to mark order complete. Please try again.",
+        "Failed to mark order complete. Please try again.",
         "error"
       );
     }
