@@ -90,13 +90,17 @@ class UserDashboard extends Component {
         this.fetchMyBookings();
         this.fetchWishlist();
         this.fetchNotifications();
-        this.fetchOrders(); // This fetches orders as CLIENT
 
-        // ADDITIONAL for freelancers only
-        if (this.isFreelancer()) {
-          this.fetchBookingRequests();
-          this.fetchFreelancerOrders(); // This fetches orders received as FREELANCER
-        }
+        // Add a small delay to ensure userData is properly set
+        setTimeout(() => {
+          this.fetchOrders(); // This fetches orders as CLIENT
+
+          // ADDITIONAL for freelancers only
+          if (this.isFreelancer()) {
+            this.fetchBookingRequests();
+            this.fetchFreelancerOrders(); // This fetches orders received as FREELANCER
+          }
+        }, 500);
 
         setTimeout(() => {
           this.updateStats();
@@ -682,18 +686,41 @@ class UserDashboard extends Component {
         const orders = await response.json();
         console.log("✅ Fetched orders:", orders);
 
-        this.setState({ orders }, () => {
+        // Ensure orders is an array and has the correct structure
+        const ordersArray = Array.isArray(orders) ? orders : [];
+
+        // Transform orders to match the UI expectations
+        const formattedOrders = ordersArray.map((order) => ({
+          id: order.id || `ORD-${Math.random().toString(36).substr(2, 9)}`,
+          service: order.service || order.serviceName,
+          status: order.status || "Pending",
+          date:
+            order.date ||
+            new Date(order.orderDate || Date.now()).toISOString().split("T")[0],
+          amount: order.amount || order.totalAmount,
+          provider: order.provider || order.freelancerName,
+          providerImage: order.providerImage || null,
+          providerEmail: order.providerEmail || order.freelancerEmail,
+          providerId: order.providerId || order.freelancerId,
+          orderId: order.orderId || order._id,
+          orderType: order.orderType || "order",
+        }));
+
+        this.setState({ orders: formattedOrders }, () => {
+          console.log("Orders set in state:", this.state.orders);
           this.updateStats();
         });
       } else {
-        console.log("No orders found or failed to fetch orders");
+        console.log("Failed to fetch orders, status:", response.status);
         this.setState({ orders: [] }, () => {
           this.updateStats();
         });
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
-      this.setState({ orders: [] });
+      this.setState({ orders: [] }, () => {
+        this.updateStats();
+      });
     }
   };
 
@@ -755,6 +782,7 @@ class UserDashboard extends Component {
   fetchFreelancerOrders = async () => {
     try {
       if (!this.isFreelancer() || !this.state.userData?.id) {
+        console.log("Not a freelancer or no user ID");
         return;
       }
 
@@ -771,13 +799,50 @@ class UserDashboard extends Component {
         }
       );
 
+      console.log("Response status:", response.status);
+
       if (response.ok) {
         const receivedOrders = await response.json();
         console.log("✅ Fetched freelancer orders:", receivedOrders);
 
-        this.setState({ receivedOrders }, () => this.updateStats());
+        // Ensure it's an array
+        const ordersArray = Array.isArray(receivedOrders) ? receivedOrders : [];
+
+        // Transform orders to match the UI expectations
+        const formattedOrders = ordersArray.map((order) => ({
+          _id: order._id || order.id,
+          id: order.id || `RCV-${Math.random().toString(36).substr(2, 9)}`,
+          serviceName: order.serviceName || order.service,
+          clientId: order.clientId,
+          clientName: order.clientName || order.client,
+          clientEmail: order.clientEmail,
+          clientProfileImage: order.clientProfileImage || order.clientImage,
+          servicePrice: order.servicePrice || order.amount,
+          status: order.status || "pending",
+          requestDate: order.requestDate || order.date,
+          responseDate: order.responseDate,
+          orderType: "order",
+          paymentStatus: order.paymentStatus || "paid",
+          serviceLevel: order.serviceLevel || "Standard",
+        }));
+
+        console.log("Setting receivedOrders in state:", formattedOrders);
+
+        this.setState({ receivedOrders: formattedOrders }, () => {
+          console.log(
+            "State after setting receivedOrders:",
+            this.state.receivedOrders
+          );
+          this.updateStats();
+        });
       } else {
-        console.log("No freelancer orders found");
+        const errorText = await response.text();
+        console.log(
+          "Failed to fetch freelancer orders, status:",
+          response.status,
+          "Error:",
+          errorText
+        );
         this.setState({ receivedOrders: [] });
       }
     } catch (error) {
@@ -1645,6 +1710,7 @@ class UserDashboard extends Component {
   }
 
   renderOrders() {
+    const { orders = [] } = this.state; // Ensure default empty array
     const filteredOrders = this.getFilteredOrders();
 
     return (
@@ -1654,7 +1720,10 @@ class UserDashboard extends Component {
           <div className="dashboard-actions">
             <button
               className="refresh-btn"
-              onClick={this.refreshOrderData}
+              onClick={() => {
+                console.log("Refreshing orders...");
+                this.fetchOrders();
+              }}
               title="Refresh Orders"
             >
               <i className="fas fa-sync-alt"></i> Refresh
@@ -1682,7 +1751,7 @@ class UserDashboard extends Component {
           </div>
         </div>
 
-        {/* Compact Orders Summary Stats */}
+        {/* Orders Summary Stats */}
         <div className="orders-summary-stats-compact">
           <div className="summary-stat-compact">
             <div className="stat-icon-compact pending">
@@ -1703,8 +1772,10 @@ class UserDashboard extends Component {
             </div>
             <div className="stat-number-compact">
               {
-                filteredOrders.filter((order) =>
-                  order.status.toLowerCase().includes("progress")
+                filteredOrders.filter(
+                  (order) =>
+                    order.status.toLowerCase().includes("progress") ||
+                    order.status.toLowerCase() === "in progress"
                 ).length
               }
             </div>
@@ -1749,7 +1820,7 @@ class UserDashboard extends Component {
               <p>
                 {this.state.orderSearchQuery || this.state.orderFilter !== "all"
                   ? "No orders match your search criteria."
-                  : "You haven't placed any orders yet. Start exploring services to place your first order!"}
+                  : "You haven't placed any paid orders yet. Orders appear here after payment is completed."}
               </p>
               {!this.state.orderSearchQuery &&
                 this.state.orderFilter === "all" && (
@@ -1765,7 +1836,7 @@ class UserDashboard extends Component {
         ) : (
           <div className="compact-orders-grid">
             {filteredOrders.map((order, index) => (
-              <div className="compact-order-card" key={index}>
+              <div className="compact-order-card" key={order.orderId || index}>
                 {/* Order Header */}
                 <div className="compact-order-header">
                   <div className="order-id-compact">
@@ -1839,22 +1910,6 @@ class UserDashboard extends Component {
                       </span>
                     </div>
                   </div>
-
-                  {/* Progress Bar for In Progress Orders */}
-                  {order.status === "In Progress" && (
-                    <div className="progress-compact">
-                      <div className="progress-info">
-                        <span className="progress-text">Progress</span>
-                        <span className="progress-percent">65%</span>
-                      </div>
-                      <div className="progress-bar-compact">
-                        <div
-                          className="progress-fill-compact"
-                          style={{ width: "65%" }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Order Actions */}
@@ -1870,33 +1925,6 @@ class UserDashboard extends Component {
                     <i className="fas fa-eye"></i>
                     <span>View Details</span>
                   </button>
-
-                  {order.status === "Completed" && (
-                    <button className="action-btn-compact secondary">
-                      <i className="fas fa-star"></i>
-                      <span>Review</span>
-                    </button>
-                  )}
-
-                  {order.status === "In Progress" && (
-                    <button className="action-btn-compact secondary">
-                      <i className="fas fa-comment-dots"></i>
-                      <span>Message</span>
-                    </button>
-                  )}
-
-                  {(order.status === "Pending" ||
-                    order.status === "In Progress") && (
-                    <button
-                      className="action-btn-compact cancel"
-                      onClick={() =>
-                        this.handleCancelOrder(order.bookingId || order.id)
-                      }
-                    >
-                      <i className="fas fa-times"></i>
-                      <span>Cancel Order</span>
-                    </button>
-                  )}
                 </div>
               </div>
             ))}
@@ -4407,6 +4435,175 @@ class UserDashboard extends Component {
     );
   }
 
+  renderReceivedOrders() {
+    const { receivedOrders = [] } = this.state;
+
+    console.log("=== RENDERING RECEIVED ORDERS ===");
+    console.log("receivedOrders from state:", receivedOrders);
+    console.log("receivedOrders length:", receivedOrders.length);
+
+    return (
+      <div className="dashboard-main-content">
+        <div className="dashboard-header">
+          <h1>Orders Received</h1>
+          <p className="section-description">
+            Paid orders received from clients ({receivedOrders.length} orders)
+          </p>
+          <div className="dashboard-actions">
+            <button
+              className="refresh-btn"
+              onClick={() => {
+                console.log("Manual refresh clicked");
+                this.fetchFreelancerOrders();
+              }}
+              title="Refresh Orders"
+            >
+              <i className="fas fa-sync-alt"></i> Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Debug info - remove in production */}
+        <div
+          style={{
+            background: "#f0f0f0",
+            padding: "10px",
+            margin: "10px 0",
+            fontSize: "12px",
+          }}
+        >
+          Debug: receivedOrders.length = {receivedOrders.length}
+          <br />
+          Is freelancer: {this.isFreelancer() ? "Yes" : "No"}
+          <br />
+          User ID: {this.state.userData?.id}
+        </div>
+
+        {receivedOrders.length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-inbox"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Orders Received</h3>
+              <p>
+                You haven't received any paid orders yet. Orders will appear
+                here when clients complete payment for your services.
+              </p>
+              <button
+                className="btn btn-secondary"
+                onClick={() => this.fetchFreelancerOrders()}
+              >
+                Retry Loading Orders
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="compact-orders-grid">
+            {receivedOrders.map((order, index) => (
+              <div className="compact-order-card" key={order._id || index}>
+                <div className="compact-order-header">
+                  <div className="order-id-compact">
+                    <i className="fas fa-hashtag"></i>
+                    <span>{order.id || `RCV-${index + 1}`}</span>
+                  </div>
+                  <div
+                    className={`compact-order-status ${(
+                      order.status || "pending"
+                    )
+                      .toLowerCase()
+                      .replace(" ", "-")}`}
+                  >
+                    <div className="status-dot"></div>
+                    <span>
+                      {(order.status || "Pending").charAt(0).toUpperCase() +
+                        (order.status || "pending").slice(1)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="compact-order-content">
+                  <div className="service-info-compact">
+                    <h3 className="service-name-compact">
+                      {order.serviceName || "Unknown Service"}
+                    </h3>
+                  </div>
+
+                  <div className="provider-compact">
+                    <div className="provider-avatar-compact">
+                      {order.clientProfileImage ? (
+                        <img
+                          src={this.getFullImageUrl(order.clientProfileImage)}
+                          alt={order.clientName}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="avatar-placeholder-compact"
+                        style={{
+                          display: order.clientProfileImage ? "none" : "flex",
+                        }}
+                      >
+                        {(order.clientName || "C").charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="provider-details-compact">
+                      <h4 className="provider-name-compact">
+                        {order.clientName || "Unknown Client"}
+                      </h4>
+                      <p className="provider-role-compact">Client</p>
+                    </div>
+                  </div>
+
+                  <div className="order-meta-compact">
+                    <div className="meta-item-compact">
+                      <i className="fas fa-calendar-alt"></i>
+                      <span className="meta-label">Date:</span>
+                      <span className="meta-value">
+                        {order.requestDate
+                          ? new Date(order.requestDate).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              }
+                            )
+                          : "Unknown"}
+                      </span>
+                    </div>
+                    <div className="meta-item-compact price-meta">
+                      <i className="fas fa-indian-rupee-sign"></i>
+                      <span className="meta-label">Amount:</span>
+                      <span className="meta-value price-value">
+                        ₹{(order.servicePrice || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="compact-order-actions">
+                  <button
+                    className="action-btn-compact primary"
+                    onClick={() => console.log("View order details:", order)}
+                  >
+                    <i className="fas fa-eye"></i>
+                    <span>View Details</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   renderMyBookings() {
     const { myBookings = [], bookingSearchQuery, bookingFilter } = this.state;
 
@@ -4753,232 +4950,6 @@ class UserDashboard extends Component {
     );
   }
 
-  renderOrderReceived() {
-    const { receivedOrders = [] } = this.state;
-
-    return (
-      <div className="dashboard-main-content">
-        <div className="dashboard-header">
-          <h1>Orders Received</h1>
-          <p className="section-description">
-            Paid orders received from clients
-          </p>
-          <div className="dashboard-actions">
-            <button
-              className="refresh-btn"
-              onClick={this.refreshOrderData}
-              title="Refresh Orders"
-            >
-              <i className="fas fa-sync-alt"></i> Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* Orders Summary Stats */}
-        <div className="orders-summary-stats-compact">
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact pending">
-              <i className="fas fa-clock"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                receivedOrders.filter((order) => order.status === "pending")
-                  .length
-              }
-            </div>
-            <div className="stat-label-compact">Pending</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact progress">
-              <i className="fas fa-spinner"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                receivedOrders.filter((order) => order.status === "in-progress")
-                  .length
-              }
-            </div>
-            <div className="stat-label-compact">In Progress</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact completed">
-              <i className="fas fa-check-circle"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                receivedOrders.filter((order) => order.status === "completed")
-                  .length
-              }
-            </div>
-            <div className="stat-label-compact">Completed</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact total">
-              <i className="fas fa-indian-rupee-sign"></i>
-            </div>
-            <div className="stat-number-compact">
-              ₹
-              {receivedOrders
-                .reduce((sum, order) => sum + (order.servicePrice || 0), 0)
-                .toLocaleString()}
-            </div>
-            <div className="stat-label-compact">Total Value</div>
-          </div>
-        </div>
-
-        {receivedOrders.length === 0 ? (
-          <div className="empty-state-modern">
-            <div className="empty-illustration">
-              <div className="empty-icon">
-                <i className="fas fa-inbox"></i>
-              </div>
-            </div>
-            <div className="empty-content">
-              <h3>No Orders Received</h3>
-              <p>
-                You haven't received any paid orders yet. Orders will appear
-                here when clients complete payment for your services.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="compact-orders-grid">
-            {receivedOrders.map((order, index) => (
-              <div className="compact-order-card" key={order._id || index}>
-                {/* Order Header */}
-                <div className="compact-order-header">
-                  <div className="order-id-compact">
-                    <i className="fas fa-hashtag"></i>
-                    <span>{order.id}</span>
-                  </div>
-                  <div
-                    className={`compact-order-status ${order.status
-                      .toLowerCase()
-                      .replace(" ", "-")}`}
-                  >
-                    <div className="status-dot"></div>
-                    <span>
-                      {order.status.charAt(0).toUpperCase() +
-                        order.status.slice(1)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Service Info */}
-                <div className="compact-order-content">
-                  <div className="service-info-compact">
-                    <h3 className="service-name-compact">
-                      {order.serviceName}
-                    </h3>
-                    <div className="service-type-compact">
-                      <i className="fas fa-layer-group"></i>
-                      <span>{order.serviceLevel}</span>
-                    </div>
-                  </div>
-
-                  {/* Client Section */}
-                  <div className="provider-compact">
-                    <div className="provider-avatar-compact">
-                      {order.clientProfileImage ? (
-                        <img
-                          src={this.getFullImageUrl(order.clientProfileImage)}
-                          alt={order.clientName}
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className="avatar-placeholder-compact"
-                        style={{
-                          display: order.clientProfileImage ? "none" : "flex",
-                        }}
-                      >
-                        {order.clientName?.charAt(0).toUpperCase() || "C"}
-                      </div>
-                    </div>
-                    <div className="provider-details-compact">
-                      <h4 className="provider-name-compact">
-                        {order.clientName}
-                      </h4>
-                      <p className="provider-role-compact">Client</p>
-                    </div>
-                  </div>
-
-                  {/* Order Meta */}
-                  <div className="order-meta-compact">
-                    <div className="meta-item-compact">
-                      <i className="fas fa-calendar-alt"></i>
-                      <span className="meta-label">Date:</span>
-                      <span className="meta-value">
-                        {new Date(order.requestDate).toLocaleDateString(
-                          "en-IN",
-                          {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          }
-                        )}
-                      </span>
-                    </div>
-                    <div className="meta-item-compact price-meta">
-                      <i className="fas fa-indian-rupee-sign"></i>
-                      <span className="meta-label">Amount:</span>
-                      <span className="meta-value price-value">
-                        ₹{order.servicePrice?.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="meta-item-compact">
-                      <i className="fas fa-credit-card"></i>
-                      <span className="meta-label">Payment:</span>
-                      <span className="meta-value">Paid</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Order Actions */}
-                <div className="compact-order-actions">
-                  <button
-                    className="action-btn-compact primary"
-                    onClick={() => this.viewOrderDetails(order)}
-                  >
-                    <i className="fas fa-eye"></i>
-                    <span>View Details</span>
-                  </button>
-
-                  {order.status === "pending" && (
-                    <button
-                      className="action-btn-compact secondary"
-                      onClick={() =>
-                        this.updateOrderStatus(order._id, "in-progress")
-                      }
-                    >
-                      <i className="fas fa-play"></i>
-                      <span>Start Work</span>
-                    </button>
-                  )}
-
-                  {order.status === "in-progress" && (
-                    <button
-                      className="action-btn-compact secondary"
-                      onClick={() =>
-                        this.updateOrderStatus(order._id, "completed")
-                      }
-                    >
-                      <i className="fas fa-check-circle"></i>
-                      <span>Mark Complete</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   updateOrderStatus = async (orderId, newStatus) => {
     try {
       const response = await fetch(
@@ -5008,29 +4979,37 @@ class UserDashboard extends Component {
     }
   };
 
+  viewOrderDetails = (order) => {
+    // Implementation for viewing order details
+    console.log("Viewing order details:", order);
+  };
+
   refreshOrderData = () => {
     console.log("=== AUTO REFRESHING ORDER DATA ===");
+    console.log("Current user:", this.state.userData?.id);
+    console.log("Is freelancer:", this.isFreelancer());
 
     // Only refresh if user is on order-related tabs
-    const orderTabs = [
-      "my-orders",
-      "booking-requests",
-      "order-received",
-      "my-bookings",
-    ];
+    const orderTabs = ["my-orders", "orders-received", "order-received"];
     if (orderTabs.includes(this.state.activeTab)) {
-      this.fetchOrders();
-      this.fetchMyBookings();
+      this.fetchOrders(); // Fetch orders as CLIENT
 
       if (this.isFreelancer()) {
-        this.fetchBookingRequests();
-        this.fetchFreelancerOrders();
+        this.fetchFreelancerOrders(); // Fetch orders received as FREELANCER
       }
 
       setTimeout(() => {
         this.updateStats();
       }, 1000);
     }
+  };
+  forceRefreshOrders = () => {
+    console.log("Force refreshing orders...");
+    this.setState({ receivedOrders: [] }, () => {
+      setTimeout(() => {
+        this.fetchFreelancerOrders();
+      }, 100);
+    });
   };
 
   refreshAfterPayment = () => {
@@ -5073,7 +5052,7 @@ class UserDashboard extends Component {
       case "booking-requests": // Only freelancers can access this
         return this.renderBookingRequests();
       case "order-received": // Only freelancers can access this
-        return this.renderOrderReceived();
+        return this.renderReceivedOrders();
       case "wishlist":
         return this.renderWishlist();
       default:
@@ -5088,8 +5067,13 @@ class UserDashboard extends Component {
       errorType,
       activeTab,
       showMobileSidebar,
+      receivedOrders,
       showNotifications,
     } = this.state;
+
+    console.log("=== RENDER CALLED ===");
+    console.log("Active tab:", activeTab);
+    console.log("Received orders length:", receivedOrders?.length);
 
     if (isLoading) {
       return (

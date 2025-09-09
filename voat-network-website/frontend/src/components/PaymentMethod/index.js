@@ -521,7 +521,7 @@ const PaymentGateway = () => {
 
             // Redirect to dashboard after 3 seconds
             setTimeout(() => {
-              window.location.href = "/dashboard";
+              window.location.href = "/user-dashboard";
             }, 3000);
           } catch (error) {
             console.error(
