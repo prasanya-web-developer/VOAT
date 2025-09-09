@@ -4652,64 +4652,89 @@ class UserDashboard extends Component {
                     </div>
                   </div>
 
-                  {/* FIXED ORDER ACTIONS */}
+                  {/* ORDER ACTIONS - Two States Only */}
                   {/* FIXED ORDER ACTIONS */}
                   <div className="compact-order-actions">
-                    {/* Always show View Details button */}
-                    <button
-                      className="action-btn-compact details"
-                      onClick={() => this.openOrderDetails(order)}
-                    >
-                      <i className="fas fa-eye"></i>
-                      <span>View Details</span>
-                    </button>
+                    {(() => {
+                      console.log(
+                        `Rendering buttons for order ${order.id}, status: "${order.status}", _id: "${order._id}"`
+                      );
 
-                    {/* Show Accept/Reject for pending orders */}
-                    {(order.status === "pending" || !order.status) && (
-                      <>
-                        <button
-                          className="action-btn-compact accept"
-                          onClick={() => this.handleAcceptOrder(order._id)}
-                        >
-                          <i className="fas fa-check"></i>
-                          <span>Accept</span>
-                        </button>
-                        <button
-                          className="action-btn-compact reject"
-                          onClick={() => this.handleRejectOrder(order._id)}
-                        >
-                          <i className="fas fa-times"></i>
-                          <span>Reject</span>
-                        </button>
-                      </>
-                    )}
+                      const status = (order.status || "pending").toLowerCase();
+                      const orderId = order._id; // Use the MongoDB _id for API calls
 
-                    {/* Show Mark Complete for accepted orders */}
-                    {order.status === "accepted" && (
-                      <button
-                        className="action-btn-compact complete"
-                        onClick={() => this.handleMarkComplete(order._id)}
-                      >
-                        <i className="fas fa-check-circle"></i>
-                        <span>Mark Complete</span>
-                      </button>
-                    )}
-
-                    {/* Show completion badge for completed orders */}
-                    {order.status === "completed" && (
-                      <div className="order-completed-badge">
-                        <i className="fas fa-check-circle"></i>
-                        <span>Order Completed</span>
-                      </div>
-                    )}
-
-                    {/* Show rejection badge for rejected orders */}
-                    {order.status === "rejected" && (
-                      <div className="order-rejected-badge">
-                        <i className="fas fa-times-circle"></i>
-                        <span>Order Rejected</span>
-                      </div>
-                    )}
+                      if (status === "pending") {
+                        return (
+                          <>
+                            <button
+                              className="action-btn-compact accept"
+                              onClick={() => this.handleAcceptOrder(orderId)}
+                              disabled={!orderId}
+                            >
+                              <i className="fas fa-check"></i>
+                              <span>Accept</span>
+                            </button>
+                            <button
+                              className="action-btn-compact reject"
+                              onClick={() => this.handleRejectOrder(orderId)}
+                              disabled={!orderId}
+                            >
+                              <i className="fas fa-times"></i>
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        );
+                      } else if (status === "accepted") {
+                        return (
+                          <>
+                            <button
+                              className="action-btn-compact details"
+                              onClick={() => this.openOrderDetails(order)}
+                            >
+                              <i className="fas fa-eye"></i>
+                              <span>View Details</span>
+                            </button>
+                            <button
+                              className="action-btn-compact complete"
+                              onClick={() => this.handleMarkComplete(orderId)}
+                              disabled={!orderId}
+                            >
+                              <i className="fas fa-check-circle"></i>
+                              <span>Mark Complete</span>
+                            </button>
+                          </>
+                        );
+                      } else if (status === "completed") {
+                        return (
+                          <div className="order-completed-badge">
+                            <i className="fas fa-check-circle"></i>
+                            <span>Order Completed</span>
+                          </div>
+                        );
+                      } else if (status === "rejected") {
+                        return (
+                          <div className="order-rejected-badge">
+                            <i className="fas fa-times-circle"></i>
+                            <span>Order Rejected</span>
+                          </div>
+                        );
+                      } else {
+                        // Fallback for any other status
+                        return (
+                          <div
+                            style={{
+                              padding: "10px",
+                              color: "#666",
+                              fontSize: "12px",
+                            }}
+                          >
+                            Status: {status}
+                            <br />
+                            Order ID: {orderId ? "Present" : "Missing"}
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               );
@@ -5228,6 +5253,15 @@ class UserDashboard extends Component {
 
   handleAcceptOrder = async (orderId) => {
     try {
+      console.log("Accepting order:", orderId);
+
+      // Optimistic UI update
+      this.setState((prevState) => ({
+        receivedOrders: prevState.receivedOrders.map((order) =>
+          order._id === orderId ? { ...order, status: "accepted" } : order
+        ),
+      }));
+
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
       const response = await fetch(
@@ -5243,13 +5277,19 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        // Immediately refresh the orders list
-        await this.fetchFreelancerOrders();
+        const result = await response.json();
+        console.log("Order accepted successfully:", result);
+
         this.showNotification("Order accepted successfully!", "success");
 
-        // Force a re-render by updating stats
+        // Refresh notifications
         setTimeout(() => {
-          this.updateStats();
+          this.refreshNotifications();
+        }, 1000);
+
+        // Refresh data to ensure consistency
+        setTimeout(() => {
+          this.fetchFreelancerOrders();
         }, 500);
       } else {
         const errorData = await response.json();
@@ -5257,18 +5297,25 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error accepting order:", error);
-      this.showNotification("Failed to accept order", "error");
+
+      // Revert optimistic update on error
+      this.fetchFreelancerOrders();
+
+      this.showNotification(error.message || "Failed to accept order", "error");
     }
   };
 
   handleRejectOrder = async (orderId) => {
-    const confirmReject = window.confirm(
-      "Are you sure you want to reject this order? This action cannot be undone."
-    );
-
-    if (!confirmReject) return;
-
     try {
+      console.log("Rejecting order:", orderId);
+
+      // Optimistic UI update
+      this.setState((prevState) => ({
+        receivedOrders: prevState.receivedOrders.map((order) =>
+          order._id === orderId ? { ...order, status: "rejected" } : order
+        ),
+      }));
+
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
       const response = await fetch(
@@ -5284,14 +5331,19 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        // Immediately refresh the orders list
-        await this.fetchFreelancerOrders();
+        const result = await response.json();
+        console.log("Order rejected successfully:", result);
+
         this.showNotification("Order rejected successfully", "success");
 
-        // Refresh notifications and stats
+        // Refresh notifications
         setTimeout(() => {
           this.refreshNotifications();
-          this.updateStats();
+        }, 1000);
+
+        // Refresh data to ensure consistency
+        setTimeout(() => {
+          this.fetchFreelancerOrders();
         }, 500);
       } else {
         const errorData = await response.json();
@@ -5299,21 +5351,25 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error rejecting order:", error);
-      this.showNotification(
-        "Failed to reject order. Please try again.",
-        "error"
-      );
+
+      // Revert optimistic update on error
+      this.fetchFreelancerOrders();
+
+      this.showNotification(error.message || "Failed to reject order", "error");
     }
   };
 
   handleMarkComplete = async (orderId) => {
-    const confirmComplete = window.confirm(
-      "Are you sure you want to mark this order as completed? This will notify the client that the work is finished."
-    );
-
-    if (!confirmComplete) return;
-
     try {
+      console.log("Marking order complete:", orderId);
+
+      // Optimistic UI update
+      this.setState((prevState) => ({
+        receivedOrders: prevState.receivedOrders.map((order) =>
+          order._id === orderId ? { ...order, status: "completed" } : order
+        ),
+      }));
+
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
       const response = await fetch(
@@ -5329,14 +5385,19 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        // Immediately refresh the orders list
-        await this.fetchFreelancerOrders();
+        const result = await response.json();
+        console.log("Order marked complete successfully:", result);
+
         this.showNotification("Order marked as completed!", "success");
 
-        // Refresh notifications and stats
+        // Refresh notifications
         setTimeout(() => {
           this.refreshNotifications();
-          this.updateStats();
+        }, 1000);
+
+        // Refresh data to ensure consistency
+        setTimeout(() => {
+          this.fetchFreelancerOrders();
         }, 500);
       } else {
         const errorData = await response.json();
@@ -5344,8 +5405,12 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error marking order complete:", error);
+
+      // Revert optimistic update on error
+      this.fetchFreelancerOrders();
+
       this.showNotification(
-        "Failed to mark order complete. Please try again.",
+        error.message || "Failed to mark order complete",
         "error"
       );
     }
