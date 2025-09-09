@@ -806,30 +806,44 @@ class UserDashboard extends Component {
 
       if (response.ok) {
         const receivedOrders = await response.json();
-        console.log("✅ Fetched freelancer orders:", receivedOrders);
+        console.log("✅ Raw API response:", receivedOrders);
 
         // Ensure it's an array
         const ordersArray = Array.isArray(receivedOrders) ? receivedOrders : [];
 
-        // Transform orders to match the UI expectations
-        const formattedOrders = ordersArray.map((order) => ({
-          _id: order._id || order.id,
-          id: order.id || `RCV-${Math.random().toString(36).substr(2, 9)}`,
-          serviceName: order.serviceName || order.service,
-          clientId: order.clientId,
-          clientName: order.clientName || order.client,
-          clientEmail: order.clientEmail,
-          clientProfileImage: order.clientProfileImage || order.clientImage,
-          servicePrice: order.servicePrice || order.amount,
-          status: order.status || "pending",
-          requestDate: order.requestDate || order.date,
-          responseDate: order.responseDate,
-          orderType: "order",
-          paymentStatus: order.paymentStatus || "paid",
-          serviceLevel: order.serviceLevel || "Standard",
-        }));
+        // Transform orders to ensure we have the correct _id field
+        const formattedOrders = ordersArray.map((order, index) => {
+          console.log(`Processing order ${index + 1}:`, order);
 
-        console.log("Setting receivedOrders in state:", formattedOrders);
+          return {
+            _id: order._id || order.orderId, // This is the MongoDB ObjectId we need for API calls
+            id: order.id || `RCV-${String(index + 1).padStart(3, "0")}`, // This is for display
+            serviceName: order.serviceName || order.service,
+            clientId: order.clientId,
+            clientName: order.clientName || order.client,
+            clientEmail: order.clientEmail,
+            clientProfileImage: order.clientProfileImage || order.clientImage,
+            servicePrice: order.servicePrice || order.amount,
+            status: order.status || "pending",
+            requestDate: order.requestDate || order.date || order.orderDate,
+            responseDate: order.responseDate,
+            orderType: "order",
+            paymentStatus: order.paymentStatus || "paid",
+            serviceLevel: order.serviceLevel || "Standard",
+          };
+        });
+
+        console.log("✅ Formatted orders:", formattedOrders);
+
+        // Log each order's _id to verify
+        formattedOrders.forEach((order, index) => {
+          console.log(
+            `Order ${index + 1} _id:`,
+            order._id,
+            "type:",
+            typeof order._id
+          );
+        });
 
         this.setState({ receivedOrders: formattedOrders }, () => {
           console.log(
@@ -4653,7 +4667,6 @@ class UserDashboard extends Component {
                   </div>
 
                   {/* ORDER ACTIONS - Two States Only */}
-                  {/* FIXED ORDER ACTIONS */}
                   <div className="compact-order-actions">
                     {(() => {
                       console.log(
@@ -4661,7 +4674,13 @@ class UserDashboard extends Component {
                       );
 
                       const status = (order.status || "pending").toLowerCase();
-                      const orderId = order._id; // Use the MongoDB _id for API calls
+                      const orderId = order._id || order.orderId; // Use the MongoDB _id for API calls
+
+                      // Debug logging
+                      console.log("Order object:", order);
+                      console.log("Using orderId:", orderId);
+                      console.log("Order._id:", order._id);
+                      console.log("Order.orderId:", order.orderId);
 
                       if (status === "pending") {
                         return (
