@@ -4813,61 +4813,109 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
     console.log("Order ID:", orderId);
     console.log("New Status:", status);
     console.log("Freelancer ID:", freelancerId);
+    console.log("Request body:", req.body);
 
-    // Validate status
-    if (
-      ![
-        "pending",
-        "accepted",
-        "in-progress",
-        "completed",
-        "cancelled",
-        "rejected",
-      ].includes(status)
-    ) {
+    // Validate required fields
+    if (!orderId) {
+      console.log("❌ Missing order ID");
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid status. Must be one of: pending, accepted, in-progress, completed, cancelled, rejected",
+        message: "Order ID is required",
       });
     }
 
+    if (!status) {
+      console.log("❌ Missing status");
+      return res.status(400).json({
+        success: false,
+        message: "Status is required",
+      });
+    }
+
+    // Validate status
+    const validStatuses = [
+      "pending",
+      "accepted",
+      "in-progress",
+      "completed",
+      "cancelled",
+      "rejected",
+    ];
+    if (!validStatuses.includes(status)) {
+      console.log("❌ Invalid status:", status);
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+        receivedStatus: status,
+      });
+    }
+
+    // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      console.log("❌ Invalid ObjectId format:", orderId);
       return res.status(400).json({
         success: false,
         message: "Invalid order ID format",
+        receivedOrderId: orderId,
       });
     }
 
+    // Find the order
+    console.log("🔍 Finding order...");
     const order = await Order.findById(orderId);
+
     if (!order) {
+      console.log("❌ Order not found:", orderId);
       return res.status(404).json({
         success: false,
         message: "Order not found",
+        searchedOrderId: orderId,
       });
     }
 
+    console.log("✅ Order found:", {
+      id: order._id,
+      currentStatus: order.status,
+      freelancerId: order.freelancerId,
+      serviceName: order.serviceName,
+    });
+
     // Security check - only the freelancer can update their received orders
     if (freelancerId && order.freelancerId.toString() !== freelancerId) {
+      console.log("❌ Authorization failed:", {
+        orderFreelancerId: order.freelancerId.toString(),
+        requestFreelancerId: freelancerId,
+      });
       return res.status(403).json({
         success: false,
         message: "You are not authorized to update this order",
       });
     }
 
+    // Store previous status for logging
     const previousStatus = order.status;
+    console.log(`📝 Updating status from "${previousStatus}" to "${status}"`);
+
+    // Update the order
     order.status = status;
-    if (notes) order.notes = notes;
-    if (status === "completed") order.completedDate = new Date();
+    if (notes) {
+      order.notes = notes;
+      console.log("📝 Added notes:", notes);
+    }
+    if (status === "completed") {
+      order.completedDate = new Date();
+      console.log("📅 Set completion date");
+    }
 
+    // Save the order
+    console.log("💾 Saving order...");
     const updatedOrder = await order.save();
+    console.log("✅ Order saved successfully");
 
-    console.log(
-      `Order ${orderId} status updated from ${previousStatus} to ${status}`
-    );
-
-    // Create notifications for status changes
+    // Create notifications
     try {
+      console.log("📢 Creating notifications...");
+
       // Notification for the client
       let clientMessage = "";
       let clientTitle = "";
@@ -4894,6 +4942,7 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
           clientMessage = `Your order for "${order.serviceName}" status has been updated to ${status}`;
       }
 
+      // Create client notification
       await createNotification({
         userId: order.clientId,
         type: "order",
@@ -4932,6 +4981,7 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
           freelancerMessage = `You have updated the order status for "${order.serviceName}" to ${status}`;
       }
 
+      // Create freelancer notification
       await createNotification({
         userId: order.freelancerId,
         type: "system",
@@ -4946,24 +4996,53 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
           timestamp: new Date().toISOString(),
         },
       });
+
+      console.log("✅ Notifications created successfully");
     } catch (notificationError) {
-      console.error("Error creating notifications:", notificationError);
+      console.error(
+        "⚠️ Error creating notifications (non-critical):",
+        notificationError
+      );
       // Don't fail the status update for notification errors
     }
 
+    console.log(
+      `✅ Order ${orderId} status updated successfully from ${previousStatus} to ${status}`
+    );
+
+    // Send success response
     res.json({
       success: true,
       message: `Order status updated to ${status} successfully`,
-      order: updatedOrder,
+      order: {
+        _id: updatedOrder._id,
+        status: updatedOrder.status,
+        previousStatus,
+        serviceName: updatedOrder.serviceName,
+        clientName: updatedOrder.clientName,
+        freelancerName: updatedOrder.freelancerName,
+      },
       previousStatus,
       newStatus: status,
     });
   } catch (error) {
-    console.error("Error updating order status:", error);
+    console.error("❌ CRITICAL ERROR updating order status:", error);
+    console.error("Error stack:", error.stack);
+
     res.status(500).json({
       success: false,
       message: "Failed to update order status",
       error: error.message,
+      details:
+        process.env.NODE_ENV === "development"
+          ? {
+              stack: error.stack,
+              receivedData: {
+                orderId: req.params.orderId,
+                body: req.body,
+              },
+            }
+          : undefined,
     });
   }
 });
@@ -6386,6 +6465,70 @@ app.get("/api/test-razorpay", (req, res) => {
     webhook_secret_configured: !!process.env.RAZORPAY_WEBHOOK_SECRET,
     server_time: new Date().toISOString(),
   });
+});
+
+app.get("/api/debug/order/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    console.log("=== DEBUG ORDER ENDPOINT ===");
+    console.log("Requested Order ID:", orderId);
+    console.log("Order ID type:", typeof orderId);
+    console.log("Is valid ObjectId:", mongoose.Types.ObjectId.isValid(orderId));
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.json({
+        error: "Invalid ObjectId format",
+        receivedId: orderId,
+        expectedFormat: "MongoDB ObjectId (24 hex characters)",
+      });
+    }
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.json({
+        error: "Order not found",
+        searchedId: orderId,
+        suggestion: "Check if the order exists in the database",
+      });
+    }
+
+    res.json({
+      success: true,
+      order: {
+        _id: order._id,
+        status: order.status,
+        serviceName: order.serviceName,
+        clientId: order.clientId,
+        freelancerId: order.freelancerId,
+        clientName: order.clientName,
+        freelancerName: order.freelancerName,
+        totalAmount: order.totalAmount,
+        orderDate: order.orderDate,
+        paymentStatus: order.paymentStatus,
+      },
+      metadata: {
+        canUpdate: true,
+        validStatuses: [
+          "pending",
+          "accepted",
+          "in-progress",
+          "completed",
+          "cancelled",
+          "rejected",
+        ],
+        currentStatus: order.status,
+      },
+    });
+  } catch (error) {
+    console.error("Debug endpoint error:", error);
+    res.status(500).json({
+      error: "Debug endpoint failed",
+      message: error.message,
+      stack: error.stack,
+    });
+  }
 });
 
 // Debug endpoint to check VOAT IDs for all users

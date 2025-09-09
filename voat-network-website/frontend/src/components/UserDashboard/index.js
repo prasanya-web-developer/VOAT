@@ -5326,7 +5326,14 @@ class UserDashboard extends Component {
 
   handleRejectOrder = async (orderId) => {
     try {
-      console.log("Rejecting order:", orderId);
+      console.log("=== REJECTING ORDER ===");
+      console.log("Order ID:", orderId);
+      console.log("Order ID type:", typeof orderId);
+
+      // Validate orderId before making the request
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
 
       // Optimistic UI update
       this.setState((prevState) => ({
@@ -5337,21 +5344,37 @@ class UserDashboard extends Component {
 
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
+      if (!userData.id) {
+        throw new Error("User ID not found. Please login again.");
+      }
+
+      console.log("Making request to reject order...");
+
+      const requestBody = {
+        status: "rejected",
+        freelancerId: userData.id,
+      };
+
+      console.log("Request body:", requestBody);
+
       const response = await fetch(
         `${this.state.baseUrl}/api/orders/${orderId}/status`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: "rejected",
-            freelancerId: userData.id,
-          }),
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(requestBody),
         }
       );
 
+      console.log("Response status:", response.status);
+      console.log("Response ok:", response.ok);
+
       if (response.ok) {
         const result = await response.json();
-        console.log("Order rejected successfully:", result);
+        console.log("✅ Order rejected successfully:", result);
 
         this.showNotification("Order rejected successfully", "success");
 
@@ -5365,16 +5388,30 @@ class UserDashboard extends Component {
           this.fetchFreelancerOrders();
         }, 500);
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to reject order");
+        // Log the full error response
+        const errorText = await response.text();
+        console.error("❌ Server error response:", errorText);
+
+        let errorMessage = "Failed to reject order";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+
+        throw new Error(errorMessage);
       }
     } catch (error) {
-      console.error("Error rejecting order:", error);
+      console.error("❌ Error rejecting order:", error);
 
       // Revert optimistic update on error
       this.fetchFreelancerOrders();
 
-      this.showNotification(error.message || "Failed to reject order", "error");
+      this.showNotification(
+        error.message || "Failed to reject order. Please try again.",
+        "error"
+      );
     }
   };
 
