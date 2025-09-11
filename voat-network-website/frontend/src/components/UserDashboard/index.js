@@ -91,17 +91,17 @@ class UserDashboard extends Component {
       this.fetchPortfolioStatus().then(() => {
         // COMMON for all users
         this.fetchMyBookings();
-        this.fetchWishlist(true); // Force refresh on mount to ensure fresh data
+        this.fetchWishlist(); // Regular fetch on mount
         this.fetchNotifications();
 
         // Add a small delay to ensure userData is properly set
         setTimeout(() => {
-          this.fetchOrders(); // This fetches orders as CLIENT
+          this.fetchOrders();
 
           // ADDITIONAL for freelancers only
           if (this.isFreelancer()) {
             this.fetchBookingRequests();
-            this.fetchFreelancerOrders(); // This fetches orders received as FREELANCER
+            this.fetchFreelancerOrders();
           }
         }, 500);
 
@@ -111,13 +111,9 @@ class UserDashboard extends Component {
       });
     });
 
-    // Start cross-browser synchronization for wishlist
-    this.startCrossBrowserSync();
-
     // Check if coming from successful payment
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("payment") === "success") {
-      // Delay refresh to allow backend processing to complete
       setTimeout(() => {
         this.refreshAfterPayment();
       }, 3000);
@@ -128,84 +124,52 @@ class UserDashboard extends Component {
       this.refreshOrderData();
     }, 30000);
 
-    // Wishlist consistency check and periodic refresh
     this.checkWishlistConsistency();
+
+    // Wishlist refresh interval
     this.wishlistRefreshInterval = setInterval(() => {
       if (this.state.activeTab === "wishlist") {
-        this.fetchWishlist(true); // Force refresh for cross-browser consistency
+        this.fetchWishlist();
       }
-    }, 20000); // Check every 20 seconds when on wishlist tab
+    }, 30000);
 
-    // Notification refresh interval
     this.notificationRefreshInterval = setInterval(() => {
       this.fetchNotifications();
     }, 30000);
 
-    // Enhanced cart status interval for wishlist sync
+    // Event handlers
+    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
+    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
+    window.addEventListener("cartUpdated", this.handleCartUpdate);
+
     this.cartStatusInterval = setInterval(() => {
       if (this.state.activeTab === "wishlist") {
         this.refreshCartStatus();
       }
-    }, 10000); // Check every 10 seconds when on wishlist tab
-
-    // Wishlist and cart event handlers
-    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
-    this.handleCartUpdate = this.handleCartUpdate.bind(this);
-
-    // Enhanced event listeners for cart-wishlist synchronization
-    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
-    window.addEventListener("cartUpdated", this.handleCartUpdate);
-    window.addEventListener("cartItemRemoved", this.handleCartUpdate);
-    window.addEventListener("cartItemAdded", this.handleCartUpdate);
-    window.addEventListener("wishlistCartSync", this.refreshCartStatus);
-    window.addEventListener("cartCleared", this.handleCartUpdate);
-
-    // Click outside handler for notifications
-    document.addEventListener("click", this.handleClickOutside);
-
-    // Auto-refresh data every 30 seconds (duplicate interval management)
-    if (this.dataRefreshInterval) {
-      clearInterval(this.dataRefreshInterval);
-    }
-    this.dataRefreshInterval = setInterval(() => {
-      this.refreshOrderData();
     }, 30000);
+
+    document.addEventListener("click", this.handleClickOutside);
   }
 
   componentWillUnmount() {
-    // Stop cross-browser synchronization
-    this.stopCrossBrowserSync();
-
-    // Clear all intervals
     if (this.wishlistRefreshInterval) {
       clearInterval(this.wishlistRefreshInterval);
     }
-
     if (this.portfolioStatusTimeout) {
       clearTimeout(this.portfolioStatusTimeout);
     }
-
     if (this.cartStatusInterval) {
       clearInterval(this.cartStatusInterval);
     }
-
     if (this.notificationRefreshInterval) {
       clearInterval(this.notificationRefreshInterval);
     }
-
     if (this.dataRefreshInterval) {
       clearInterval(this.dataRefreshInterval);
     }
 
-    // Remove all event listeners for cart-wishlist synchronization
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
     window.removeEventListener("cartUpdated", this.handleCartUpdate);
-    window.removeEventListener("cartItemRemoved", this.handleCartUpdate);
-    window.removeEventListener("cartItemAdded", this.handleCartUpdate);
-    window.removeEventListener("wishlistCartSync", this.refreshCartStatus);
-    window.removeEventListener("cartCleared", this.handleCartUpdate);
-
-    // Remove click outside handler
     document.removeEventListener("click", this.handleClickOutside);
   }
 
@@ -961,10 +925,9 @@ class UserDashboard extends Component {
 
   fetchWishlist = async (forceRefresh = false) => {
     this.setState({ wishlistLoading: true });
-    let userData;
 
     try {
-      userData = JSON.parse(localStorage.getItem("user") || "{}");
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
         console.log("No user data available, cannot fetch wishlist");
         this.setState({ wishlist: [], wishlistLoading: false }, () => {
@@ -975,66 +938,55 @@ class UserDashboard extends Component {
 
       console.log("=== FETCHING WISHLIST ===");
       console.log("User ID:", userData.id);
-      console.log("Force refresh:", forceRefresh);
+      console.log("Base URL:", this.state.baseUrl);
 
-      // Always fetch from database as source of truth with cache busting
-      const timestamp = Date.now();
+      // Fetch from database
       const response = await fetch(
-        `${this.state.baseUrl}/api/wishlist/${userData.id}?t=${timestamp}`,
+        `${this.state.baseUrl}/api/wishlist/${userData.id}`,
         {
           method: "GET",
           headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
           },
         }
       );
 
+      console.log("Wishlist API response status:", response.status);
+
       if (!response.ok) {
-        throw new Error(
-          `Server returned ${response.status}: ${await response.text()}`
-        );
+        const errorText = await response.text();
+        console.error("Wishlist API error:", response.status, errorText);
+        throw new Error(`API Error ${response.status}: ${errorText}`);
       }
 
       const apiWishlist = await response.json();
-      console.log(
-        "✅ Fetched wishlist from database:",
-        apiWishlist.length,
-        "items"
-      );
+      console.log("Fetched wishlist from API:", apiWishlist);
 
-      // Fetch current cart status
+      // Ensure it's an array
+      const wishlistArray = Array.isArray(apiWishlist) ? apiWishlist : [];
+
+      // Fetch cart status
       let cartItems = [];
       try {
         const cartResponse = await fetch(
-          `${this.state.baseUrl}/api/cart/${userData.id}?t=${timestamp}`,
-          {
-            headers: {
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-            },
-          }
+          `${this.state.baseUrl}/api/cart/${userData.id}`
         );
-
         if (cartResponse.ok) {
           const cartData = await cartResponse.json();
           cartItems = cartData.data || [];
-          console.log("✅ Fetched cart items:", cartItems.length);
         }
       } catch (cartError) {
-        console.error("Error fetching cart data:", cartError);
+        console.error("Error fetching cart:", cartError);
       }
 
-      // Process wishlist items with cart status
-      const updatedWishlist = apiWishlist.map((item) => ({
+      // Process wishlist with cart status
+      const processedWishlist = wishlistArray.map((item) => ({
         ...item,
         inCart: cartItems.some(
           (cartItem) =>
             cartItem.serviceName === item.service &&
-            cartItem.freelancerName === item.provider &&
-            (cartItem.serviceLevel || "Standard") ===
-              (item.serviceLevel || "Standard")
+            cartItem.freelancerName === item.provider
         ),
         serviceLevel: item.serviceLevel || "Standard",
         deliveryTime: item.deliveryTime || "7-14 days",
@@ -1047,11 +999,9 @@ class UserDashboard extends Component {
           `${item.provider?.toLowerCase().replace(" ", "")}@example.com`,
       }));
 
-      // Update state
       this.setState(
         {
-          wishlist: updatedWishlist,
-          cartItems: cartItems,
+          wishlist: processedWishlist,
           wishlistLoading: false,
         },
         () => {
@@ -1059,32 +1009,27 @@ class UserDashboard extends Component {
         }
       );
 
-      // Update localStorage with fresh data (always overwrite)
+      // Update localStorage
       localStorage.setItem(
         `wishlist_${userData.id}`,
-        JSON.stringify(updatedWishlist)
+        JSON.stringify(processedWishlist)
       );
 
       console.log(
-        "✅ Wishlist updated successfully:",
-        updatedWishlist.length,
+        "Wishlist updated successfully:",
+        processedWishlist.length,
         "items"
       );
     } catch (error) {
-      console.error("❌ Error fetching wishlist:", error);
+      console.error("Error fetching wishlist:", error);
 
-      // Fallback to localStorage only if not a force refresh and API fails
-      if (!forceRefresh && userData && userData.id) {
+      // Fallback to localStorage
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      if (userData && userData.id) {
         try {
           const localWishlist = JSON.parse(
             localStorage.getItem(`wishlist_${userData.id}`) || "[]"
           );
-          console.log(
-            "⚠️ Falling back to localStorage:",
-            localWishlist.length,
-            "items"
-          );
-
           this.setState(
             {
               wishlist: localWishlist,
@@ -1095,10 +1040,6 @@ class UserDashboard extends Component {
             }
           );
         } catch (localError) {
-          console.error(
-            "❌ Error loading wishlist from localStorage:",
-            localError
-          );
           this.setState({ wishlist: [], wishlistLoading: false });
         }
       } else {
@@ -1106,7 +1047,6 @@ class UserDashboard extends Component {
       }
     }
   };
-
   fetchPortfolioStatus = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {

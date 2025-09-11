@@ -2748,9 +2748,12 @@ app.get("/api/debug/users-voat", async (req, res) => {
   }
 });
 
+// GET - Fetch user's wishlist
 app.get("/api/wishlist/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+
+    console.log("Fetching wishlist for user:", userId);
 
     // Set headers to prevent caching
     res.set({
@@ -2769,15 +2772,120 @@ app.get("/api/wishlist/:userId", async (req, res) => {
     const wishlist = await Wishlist.findOne({ userId: userId });
 
     if (!wishlist) {
-      return res.json([]);
+      console.log("No wishlist found, returning empty array");
+      return res.status(200).json([]);
     }
 
     console.log(
       `Returning ${wishlist.items.length} wishlist items for user ${userId}`
     );
-    res.json(wishlist.items);
+    res.status(200).json(wishlist.items || []);
   } catch (error) {
     console.error("Error fetching wishlist:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      details: error.message,
+    });
+  }
+});
+
+// POST - Update user's entire wishlist
+app.post("/api/wishlist/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const wishlistItems = req.body;
+
+    console.log("Updating wishlist for user:", userId);
+    console.log("New wishlist items:", wishlistItems.length);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid user ID format",
+      });
+    }
+
+    if (!Array.isArray(wishlistItems)) {
+      return res.status(400).json({
+        success: false,
+        error: "Wishlist data must be an array",
+      });
+    }
+
+    const updatedWishlist = await Wishlist.findOneAndUpdate(
+      { userId: userId },
+      { $set: { items: wishlistItems } },
+      { new: true, upsert: true }
+    );
+
+    console.log("Wishlist updated successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Wishlist updated successfully",
+      count: updatedWishlist.items.length,
+    });
+  } catch (error) {
+    console.error("Error updating wishlist:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+      details: error.message,
+    });
+  }
+});
+
+// POST - Add single item to wishlist
+app.post("/api/wishlist/:userId/add", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const newItem = req.body;
+
+    console.log("Adding item to wishlist for user:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid user ID format",
+      });
+    }
+
+    // Ensure the item has required fields
+    if (!newItem.service || !newItem.provider) {
+      return res.status(400).json({
+        success: false,
+        error: "Service name and provider are required",
+      });
+    }
+
+    // Add ID and timestamp if not present
+    if (!newItem.id) {
+      newItem.id = `wishlist_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+    }
+    if (!newItem.addedDate) {
+      newItem.addedDate = new Date();
+    }
+
+    const wishlist = await Wishlist.findOneAndUpdate(
+      { userId: userId },
+      {
+        $push: { items: newItem },
+        $setOnInsert: { userId: userId },
+      },
+      { new: true, upsert: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Item added to wishlist",
+      item: newItem,
+      totalItems: wishlist.items.length,
+    });
+  } catch (error) {
+    console.error("Error adding item to wishlist:", error);
     res.status(500).json({
       success: false,
       error: "Internal Server Error",
