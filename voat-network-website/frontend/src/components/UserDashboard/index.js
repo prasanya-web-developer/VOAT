@@ -3409,7 +3409,7 @@ class UserDashboard extends Component {
       );
 
       if (response.ok) {
-        this.fetchBookings();
+        this.fetchBookingRequests();
         this.showNotification(
           `Booking request ${action}ed successfully!`,
           "success"

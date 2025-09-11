@@ -3742,7 +3742,6 @@ app.get("/api/bookings/:userId", async (req, res) => {
   }
 });
 
-// NEW: Get My Bookings (booking requests made by current user as client)
 // Get My Bookings (booking requests made by current user as client)
 app.get("/api/my-bookings/:userId", async (req, res) => {
   try {
@@ -4063,6 +4062,7 @@ app.get("/api/booking/:bookingId", async (req, res) => {
 });
 
 // Delete/Cancel Booking
+// Delete/Cancel Booking
 app.delete("/api/booking/:bookingId", async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -4097,8 +4097,9 @@ app.delete("/api/booking/:bookingId", async (req, res) => {
       });
     }
 
-    // Only allow cancellation if booking is pending
-    if (booking.status !== "pending") {
+    // FIX: Allow cancellation of both pending and accepted bookings
+    // Only prevent cancellation of completed or already rejected bookings
+    if (booking.status === "completed" || booking.status === "rejected") {
       return res.status(409).json({
         success: false,
         message: `Cannot cancel a booking that has been ${booking.status}`,
@@ -4106,6 +4107,41 @@ app.delete("/api/booking/:bookingId", async (req, res) => {
     }
 
     await Booking.findByIdAndDelete(bookingId);
+
+    // Create notifications for both parties
+    if (booking.clientId.toString() !== userId) {
+      // Notify client if freelancer cancelled
+      await createNotification({
+        userId: booking.clientId,
+        type: "booking",
+        title: "Booking Cancelled",
+        message: `Your booking for "${booking.serviceName}" has been cancelled by ${booking.freelancerName}`,
+        relatedId: booking._id.toString(),
+        metadata: {
+          bookingId: booking._id,
+          serviceName: booking.serviceName,
+          freelancerName: booking.freelancerName,
+          action: "cancelled_by_freelancer",
+        },
+      });
+    }
+
+    if (booking.freelancerId.toString() !== userId) {
+      // Notify freelancer if client cancelled
+      await createNotification({
+        userId: booking.freelancerId,
+        type: "booking",
+        title: "Booking Cancelled",
+        message: `The booking for "${booking.serviceName}" has been cancelled by ${booking.clientName}`,
+        relatedId: booking._id.toString(),
+        metadata: {
+          bookingId: booking._id,
+          serviceName: booking.serviceName,
+          clientName: booking.clientName,
+          action: "cancelled_by_client",
+        },
+      });
+    }
 
     console.log(`Booking ${bookingId} successfully cancelled`);
 
