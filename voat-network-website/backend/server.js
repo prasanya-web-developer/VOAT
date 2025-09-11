@@ -2748,63 +2748,36 @@ app.get("/api/debug/users-voat", async (req, res) => {
   }
 });
 
-app.post("/api/wishlist/:userId", async (req, res) => {
+app.get("/api/wishlist/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const wishlistItems = req.body;
 
-    console.log("=== BACKEND WISHLIST UPDATE ===");
-    console.log("User ID received:", userId);
-    console.log("Wishlist items received:", wishlistItems);
+    // Set headers to prevent caching
+    res.set({
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      console.error("Invalid user ID format:", userId);
       return res.status(400).json({
         success: false,
         error: "Invalid user ID format",
       });
     }
 
-    if (!Array.isArray(wishlistItems)) {
-      console.error("Invalid wishlist data:", typeof wishlistItems);
-      return res.status(400).json({
-        success: false,
-        error: "Wishlist data must be an array",
-      });
+    const wishlist = await Wishlist.findOne({ userId: userId });
+
+    if (!wishlist) {
+      return res.json([]);
     }
 
-    const updatedWishlist = await Wishlist.findOneAndUpdate(
-      { userId: userId },
-      { $set: { items: wishlistItems } },
-      { new: true, upsert: true }
+    console.log(
+      `Returning ${wishlist.items.length} wishlist items for user ${userId}`
     );
-
-    // ✅ CREATE NOTIFICATION FOR WISHLIST UPDATE
-    if (wishlistItems.length > 0) {
-      const lastItem = wishlistItems[wishlistItems.length - 1];
-      await createNotification({
-        userId: userId,
-        type: "system",
-        title: "Item Added to Wishlist",
-        message: `"${lastItem.service}" has been added to your wishlist`,
-        relatedId: lastItem.id,
-        metadata: {
-          action: "wishlist_add",
-          serviceName: lastItem.service,
-          provider: lastItem.provider,
-        },
-      });
-    }
-
-    console.log("Wishlist updated successfully:", updatedWishlist._id);
-
-    res.status(200).json({
-      success: true,
-      message: "Wishlist updated successfully",
-      count: updatedWishlist.items.length,
-    });
+    res.json(wishlist.items);
   } catch (error) {
-    console.error("Backend wishlist error:", error);
+    console.error("Error fetching wishlist:", error);
     res.status(500).json({
       success: false,
       error: "Internal Server Error",

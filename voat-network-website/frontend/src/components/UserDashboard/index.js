@@ -91,7 +91,7 @@ class UserDashboard extends Component {
       this.fetchPortfolioStatus().then(() => {
         // COMMON for all users
         this.fetchMyBookings();
-        this.fetchWishlist();
+        this.fetchWishlist(true); // Force refresh on mount to ensure fresh data
         this.fetchNotifications();
 
         // Add a small delay to ensure userData is properly set
@@ -111,6 +111,9 @@ class UserDashboard extends Component {
       });
     });
 
+    // Start cross-browser synchronization for wishlist
+    this.startCrossBrowserSync();
+
     // Check if coming from successful payment
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("payment") === "success") {
@@ -125,66 +128,84 @@ class UserDashboard extends Component {
       this.refreshOrderData();
     }, 30000);
 
+    // Wishlist consistency check and periodic refresh
     this.checkWishlistConsistency();
     this.wishlistRefreshInterval = setInterval(() => {
-      this.fetchWishlist();
-    }, 10000);
+      if (this.state.activeTab === "wishlist") {
+        this.fetchWishlist(true); // Force refresh for cross-browser consistency
+      }
+    }, 20000); // Check every 20 seconds when on wishlist tab
 
+    // Notification refresh interval
     this.notificationRefreshInterval = setInterval(() => {
       this.fetchNotifications();
     }, 30000);
 
-    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
-    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
+    // Enhanced cart status interval for wishlist sync
+    this.cartStatusInterval = setInterval(() => {
+      if (this.state.activeTab === "wishlist") {
+        this.refreshCartStatus();
+      }
+    }, 10000); // Check every 10 seconds when on wishlist tab
 
+    // Wishlist and cart event handlers
+    this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     this.handleCartUpdate = this.handleCartUpdate.bind(this);
+
+    // Enhanced event listeners for cart-wishlist synchronization
+    window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
     window.addEventListener("cartUpdated", this.handleCartUpdate);
     window.addEventListener("cartItemRemoved", this.handleCartUpdate);
     window.addEventListener("cartItemAdded", this.handleCartUpdate);
     window.addEventListener("wishlistCartSync", this.refreshCartStatus);
     window.addEventListener("cartCleared", this.handleCartUpdate);
 
-    this.cartStatusInterval = setInterval(() => {
-      if (this.state.activeTab === "wishlist") {
-        this.refreshCartStatus();
-      }
-    }, 10000);
+    // Click outside handler for notifications
+    document.addEventListener("click", this.handleClickOutside);
 
+    // Auto-refresh data every 30 seconds (duplicate interval management)
+    if (this.dataRefreshInterval) {
+      clearInterval(this.dataRefreshInterval);
+    }
     this.dataRefreshInterval = setInterval(() => {
       this.refreshOrderData();
     }, 30000);
-
-    document.addEventListener("click", this.handleClickOutside);
   }
 
   componentWillUnmount() {
+    // Stop cross-browser synchronization
+    this.stopCrossBrowserSync();
+
+    // Clear all intervals
     if (this.wishlistRefreshInterval) {
       clearInterval(this.wishlistRefreshInterval);
     }
+
     if (this.portfolioStatusTimeout) {
       clearTimeout(this.portfolioStatusTimeout);
     }
+
     if (this.cartStatusInterval) {
       clearInterval(this.cartStatusInterval);
     }
+
     if (this.notificationRefreshInterval) {
       clearInterval(this.notificationRefreshInterval);
     }
-    // Add cleanup for new interval
-    if (this.dataRefreshInterval) {
-      clearInterval(this.dataRefreshInterval);
-    }
 
     if (this.dataRefreshInterval) {
       clearInterval(this.dataRefreshInterval);
     }
 
+    // Remove all event listeners for cart-wishlist synchronization
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
     window.removeEventListener("cartUpdated", this.handleCartUpdate);
     window.removeEventListener("cartItemRemoved", this.handleCartUpdate);
     window.removeEventListener("cartItemAdded", this.handleCartUpdate);
     window.removeEventListener("wishlistCartSync", this.refreshCartStatus);
     window.removeEventListener("cartCleared", this.handleCartUpdate);
+
+    // Remove click outside handler
     document.removeEventListener("click", this.handleClickOutside);
   }
 
@@ -201,6 +222,64 @@ class UserDashboard extends Component {
       !notificationBtn.contains(event.target)
     ) {
       this.setState({ showNotifications: false });
+    }
+  };
+
+  // Method to start cross-browser synchronization
+  startCrossBrowserSync = () => {
+    // Refresh wishlist every 15 seconds when wishlist tab is active
+    this.wishlistSyncInterval = setInterval(() => {
+      if (this.state.activeTab === "wishlist" && !document.hidden) {
+        console.log("🔄 Auto-syncing wishlist across browsers");
+        this.fetchWishlist(true); // Force refresh from database
+      }
+    }, 15000);
+
+    // Listen for page visibility changes (when user switches back to tab)
+    this.handleVisibilityChange = () => {
+      if (!document.hidden && this.state.activeTab === "wishlist") {
+        console.log("👁️ Page became visible, syncing wishlist");
+        this.fetchWishlist(true);
+      }
+    };
+
+    // Listen for focus events (when user clicks on browser tab)
+    this.handleFocusChange = () => {
+      if (this.state.activeTab === "wishlist") {
+        console.log("🎯 Window focused, syncing wishlist");
+        setTimeout(() => this.fetchWishlist(true), 100);
+      }
+    };
+
+    document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    window.addEventListener("focus", this.handleFocusChange);
+  };
+
+  // Method to stop cross-browser synchronization
+  stopCrossBrowserSync = () => {
+    if (this.wishlistSyncInterval) {
+      clearInterval(this.wishlistSyncInterval);
+    }
+    if (this.handleVisibilityChange) {
+      document.removeEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange
+      );
+    }
+    if (this.handleFocusChange) {
+      window.removeEventListener("focus", this.handleFocusChange);
+    }
+  };
+
+  // Method to force sync wishlist across all open tabs
+  forceSyncWishlist = () => {
+    console.log("🔧 Force syncing wishlist");
+    this.fetchWishlist(true);
+
+    // Clear localStorage to force fresh fetch
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    if (userData && userData.id) {
+      localStorage.removeItem(`wishlist_${userData.id}`);
     }
   };
 
@@ -880,7 +959,7 @@ class UserDashboard extends Component {
     }
   };
 
-  fetchWishlist = async () => {
+  fetchWishlist = async (forceRefresh = false) => {
     this.setState({ wishlistLoading: true });
     let userData;
 
@@ -894,9 +973,22 @@ class UserDashboard extends Component {
         return;
       }
 
-      // Fetch wishlist
+      console.log("=== FETCHING WISHLIST ===");
+      console.log("User ID:", userData.id);
+      console.log("Force refresh:", forceRefresh);
+
+      // Always fetch from database as source of truth with cache busting
+      const timestamp = Date.now();
       const response = await fetch(
-        `${this.state.baseUrl}/api/wishlist/${userData.id}`
+        `${this.state.baseUrl}/api/wishlist/${userData.id}?t=${timestamp}`,
+        {
+          method: "GET",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        }
       );
 
       if (!response.ok) {
@@ -906,75 +998,91 @@ class UserDashboard extends Component {
       }
 
       const apiWishlist = await response.json();
+      console.log(
+        "✅ Fetched wishlist from database:",
+        apiWishlist.length,
+        "items"
+      );
 
-      // Fetch user's cart to check which items are already in cart
-      // Fetch user's cart to check which items are already in cart
+      // Fetch current cart status
+      let cartItems = [];
       try {
         const cartResponse = await fetch(
-          `${this.state.baseUrl}/api/cart/${userData.id}`
+          `${this.state.baseUrl}/api/cart/${userData.id}?t=${timestamp}`,
+          {
+            headers: {
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+            },
+          }
         );
 
-        let cartItems = [];
         if (cartResponse.ok) {
           const cartData = await cartResponse.json();
           cartItems = cartData.data || [];
-          console.log("=== CART ITEMS FOR WISHLIST CHECK ===", cartItems); // Debug log
+          console.log("✅ Fetched cart items:", cartItems.length);
         }
-
-        // Update wishlist items with cart status
-        const updatedWishlist = apiWishlist.map((item) => ({
-          ...item,
-          inCart: cartItems.some(
-            (cartItem) =>
-              cartItem.serviceName === item.service &&
-              cartItem.freelancerName === item.provider
-          ),
-          serviceLevel: item.serviceLevel || "Standard",
-          deliveryTime: item.deliveryTime || "7-14 days",
-          description:
-            item.description ||
-            "Professional service with quality guarantee and timely delivery.",
-          freelancerId: item.freelancerId || item.serviceId || item.id,
-          providerEmail:
-            item.providerEmail ||
-            `${item.provider?.toLowerCase().replace(" ", "")}@example.com`,
-        }));
-
-        this.setState(
-          {
-            wishlist: updatedWishlist,
-            cartItems: cartItems,
-            wishlistLoading: false,
-          },
-          () => {
-            this.updateStats();
-          }
-        );
-
-        localStorage.setItem(
-          `wishlist_${userData.id}`,
-          JSON.stringify(updatedWishlist)
-        );
       } catch (cartError) {
         console.error("Error fetching cart data:", cartError);
-        // Continue with wishlist without cart status
-        this.setState(
-          {
-            wishlist: Array.isArray(apiWishlist) ? apiWishlist : [],
-            wishlistLoading: false,
-          },
-          () => {
-            this.updateStats();
-          }
-        );
       }
-    } catch (error) {
-      console.error("Error fetching wishlist:", error);
 
-      if (userData && userData.id) {
+      // Process wishlist items with cart status
+      const updatedWishlist = apiWishlist.map((item) => ({
+        ...item,
+        inCart: cartItems.some(
+          (cartItem) =>
+            cartItem.serviceName === item.service &&
+            cartItem.freelancerName === item.provider &&
+            (cartItem.serviceLevel || "Standard") ===
+              (item.serviceLevel || "Standard")
+        ),
+        serviceLevel: item.serviceLevel || "Standard",
+        deliveryTime: item.deliveryTime || "7-14 days",
+        description:
+          item.description ||
+          "Professional service with quality guarantee and timely delivery.",
+        freelancerId: item.freelancerId || item.serviceId || item.id,
+        providerEmail:
+          item.providerEmail ||
+          `${item.provider?.toLowerCase().replace(" ", "")}@example.com`,
+      }));
+
+      // Update state
+      this.setState(
+        {
+          wishlist: updatedWishlist,
+          cartItems: cartItems,
+          wishlistLoading: false,
+        },
+        () => {
+          this.updateStats();
+        }
+      );
+
+      // Update localStorage with fresh data (always overwrite)
+      localStorage.setItem(
+        `wishlist_${userData.id}`,
+        JSON.stringify(updatedWishlist)
+      );
+
+      console.log(
+        "✅ Wishlist updated successfully:",
+        updatedWishlist.length,
+        "items"
+      );
+    } catch (error) {
+      console.error("❌ Error fetching wishlist:", error);
+
+      // Fallback to localStorage only if not a force refresh and API fails
+      if (!forceRefresh && userData && userData.id) {
         try {
           const localWishlist = JSON.parse(
             localStorage.getItem(`wishlist_${userData.id}`) || "[]"
+          );
+          console.log(
+            "⚠️ Falling back to localStorage:",
+            localWishlist.length,
+            "items"
           );
 
           this.setState(
@@ -988,7 +1096,7 @@ class UserDashboard extends Component {
           );
         } catch (localError) {
           console.error(
-            "Error loading wishlist from localStorage:",
+            "❌ Error loading wishlist from localStorage:",
             localError
           );
           this.setState({ wishlist: [], wishlistLoading: false });
@@ -1090,8 +1198,16 @@ class UserDashboard extends Component {
       activeTab: tab,
       showPortfolioForm: false,
       showMobileSidebar: false,
-      showNotifications: false, // Close notifications when changing tabs
+      showNotifications: false,
     });
+
+    // Force refresh wishlist when switching to wishlist tab
+    if (tab === "wishlist") {
+      console.log("🔄 Switched to wishlist tab, force syncing");
+      setTimeout(() => {
+        this.fetchWishlist(true); // Force refresh from database
+      }, 100);
+    }
   };
 
   toggleMobileSidebar = () => {
@@ -3447,6 +3563,19 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>My Wishlist</h1>
           <div className="dashboard-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={this.forceSyncWishlist}
+              disabled={wishlistLoading}
+              title="Sync wishlist across all browsers"
+            >
+              <i
+                className={`fas fa-sync-alt ${
+                  wishlistLoading ? "fa-spin" : ""
+                }`}
+              ></i>
+              {wishlistLoading ? "Syncing..." : "Sync"}
+            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
