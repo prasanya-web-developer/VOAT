@@ -137,11 +137,18 @@ class UserDashboard extends Component {
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
 
+    this.handleCartUpdate = this.handleCartUpdate.bind(this);
+    window.addEventListener("cartUpdated", this.handleCartUpdate);
+    window.addEventListener("cartItemRemoved", this.handleCartUpdate);
+    window.addEventListener("cartItemAdded", this.handleCartUpdate);
+    window.addEventListener("wishlistCartSync", this.refreshCartStatus);
+    window.addEventListener("cartCleared", this.handleCartUpdate);
+
     this.cartStatusInterval = setInterval(() => {
       if (this.state.activeTab === "wishlist") {
         this.refreshCartStatus();
       }
-    }, 30000);
+    }, 10000);
 
     this.dataRefreshInterval = setInterval(() => {
       this.refreshOrderData();
@@ -173,6 +180,11 @@ class UserDashboard extends Component {
     }
 
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
+    window.removeEventListener("cartUpdated", this.handleCartUpdate);
+    window.removeEventListener("cartItemRemoved", this.handleCartUpdate);
+    window.removeEventListener("cartItemAdded", this.handleCartUpdate);
+    window.removeEventListener("wishlistCartSync", this.refreshCartStatus);
+    window.removeEventListener("cartCleared", this.handleCartUpdate);
     document.removeEventListener("click", this.handleClickOutside);
   }
 
@@ -896,6 +908,7 @@ class UserDashboard extends Component {
       const apiWishlist = await response.json();
 
       // Fetch user's cart to check which items are already in cart
+      // Fetch user's cart to check which items are already in cart
       try {
         const cartResponse = await fetch(
           `${this.state.baseUrl}/api/cart/${userData.id}`
@@ -905,6 +918,7 @@ class UserDashboard extends Component {
         if (cartResponse.ok) {
           const cartData = await cartResponse.json();
           cartItems = cartData.data || [];
+          console.log("=== CART ITEMS FOR WISHLIST CHECK ===", cartItems); // Debug log
         }
 
         // Update wishlist items with cart status
@@ -1741,7 +1755,7 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>My Orders</h1>
           <div className="dashboard-actions">
-            <button
+            {/* <button
               className="refresh-btn"
               onClick={() => {
                 console.log("Refreshing orders...");
@@ -1750,7 +1764,7 @@ class UserDashboard extends Component {
               title="Refresh Orders"
             >
               <i className="fas fa-sync-alt"></i> Refresh
-            </button>
+            </button> */}
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -2899,13 +2913,6 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>Booking Requests</h1>
           <div className="dashboard-actions">
-            <button
-              className="refresh-btn"
-              onClick={this.refreshOrderData}
-              title="Refresh Booking Requests"
-            >
-              <i className="fas fa-sync-alt"></i> Refresh
-            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -3155,15 +3162,20 @@ class UserDashboard extends Component {
                   )}
 
                   {booking.status === "rejected" && (
-                    <button
-                      className="action-btn-compact details secondary"
-                      onClick={() => this.openBookingDetails(booking)}
-                    >
-                      <i className="fas fa-eye"></i>
-                      <span>View Details</span>
-                    </button>
+                    <>
+                      <button
+                        className="action-btn-compact details secondary"
+                        onClick={() => this.openBookingDetails(booking)}
+                      >
+                        <i className="fas fa-eye"></i>
+                        <span>View Details</span>
+                      </button>
+                      <div className="order-rejected-badge">
+                        <i className="fas fa-times-circle"></i>
+                        <span>Booking Rejected</span>
+                      </div>
+                    </>
                   )}
-
                   {booking.status === "completed" && (
                     <button
                       className="action-btn-compact details secondary"
@@ -3641,8 +3653,6 @@ class UserDashboard extends Component {
     );
   }
 
-  // Helper methods to add to the component
-
   addToCart = async (item) => {
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
@@ -3677,6 +3687,7 @@ class UserDashboard extends Component {
       });
 
       if (response.ok) {
+        // Optimistically update the wishlist item
         this.setState((prevState) => ({
           wishlist: prevState.wishlist.map((wishlistItem) =>
             wishlistItem.id === item.id
@@ -3685,9 +3696,19 @@ class UserDashboard extends Component {
           ),
         }));
 
+        // Refresh cart status after a delay to ensure backend is updated
         setTimeout(() => {
+          this.refreshCartStatus();
           this.refreshNotifications();
         }, 1000);
+
+        // Trigger cart update events
+        window.dispatchEvent(
+          new CustomEvent("cartItemAdded", {
+            detail: { item: cartData },
+          })
+        );
+        window.dispatchEvent(new CustomEvent("cartUpdated"));
 
         this.showNotification("Service added to cart successfully!", "success");
       } else {
@@ -3858,28 +3879,56 @@ class UserDashboard extends Component {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) return;
 
-      const cartResponse = await fetch(
+      console.log("=== REFRESHING CART STATUS FOR WISHLIST ===");
+
+      const response = await fetch(
         `${this.state.baseUrl}/api/cart/${userData.id}`
       );
 
-      if (cartResponse.ok) {
-        const cartData = await cartResponse.json();
+      if (response.ok) {
+        const cartData = await response.json();
         const cartItems = cartData.data || [];
 
+        console.log("Current cart items for sync:", cartItems);
+
+        // Update wishlist items with accurate cart status
+        this.setState((prevState) => ({
+          wishlist: prevState.wishlist.map((item) => {
+            const isInCart = cartItems.some((cartItem) => {
+              // More precise matching logic
+              const serviceMatch = cartItem.serviceName === item.service;
+              const freelancerMatch = cartItem.freelancerName === item.provider;
+              const levelMatch =
+                (cartItem.serviceLevel || "Standard") ===
+                (item.serviceLevel || "Standard");
+
+              return serviceMatch && freelancerMatch && levelMatch;
+            });
+
+            return {
+              ...item,
+              inCart: isInCart,
+            };
+          }),
+        }));
+      } else {
+        // If cart fetch fails, set all items as not in cart
         this.setState((prevState) => ({
           wishlist: prevState.wishlist.map((item) => ({
             ...item,
-            inCart: cartItems.some(
-              (cartItem) =>
-                cartItem.serviceName === item.service &&
-                cartItem.freelancerName === item.provider
-            ),
+            inCart: false,
           })),
-          cartItems: cartItems,
         }));
       }
     } catch (error) {
       console.error("Error refreshing cart status:", error);
+      // On error, set all items as not in cart
+      this.setState((prevState) => ({
+        wishlist: prevState.wishlist.map((item) => ({
+          ...item,
+          inCart: false,
+        })),
+      }));
     }
   };
 
@@ -4199,7 +4248,7 @@ class UserDashboard extends Component {
     }
   };
 
-  // Add these new methods to handle My Bookings functionality
+  //methods to handle My Bookings functionality
 
   fetchMyBookings = async () => {
     try {
@@ -4334,128 +4383,6 @@ class UserDashboard extends Component {
     }
   };
 
-  renderMyOrders() {
-    const { myOrders } = this.state;
-
-    return (
-      <div className="dashboard-main-content">
-        <div className="dashboard-header">
-          <h1>My Orders</h1>
-          <div className="dashboard-actions">
-            <div className="search-container">
-              <i className="fas fa-search search-icon"></i>
-              <input
-                type="text"
-                placeholder="Search orders..."
-                className="search-input"
-                value={this.state.orderSearchQuery}
-                onChange={this.handleOrderSearch}
-              />
-            </div>
-            <select
-              className="filter-dropdown"
-              value={this.state.orderFilter}
-              onChange={this.handleOrderFilter}
-            >
-              <option value="all">All Orders</option>
-              <option value="pending">Pending</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Orders Summary Stats */}
-        <div className="orders-summary-stats-compact">
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact pending">
-              <i className="fas fa-clock"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                myOrders.filter(
-                  (order) => order.status.toLowerCase() === "pending"
-                ).length
-              }
-            </div>
-            <div className="stat-label-compact">Pending</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact progress">
-              <i className="fas fa-spinner"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                myOrders.filter((order) =>
-                  order.status.toLowerCase().includes("progress")
-                ).length
-              }
-            </div>
-            <div className="stat-label-compact">In Progress</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact completed">
-              <i className="fas fa-check-circle"></i>
-            </div>
-            <div className="stat-number-compact">
-              {
-                myOrders.filter(
-                  (order) => order.status.toLowerCase() === "completed"
-                ).length
-              }
-            </div>
-            <div className="stat-label-compact">Completed</div>
-          </div>
-          <div className="summary-stat-compact">
-            <div className="stat-icon-compact total">
-              <i className="fas fa-indian-rupee-sign"></i>
-            </div>
-            <div className="stat-number-compact">
-              ₹
-              {myOrders
-                .reduce((sum, order) => sum + (order.amount || 0), 0)
-                .toLocaleString()}
-            </div>
-            <div className="stat-label-compact">Total Value</div>
-          </div>
-        </div>
-
-        {myOrders.length === 0 ? (
-          <div className="empty-state-modern">
-            <div className="empty-illustration">
-              <div className="empty-icon">
-                <i className="fas fa-shopping-cart"></i>
-              </div>
-            </div>
-            <div className="empty-content">
-              <h3>No Orders Found</h3>
-              <p>
-                You haven't placed any paid orders yet. Orders appear here after
-                payment is completed.
-              </p>
-              <Link to="/portfolio-list">
-                <button className="btn btn-primary">
-                  <i className="fas fa-compass"></i>
-                  Explore Services
-                </button>
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="compact-orders-grid">
-            {myOrders.map((order, index) => (
-              <div className="compact-order-card" key={order.id || index}>
-                {/* Rest of your existing order card rendering code */}
-                {/* ... */}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   getFilteredReceivedOrders = () => {
     const { receivedOrders = [], orderSearchQuery, orderFilter } = this.state;
 
@@ -4492,24 +4419,29 @@ class UserDashboard extends Component {
     console.log("receivedOrders from state:", receivedOrders);
     console.log("receivedOrders length:", receivedOrders.length);
 
+    // Calculate statistics
+    const pendingCount = receivedOrders.filter(
+      (order) => order.status === "pending"
+    ).length;
+    const acceptedCount = receivedOrders.filter(
+      (order) => order.status === "accepted"
+    ).length;
+    const rejectedCount = receivedOrders.filter(
+      (order) => order.status === "rejected"
+    ).length;
+    const completedCount = receivedOrders.filter(
+      (order) => order.status === "completed"
+    ).length;
+    const totalValue = receivedOrders.reduce(
+      (sum, order) => sum + (order.servicePrice || 0),
+      0
+    );
+
     return (
       <div className="dashboard-main-content">
         <div className="dashboard-header">
           <h1>Orders Received</h1>
-          <p className="section-description">
-            Paid orders received from clients ({receivedOrders.length} orders)
-          </p>
           <div className="dashboard-actions">
-            <button
-              className="refresh-btn"
-              onClick={() => {
-                console.log("Manual refresh clicked");
-                this.fetchFreelancerOrders();
-              }}
-              title="Refresh Orders"
-            >
-              <i className="fas fa-sync-alt"></i> Refresh
-            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -4536,6 +4468,40 @@ class UserDashboard extends Component {
           </div>
         </div>
 
+        {/* Statistics Cards */}
+        <div className="orders-summary-stats-compact">
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact pending">
+              <i className="fas fa-clock"></i>
+            </div>
+            <div className="stat-number-compact">{pendingCount}</div>
+            <div className="stat-label-compact">Pending</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact accepted">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="stat-number-compact">{acceptedCount}</div>
+            <div className="stat-label-compact">Accepted</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact rejected">
+              <i className="fas fa-times-circle"></i>
+            </div>
+            <div className="stat-number-compact">{rejectedCount}</div>
+            <div className="stat-label-compact">Rejected</div>
+          </div>
+          <div className="summary-stat-compact">
+            <div className="stat-icon-compact total">
+              <i className="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div className="stat-number-compact">
+              ₹{totalValue.toLocaleString()}
+            </div>
+            <div className="stat-label-compact">Total Value</div>
+          </div>
+        </div>
+
         {receivedOrders.length === 0 ? (
           <div className="empty-state-modern">
             <div className="empty-illustration">
@@ -4554,6 +4520,31 @@ class UserDashboard extends Component {
                 onClick={() => this.fetchFreelancerOrders()}
               >
                 Retry Loading Orders
+              </button>
+            </div>
+          </div>
+        ) : this.getFilteredReceivedOrders().length === 0 ? (
+          <div className="empty-state-modern">
+            <div className="empty-illustration">
+              <div className="empty-icon">
+                <i className="fas fa-search"></i>
+              </div>
+            </div>
+            <div className="empty-content">
+              <h3>No Orders Found</h3>
+              <p>
+                {this.state.orderSearchQuery &&
+                this.state.orderSearchQuery.trim()
+                  ? `No orders match "${this.state.orderSearchQuery}".`
+                  : `No ${this.state.orderFilter} orders found.`}
+              </p>
+              <button
+                className="btn btn-secondary"
+                onClick={() =>
+                  this.setState({ orderSearchQuery: "", orderFilter: "all" })
+                }
+              >
+                Clear Filters
               </button>
             </div>
           </div>
@@ -4862,9 +4853,9 @@ class UserDashboard extends Component {
       <div className="dashboard-main-content">
         <div className="dashboard-header">
           <h1>My Bookings</h1>
-          <p className="section-description">
+          {/* <p className="section-description">
             Services you have booked with freelancers
-          </p>
+          </p> */}
           <div className="dashboard-actions">
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
@@ -4995,10 +4986,10 @@ class UserDashboard extends Component {
                     <h3 className="service-name-compact">
                       {booking.serviceName}
                     </h3>
-                    <div className="service-type-compact">
+                    {/* <div className="service-type-compact">
                       <i className="fas fa-cog"></i>
                       <span>Service Request</span>
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Freelancer Section - This shows the freelancer you booked */}
@@ -5037,10 +5028,6 @@ class UserDashboard extends Component {
                       <p className="freelancer-email-compact">
                         {booking.freelancerEmail}
                       </p>
-                      <div className="freelancer-role-badge">
-                        <i className="fas fa-user-tie"></i>
-                        <span>Freelancer</span>
-                      </div>
                     </div>
                   </div>
 
@@ -5137,21 +5124,6 @@ class UserDashboard extends Component {
                     </button>
                   )}
 
-                  {booking.status === "accepted" && (
-                    <button
-                      className="action-btn-compact message"
-                      onClick={() => {
-                        // You can implement messaging functionality here
-                        alert(
-                          `Contact ${booking.freelancerName} at ${booking.freelancerEmail}`
-                        );
-                      }}
-                    >
-                      <i className="fas fa-envelope"></i>
-                      <span>Contact</span>
-                    </button>
-                  )}
-
                   {booking.status === "rejected" && (
                     <div className="rejection-info">
                       <i className="fas fa-info-circle"></i>
@@ -5237,7 +5209,6 @@ class UserDashboard extends Component {
     }
   };
 
-  // Enhanced error handling with better user feedback
   showOrderError = (error, action = "update order") => {
     console.error(`Error during ${action}:`, error);
 
@@ -5646,6 +5617,14 @@ class UserDashboard extends Component {
     }, 2000);
 
     console.log("Data refresh completed after payment");
+  };
+
+  handleCartUpdate = () => {
+    console.log("=== CART UPDATE EVENT RECEIVED ===");
+    // Add a small delay to ensure cart operations are completed
+    setTimeout(() => {
+      this.refreshCartStatus();
+    }, 500);
   };
 
   renderDashboardContent() {

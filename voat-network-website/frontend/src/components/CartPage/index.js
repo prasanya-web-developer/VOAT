@@ -418,21 +418,27 @@ class CartSidebar extends Component {
         const currentWishlist = await wishlistResponse.json();
         console.log("Current wishlist:", currentWishlist);
 
-        // Find matching wishlist item
+        // Find matching wishlist item with more precise matching
         const matchingWishlistItem = currentWishlist.find((wishlistItem) => {
           const serviceMatch = wishlistItem.service === itemToRemove.category;
           const providerMatch = wishlistItem.provider === itemToRemove.seller;
+          const levelMatch =
+            (wishlistItem.serviceLevel || "Standard") ===
+            (itemToRemove.serviceLevel || "Standard");
 
           console.log("Checking match:", {
             wishlistService: wishlistItem.service,
             cartService: itemToRemove.category,
             wishlistProvider: wishlistItem.provider,
             cartProvider: itemToRemove.seller,
+            wishlistLevel: wishlistItem.serviceLevel || "Standard",
+            cartLevel: itemToRemove.serviceLevel || "Standard",
             serviceMatch,
             providerMatch,
+            levelMatch,
           });
 
-          return serviceMatch && providerMatch;
+          return serviceMatch && providerMatch && levelMatch;
         });
 
         if (matchingWishlistItem) {
@@ -462,12 +468,7 @@ class CartSidebar extends Component {
             JSON.stringify(updatedWishlist)
           );
 
-          // Trigger dashboard wishlist refresh if callback exists
-          if (this.props.onWishlistUpdate) {
-            this.props.onWishlistUpdate();
-          }
-
-          // Dispatch custom event for dashboard to listen
+          // Trigger dashboard wishlist refresh with updated data
           window.dispatchEvent(
             new CustomEvent("wishlistUpdated", {
               detail: { updatedWishlist },
@@ -477,6 +478,9 @@ class CartSidebar extends Component {
           console.log("=== WISHLIST UPDATED AFTER CART REMOVAL ===");
         } else {
           console.log("=== NO MATCHING WISHLIST ITEM FOUND ===");
+
+          // Even if no exact match found, trigger a wishlist refresh to sync cart status
+          window.dispatchEvent(new CustomEvent("wishlistCartSync"));
         }
       }
     } catch (error) {
@@ -539,12 +543,6 @@ class CartSidebar extends Component {
         }
       }
 
-      // Check content type
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
-      }
-
       const result = await response.json();
 
       if (!result.success) {
@@ -567,26 +565,27 @@ class CartSidebar extends Component {
         await this.removeFromWishlistIfExists(itemToRemove);
       }
 
-      // Trigger dashboard orders refresh if callback exists
-      if (this.props.onOrdersUpdate) {
-        this.props.onOrdersUpdate();
-      }
+      // Trigger multiple events for comprehensive sync
+      window.dispatchEvent(
+        new CustomEvent("cartItemRemoved", {
+          detail: {
+            removedItem: itemToRemove,
+            remainingItems: this.state.cartItems.length - 1,
+          },
+        })
+      );
+
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
+
+      // Trigger wishlist cart sync specifically
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("wishlistCartSync"));
+      }, 200);
 
       console.log("Item removed from cart successfully");
     } catch (error) {
       console.error("Error removing item from cart:", error);
-
-      let errorMessage = "Failed to remove item";
-      if (error.name === "TimeoutError") {
-        errorMessage = "Request timed out. Please try again.";
-      } else if (error.message.includes("Failed to fetch")) {
-        errorMessage =
-          "Cannot connect to server. Please check your connection.";
-      } else {
-        errorMessage = error.message;
-      }
-
-      alert("Error removing item from cart: " + errorMessage);
+      alert("Error removing item from cart: " + error.message);
     }
   };
 
@@ -623,22 +622,8 @@ class CartSidebar extends Component {
         }
       );
 
-      console.log("=== CLEAR RESPONSE STATUS ===", response.status);
-
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Cart not found");
-        } else if (response.status >= 500) {
-          throw new Error("Server error. Please try again.");
-        } else {
-          throw new Error(`Failed to clear cart: HTTP ${response.status}`);
-        }
-      }
-
-      // Check content type
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
+        throw new Error(`Failed to clear cart: HTTP ${response.status}`);
       }
 
       const result = await response.json();
@@ -658,26 +643,24 @@ class CartSidebar extends Component {
         await this.removeFromWishlistIfExists(cartItem);
       }
 
-      // Trigger dashboard orders refresh if callback exists
-      if (this.props.onOrdersUpdate) {
-        this.props.onOrdersUpdate();
-      }
+      // Trigger comprehensive sync events
+      window.dispatchEvent(
+        new CustomEvent("cartCleared", {
+          detail: { clearedItems: currentCartItems },
+        })
+      );
+
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
+
+      // Force wishlist cart sync
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("wishlistCartSync"));
+      }, 500);
 
       console.log("Cart cleared successfully");
     } catch (error) {
       console.error("Error clearing cart:", error);
-
-      let errorMessage = "Failed to clear cart";
-      if (error.name === "TimeoutError") {
-        errorMessage = "Request timed out. Please try again.";
-      } else if (error.message.includes("Failed to fetch")) {
-        errorMessage =
-          "Cannot connect to server. Please check your connection.";
-      } else {
-        errorMessage = error.message;
-      }
-
-      alert("Error clearing cart: " + errorMessage);
+      alert("Error clearing cart: " + error.message);
     }
   };
 
@@ -719,6 +702,7 @@ class CartSidebar extends Component {
 
     // Redirect to payment page
     window.location.href = "/payment";
+    window.dispatchEvent(new CustomEvent("cartUpdated"));
   };
 
   // In your Payment component
