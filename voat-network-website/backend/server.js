@@ -940,6 +940,28 @@ app.post(
         currentRole, // Add this field
       } = req.body;
 
+      // Add this right after extracting req.body variables
+      console.log("=== PORTFOLIO ROUTE DEBUG ===");
+      console.log("User ID received:", userId);
+      console.log("Current Role received:", currentRole);
+      console.log("Has files:", !!req.files);
+      console.log("All body fields:", Object.keys(req.body));
+
+      // Validate required fields
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid user ID format",
+        });
+      }
+
       if (!name || !profession || !email) {
         return res.status(400).json({
           success: false,

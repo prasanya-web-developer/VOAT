@@ -2780,23 +2780,28 @@ class UserDashboard extends Component {
       const { portfolioFormData, userData, selectedWorkFiles } = this.state;
       const baseUrl = this.state.baseUrl || "http://localhost:5000";
 
+      console.log("=== PORTFOLIO SUBMISSION DEBUG ===");
+      console.log("User data:", userData);
+      console.log("Portfolio form data:", portfolioFormData);
+      console.log("Selected work files:", selectedWorkFiles?.length || 0);
+
+      if (!userData || !userData.id) {
+        throw new Error("User data not available. Please login again.");
+      }
+
       const formData = new FormData();
 
       // Add existing form data fields
       formData.append("name", portfolioFormData.name || "");
       formData.append("profession", portfolioFormData.profession || "");
       formData.append("headline", portfolioFormData.headline || "");
-      formData.append("email", portfolioFormData.email);
+      formData.append("email", portfolioFormData.email || "");
       formData.append("workExperience", portfolioFormData.workExperience || "");
       formData.append("portfolioLink", portfolioFormData.portfolioLink || "");
       formData.append("about", portfolioFormData.about || "");
-
-      if (userData && userData.id) {
-        formData.append("userId", userData.id);
-      }
-
-      // Add current role to check if it needs to be changed
-      formData.append("currentRole", userData.role || "");
+      formData.append("userId", userData.id);
+      formData.append("currentRole", userData.role || ""); // This was missing
+      formData.append("isNewSubmission", "true");
 
       // Add profile image handling
       if (userData.profileImage) {
@@ -2808,8 +2813,6 @@ class UserDashboard extends Component {
         formData.append("userName", userData.name || "User");
         formData.append("hasProfileImage", "false");
       }
-
-      formData.append("isNewSubmission", "true");
 
       // Add service data
       if (
@@ -2824,34 +2827,53 @@ class UserDashboard extends Component {
         formData.append("service", JSON.stringify(service));
       }
 
-      // Add work files
+      // Add work files with proper validation
       if (selectedWorkFiles && selectedWorkFiles.length > 0) {
         selectedWorkFiles.forEach((file, index) => {
-          formData.append(`workFiles`, file);
+          if (file && file instanceof File) {
+            formData.append(`workFiles`, file);
+          } else {
+            console.warn(`Invalid file at index ${index}:`, file);
+          }
         });
+      }
+
+      // Log what we're sending
+      console.log("Form data being sent:");
+      for (let [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(key, "File:", value.name, value.size, "bytes");
+        } else {
+          console.log(key, value);
+        }
       }
 
       // Submit portfolio
       const response = await fetch(`${baseUrl}/api/portfolio`, {
         method: "POST",
         body: formData,
-        headers: {
-          Accept: "application/json",
-        },
+        // Don't set Content-Type header - let browser set it for FormData
       });
 
+      console.log("Response status:", response.status);
+
       if (!response.ok) {
-        let errorMessage = `HTTP error ${response.status}`;
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+
+        let errorMessage;
         try {
-          const errorData = await response.text();
-          errorMessage = `${errorMessage}: ${errorData}`;
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || `HTTP error ${response.status}`;
         } catch (e) {
-          // Ignore error parsing body
+          errorMessage = errorText || `HTTP error ${response.status}`;
         }
+
         throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log("Success response:", result);
 
       // Clear portfolio status timeout
       if (this.portfolioStatusTimeout) {
@@ -2893,12 +2915,18 @@ class UserDashboard extends Component {
       });
     } catch (error) {
       console.error("Portfolio submission error:", error);
+
       this.setState({
         isLoading: false,
         error: error.message,
         uploadingWorks: false,
       });
-      alert(`Failed to submit portfolio: ${error.message}`);
+
+      // Show user-friendly notification instead of alert
+      this.showNotification(
+        error.message || "Failed to submit portfolio",
+        "error"
+      );
     }
   };
 
