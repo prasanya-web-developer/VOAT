@@ -84,7 +84,6 @@ class UserDashboard extends Component {
     showMobileSidebar: false,
     wishlistLoading: false,
     cartItems: [],
-    showPortfolioSuccessOverlay: false,
   };
 
   componentDidMount() {
@@ -196,10 +195,6 @@ class UserDashboard extends Component {
 
     const freelancerId = item.freelancerId || item.serviceId;
     return userData.id === freelancerId;
-  };
-
-  closePortfolioSuccessOverlay = () => {
-    this.setState({ showPortfolioSuccessOverlay: false });
   };
 
   // Method to start cross-browser synchronization
@@ -1060,7 +1055,6 @@ class UserDashboard extends Component {
       }
     }
   };
-
   fetchPortfolioStatus = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {
@@ -2780,28 +2774,20 @@ class UserDashboard extends Component {
       const { portfolioFormData, userData, selectedWorkFiles } = this.state;
       const baseUrl = this.state.baseUrl || "http://localhost:5000";
 
-      console.log("=== PORTFOLIO SUBMISSION DEBUG ===");
-      console.log("User data:", userData);
-      console.log("Portfolio form data:", portfolioFormData);
-      console.log("Selected work files:", selectedWorkFiles?.length || 0);
-
-      if (!userData || !userData.id) {
-        throw new Error("User data not available. Please login again.");
-      }
-
       const formData = new FormData();
 
       // Add existing form data fields
       formData.append("name", portfolioFormData.name || "");
       formData.append("profession", portfolioFormData.profession || "");
       formData.append("headline", portfolioFormData.headline || "");
-      formData.append("email", portfolioFormData.email || "");
+      formData.append("email", portfolioFormData.email);
       formData.append("workExperience", portfolioFormData.workExperience || "");
       formData.append("portfolioLink", portfolioFormData.portfolioLink || "");
       formData.append("about", portfolioFormData.about || "");
-      formData.append("userId", userData.id);
-      formData.append("currentRole", userData.role || ""); // This was missing
-      formData.append("isNewSubmission", "true");
+
+      if (userData && userData.id) {
+        formData.append("userId", userData.id);
+      }
 
       // Add profile image handling
       if (userData.profileImage) {
@@ -2813,6 +2799,8 @@ class UserDashboard extends Component {
         formData.append("userName", userData.name || "User");
         formData.append("hasProfileImage", "false");
       }
+
+      formData.append("isNewSubmission", "true");
 
       // Add service data
       if (
@@ -2827,74 +2815,44 @@ class UserDashboard extends Component {
         formData.append("service", JSON.stringify(service));
       }
 
-      // Add work files with proper validation
+      // ✅ FIXED: Add work files with proper field name
       if (selectedWorkFiles && selectedWorkFiles.length > 0) {
         selectedWorkFiles.forEach((file, index) => {
-          if (file && file instanceof File) {
-            formData.append(`workFiles`, file);
-          } else {
-            console.warn(`Invalid file at index ${index}:`, file);
-          }
+          formData.append(`workFiles`, file); // Use 'workFiles' to match backend expectation
         });
-      }
-
-      // Log what we're sending
-      console.log("Form data being sent:");
-      for (let [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          console.log(key, "File:", value.name, value.size, "bytes");
-        } else {
-          console.log(key, value);
-        }
       }
 
       // Submit portfolio
       const response = await fetch(`${baseUrl}/api/portfolio`, {
         method: "POST",
         body: formData,
-        // Don't set Content-Type header - let browser set it for FormData
+        headers: {
+          Accept: "application/json",
+        },
       });
 
-      console.log("Response status:", response.status);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error response:", errorText);
-
-        let errorMessage;
+        let errorMessage = `HTTP error ${response.status}`;
         try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || `HTTP error ${response.status}`;
+          const errorData = await response.text();
+          errorMessage = `${errorMessage}: ${errorData}`;
         } catch (e) {
-          errorMessage = errorText || `HTTP error ${response.status}`;
+          // Ignore error parsing body
         }
-
         throw new Error(errorMessage);
       }
 
       const result = await response.json();
-      console.log("Success response:", result);
 
       // Clear portfolio status timeout
       if (this.portfolioStatusTimeout) {
         clearTimeout(this.portfolioStatusTimeout);
       }
 
-      // Update userData if role was changed
-      if (result.roleChanged) {
-        const updatedUserData = {
-          ...userData,
-          role: "Freelancer/Service Provider",
-        };
-        localStorage.setItem("user", JSON.stringify(updatedUserData));
-        this.setState({ userData: updatedUserData });
-      }
-
-      // Update state and show success overlay
+      // Update state
       this.setState({
         isLoading: false,
         showPortfolioForm: false,
-        showPortfolioSuccessOverlay: true,
         portfolioStatus: "pending",
         selectedWorkFiles: [],
         workPreviews: [],
@@ -2908,25 +2866,21 @@ class UserDashboard extends Component {
       // Add notification
       this.addNotification({
         type: "portfolio",
-        message: result.roleChanged
-          ? "Your portfolio has been submitted and profile updated to Freelancer!"
-          : "Your portfolio has been submitted for review!",
+        message: "Your portfolio has been submitted for review!",
         time: new Date().toISOString(),
       });
+
+      alert(
+        "Portfolio submitted successfully! It will be reviewed by the admin."
+      );
     } catch (error) {
       console.error("Portfolio submission error:", error);
-
       this.setState({
         isLoading: false,
         error: error.message,
         uploadingWorks: false,
       });
-
-      // Show user-friendly notification instead of alert
-      this.showNotification(
-        error.message || "Failed to submit portfolio",
-        "error"
-      );
+      alert(`Failed to submit portfolio: ${error.message}`);
     }
   };
 
@@ -5979,44 +5933,6 @@ class UserDashboard extends Component {
               ? this.renderError()
               : this.renderDashboardContent()}
           </div>
-
-          {/* Portfolio Success Overlay */}
-          {this.state.showPortfolioSuccessOverlay && (
-            <div className="portfolio-success-overlay">
-              <div className="portfolio-success-modal">
-                <div className="success-icon">
-                  <div className="checkmark-circle">
-                    <i className="fas fa-check"></i>
-                  </div>
-                </div>
-                <div className="success-content">
-                  <h2>Portfolio Submitted Successfully!</h2>
-                  <p>
-                    Your portfolio has been submitted to the admin for review.
-                    {this.state.userData?.role === "Freelancer/Service Provider"
-                      ? " Your profile has been updated to Freelancer."
-                      : ""}
-                  </p>
-                  <div className="success-details">
-                    <div className="detail-item">
-                      <i className="fas fa-clock"></i>
-                      <span>Status: Under Review</span>
-                    </div>
-                    <div className="detail-item">
-                      <i className="fas fa-user-tie"></i>
-                      <span>Profile: Freelancer/Service Provider</span>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={this.closePortfolioSuccessOverlay}
-                  >
-                    Continue to Dashboard
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Order Details Overlay */}
