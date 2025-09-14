@@ -84,6 +84,7 @@ class UserDashboard extends Component {
     showMobileSidebar: false,
     wishlistLoading: false,
     cartItems: [],
+    showPortfolioSuccessOverlay: false,
   };
 
   componentDidMount() {
@@ -187,6 +188,18 @@ class UserDashboard extends Component {
     ) {
       this.setState({ showNotifications: false });
     }
+  };
+
+  isOwnService = (item) => {
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!userData || !userData.id) return false;
+
+    const freelancerId = item.freelancerId || item.serviceId;
+    return userData.id === freelancerId;
+  };
+
+  closePortfolioSuccessOverlay = () => {
+    this.setState({ showPortfolioSuccessOverlay: false });
   };
 
   // Method to start cross-browser synchronization
@@ -1047,6 +1060,7 @@ class UserDashboard extends Component {
       }
     }
   };
+
   fetchPortfolioStatus = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {
@@ -2781,6 +2795,9 @@ class UserDashboard extends Component {
         formData.append("userId", userData.id);
       }
 
+      // Add current role to check if it needs to be changed
+      formData.append("currentRole", userData.role || "");
+
       // Add profile image handling
       if (userData.profileImage) {
         formData.append("profileImagePath", userData.profileImage);
@@ -2807,10 +2824,10 @@ class UserDashboard extends Component {
         formData.append("service", JSON.stringify(service));
       }
 
-      // ✅ FIXED: Add work files with proper field name
+      // Add work files
       if (selectedWorkFiles && selectedWorkFiles.length > 0) {
         selectedWorkFiles.forEach((file, index) => {
-          formData.append(`workFiles`, file); // Use 'workFiles' to match backend expectation
+          formData.append(`workFiles`, file);
         });
       }
 
@@ -2841,10 +2858,21 @@ class UserDashboard extends Component {
         clearTimeout(this.portfolioStatusTimeout);
       }
 
-      // Update state
+      // Update userData if role was changed
+      if (result.roleChanged) {
+        const updatedUserData = {
+          ...userData,
+          role: "Freelancer/Service Provider",
+        };
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+        this.setState({ userData: updatedUserData });
+      }
+
+      // Update state and show success overlay
       this.setState({
         isLoading: false,
         showPortfolioForm: false,
+        showPortfolioSuccessOverlay: true,
         portfolioStatus: "pending",
         selectedWorkFiles: [],
         workPreviews: [],
@@ -2858,13 +2886,11 @@ class UserDashboard extends Component {
       // Add notification
       this.addNotification({
         type: "portfolio",
-        message: "Your portfolio has been submitted for review!",
+        message: result.roleChanged
+          ? "Your portfolio has been submitted and profile updated to Freelancer!"
+          : "Your portfolio has been submitted for review!",
         time: new Date().toISOString(),
       });
-
-      alert(
-        "Portfolio submitted successfully! It will be reviewed by the admin."
-      );
     } catch (error) {
       console.error("Portfolio submission error:", error);
       this.setState({
@@ -3503,19 +3529,6 @@ class UserDashboard extends Component {
         <div className="dashboard-header">
           <h1>My Wishlist</h1>
           <div className="dashboard-actions">
-            <button
-              className="btn btn-secondary"
-              onClick={this.forceSyncWishlist}
-              disabled={wishlistLoading}
-              title="Sync wishlist across all browsers"
-            >
-              <i
-                className={`fas fa-sync-alt ${
-                  wishlistLoading ? "fa-spin" : ""
-                }`}
-              ></i>
-              {wishlistLoading ? "Syncing..." : "Sync"}
-            </button>
             <div className="search-container">
               <i className="fas fa-search search-icon"></i>
               <input
@@ -3727,6 +3740,15 @@ class UserDashboard extends Component {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       if (!userData || !userData.id) {
         this.showNotification("Please login to add items to cart", "error");
+        return;
+      }
+
+      // Check if user is trying to add their own service
+      if (this.isOwnService(item)) {
+        this.showNotification(
+          "You cannot add your own service to cart",
+          "error"
+        );
         return;
       }
 
@@ -5929,6 +5951,44 @@ class UserDashboard extends Component {
               ? this.renderError()
               : this.renderDashboardContent()}
           </div>
+
+          {/* Portfolio Success Overlay */}
+          {this.state.showPortfolioSuccessOverlay && (
+            <div className="portfolio-success-overlay">
+              <div className="portfolio-success-modal">
+                <div className="success-icon">
+                  <div className="checkmark-circle">
+                    <i className="fas fa-check"></i>
+                  </div>
+                </div>
+                <div className="success-content">
+                  <h2>Portfolio Submitted Successfully!</h2>
+                  <p>
+                    Your portfolio has been submitted to the admin for review.
+                    {this.state.userData?.role === "Freelancer/Service Provider"
+                      ? " Your profile has been updated to Freelancer."
+                      : ""}
+                  </p>
+                  <div className="success-details">
+                    <div className="detail-item">
+                      <i className="fas fa-clock"></i>
+                      <span>Status: Under Review</span>
+                    </div>
+                    <div className="detail-item">
+                      <i className="fas fa-user-tie"></i>
+                      <span>Profile: Freelancer/Service Provider</span>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={this.closePortfolioSuccessOverlay}
+                  >
+                    Continue to Dashboard
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Order Details Overlay */}

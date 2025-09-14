@@ -958,7 +958,8 @@
 @media (max-width: 968px) {
   .mobile-filter-toggle {
     display: flex;
-    top: 80px;
+    top: 130px;
+    left: 250px;
   }
 
   .portfolios-main-container {
@@ -1023,6 +1024,10 @@
     padding: 20px 16px;
   }
 
+  .filters-sidebar.mobile-open {
+    top: 90px;
+  }
+
   .card-actions {
     flex-direction: column;
     gap: 8px;
@@ -1033,14 +1038,19 @@
     font-size: 13px;
     padding: 8px 12px;
   }
+
+  .amount-checkboxes {
+    gap: 0px;
+  }
 }
 
 @media (max-width: 480px) {
   .mobile-filter-toggle {
     top: 120px;
-    left: 130px;
+    left: 110px;
     padding: 10px 12px;
     font-size: 0.8rem;
+    z-index: 1;
   }
 
   .portfolios-content {
@@ -1505,7 +1515,56 @@
   }
 
   .modal-title-section h2 {
-    font-size: 1.25rem;
+    font-size: 12px;
+  }
+
+  .modal-title-section p {
+    font-size: 12px;
+    margin-top: 20px;
+  }
+
+  .modal-close-btn {
+    height: 34px;
+    width: 34px;
+  }
+
+  .modal-title-section h2 i {
+    font-size: 1rem;
+  }
+
+  .form-section h3 {
+    font-size: 12px;
+  }
+
+  .form-group input {
+    font-size: 0.675rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .form-group {
+    margin-bottom: 10px;
+  }
+
+  .form-group label {
+    font-size: 0.75rem;
+    margin-bottom: 0px;
+  }
+
+  .form-section {
+    margin-bottom: 0px;
+  }
+
+  .form-group select {
+    font-size: 12px;
+  }
+
+  .form-group textarea {
+    font-size: 12px;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .quick-booking-form {
+    gap: 1rem;
   }
 }
 
@@ -1581,4 +1640,80 @@
 .filter-checkbox:checked + .voat-checkbox::after {
   color: #ffd700 !important;
   font-weight: 900;
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  position: relative;
+}
+
+.filters-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Container for buttons */
+.filters-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reset-filters-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-filters-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+  transform: translateY(-1px);
+}
+
+/* Mobile Filter Close Button - Updated */
+.mobile-filter-close {
+  display: none;
+  width: 28px;
+  height: 28px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.mobile-filter-close:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+/* Show close button on mobile when sidebar is open */
+@media (max-width: 968px) {
+  .filters-sidebar.mobile-open .mobile-filter-close {
+    display: flex;
+  }
 }

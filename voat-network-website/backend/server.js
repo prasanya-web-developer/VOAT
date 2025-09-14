@@ -920,7 +920,7 @@ app.post(
   upload.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
-    { name: "workFiles", maxCount: 10 }, // ✅ This matches the frontend
+    { name: "workFiles", maxCount: 10 },
   ]),
   async (req, res) => {
     try {
@@ -937,6 +937,7 @@ app.post(
         service,
         hasProfileImage,
         profileImagePath,
+        currentRole, // Add this field
       } = req.body;
 
       if (!name || !profession || !email) {
@@ -951,7 +952,7 @@ app.post(
       const coverImageFile = req.files?.coverImage?.[0];
       const workFiles = req.files?.workFiles || [];
 
-      console.log("✅ Work files received:", workFiles.length);
+      console.log("Work files received:", workFiles.length);
 
       // Prepare update data
       const portfolioData = {
@@ -975,7 +976,7 @@ app.post(
         portfolioData.coverImage = `/uploads/${coverImageFile.filename}`;
       }
 
-      // ✅ FIXED: Process work files correctly
+      // Process work files correctly
       const workItems = workFiles.map((file) => {
         const isVideo = file.mimetype.startsWith("video/");
         return {
@@ -988,7 +989,7 @@ app.post(
         };
       });
 
-      console.log("✅ Processed work items:", workItems.length);
+      console.log("Processed work items:", workItems.length);
 
       // Set status to pending for new submissions
       if (isNewSubmission === "true") {
@@ -1038,7 +1039,7 @@ app.post(
                 existingPortfolio.services.push(newService);
               }
 
-              // ✅ FIXED: Add work items to existing portfolio
+              // Add work items to existing portfolio
               if (!existingPortfolio.works) {
                 existingPortfolio.works = [];
               }
@@ -1050,7 +1051,7 @@ app.post(
               Object.assign(existingPortfolio, portfolioData);
               portfolio = await existingPortfolio.save();
             } else {
-              // ✅ FIXED: Create new portfolio with works
+              // Create new portfolio with works
               portfolio = new PortfolioSubmission({
                 ...portfolioData,
                 userId,
@@ -1063,7 +1064,7 @@ app.post(
               await portfolio.save();
             }
           } else {
-            // ✅ FIXED: Handle portfolio without service but with works
+            // Handle portfolio without service but with works
             const existingPortfolio = await PortfolioSubmission.findOne({
               userId,
             });
@@ -1144,14 +1145,100 @@ app.post(
         await portfolio.save();
       }
 
+      // CHECK AND UPDATE USER ROLE - NEW FUNCTIONALITY
+      let roleChanged = false;
+      if (
+        userId &&
+        currentRole === "Client/Individual" &&
+        isNewSubmission === "true"
+      ) {
+        try {
+          console.log(
+            `Attempting to change user ${userId} role from Client to Freelancer`
+          );
+
+          const userUpdateResult = await User.findByIdAndUpdate(
+            userId,
+            { role: "Freelancer/Service Provider" },
+            { new: true }
+          );
+
+          if (userUpdateResult) {
+            roleChanged = true;
+            console.log(
+              `Successfully updated user ${userId} role from Client to Freelancer`
+            );
+
+            // Create notification for role change
+            try {
+              await createNotification({
+                userId: userId,
+                type: "system",
+                title: "Profile Role Updated",
+                message:
+                  "Your profile has been updated to Freelancer/Service Provider after portfolio submission",
+                relatedId: portfolio._id.toString(),
+                metadata: {
+                  action: "role_change",
+                  previousRole: "Client/Individual",
+                  newRole: "Freelancer/Service Provider",
+                  portfolioId: portfolio._id.toString(),
+                  timestamp: new Date().toISOString(),
+                },
+              });
+            } catch (notificationError) {
+              console.error(
+                "Error creating role change notification:",
+                notificationError
+              );
+              // Don't fail the portfolio submission for notification errors
+            }
+          } else {
+            console.log(`User ${userId} not found for role update`);
+          }
+        } catch (roleUpdateError) {
+          console.error("Error updating user role:", roleUpdateError);
+          // Don't fail the portfolio submission for role update errors
+        }
+      }
+
+      // Create portfolio submission notification
+      if (userId) {
+        try {
+          await createNotification({
+            userId: userId,
+            type: "portfolio",
+            title: "Portfolio Submitted Successfully",
+            message: roleChanged
+              ? "Your portfolio has been submitted for review and your profile has been updated to Freelancer!"
+              : "Your portfolio has been submitted for admin review",
+            relatedId: portfolio._id.toString(),
+            metadata: {
+              action: "portfolio_submit",
+              portfolioId: portfolio._id.toString(),
+              roleChanged: roleChanged,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch (notificationError) {
+          console.error(
+            "Error creating portfolio notification:",
+            notificationError
+          );
+        }
+      }
+
       res.status(200).json({
         success: true,
         message:
           isNewSubmission === "true"
-            ? "Portfolio submitted successfully and pending admin approval"
+            ? roleChanged
+              ? "Portfolio submitted successfully, pending admin approval. Profile updated to Freelancer!"
+              : "Portfolio submitted successfully and pending admin approval"
             : "Portfolio updated successfully",
         portfolio: portfolio,
         worksUploaded: workItems.length,
+        roleChanged: roleChanged, // Include this in response
       });
     } catch (error) {
       console.error("Portfolio operation error:", error);

@@ -2062,6 +2062,7 @@
 
   .adminpanel-header-content {
     padding: 0.875rem;
+    padding-top: 40px;
   }
 
   .adminpanel-content-wrapper {
@@ -2102,9 +2103,9 @@
     font-size: 0.625rem;
   }
 
-  .adminpanel-tab-btn span {
+  /* .adminpanel-tab-btn span {
     display: none;
-  }
+  } */
 
   .adminpanel-submission-card,
   .adminpanel-quickbooking-card {
@@ -2132,7 +2133,7 @@
   }
 
   .adminpanel-admin-info {
-    flex-direction: column;
+    flex-direction: row;
     text-align: center;
     gap: 0.75rem;
     padding: 0.625rem;
@@ -2162,6 +2163,30 @@
     min-width: 100px;
     padding: 0.625rem 1rem;
     font-size: 0.625rem;
+  }
+
+  .adminpanel-filter-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* .adminpanel-profile-section {
+    display: flex;
+    flex-direction: row;
+  } */
+
+  /* .adminpanel-card-header {
+    display: flex;
+    flex-direction: row;
+  } */
+
+  .adminpanel-modal-header {
+    padding: 1rem;
+  }
+
+  .adminpanel-modal-header h2 {
+    font-size: 14px;
+    gap: 0.3rem;
   }
 }
 
@@ -2740,5 +2765,19 @@ select,
     width: 32px;
     height: 32px;
     font-size: 12px;
+  }
+
+  .adminpanel-work-service {
+    font-size: 9px;
+  }
+
+  .adminpanel-work-type {
+    font-size: 9px;
+    gap: 2px;
+  }
+
+  .adminpanel-work-date {
+    font-size: 9px;
+    gap: 2px;
   }
 }

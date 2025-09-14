@@ -173,7 +173,35 @@ class PortfolioList extends Component {
     this.loadWishlist();
     this.handleUrlParams();
     this.loadCurrentUser();
+    document.addEventListener("click", this.handleClickOutside);
   }
+
+  componentWillUnmount() {
+    document.removeEventListener("click", this.handleClickOutside);
+  }
+
+  handleClickOutside = (event) => {
+    const { isMobileFilterOpen } = this.state;
+
+    if (isMobileFilterOpen) {
+      const filtersSidebar = document.querySelector(".filters-sidebar");
+      const mobileFilterToggle = document.querySelector(
+        ".mobile-filter-toggle"
+      );
+
+      if (
+        filtersSidebar &&
+        !filtersSidebar.contains(event.target) &&
+        !mobileFilterToggle?.contains(event.target)
+      ) {
+        this.setState({ isMobileFilterOpen: false });
+      }
+    }
+  };
+
+  closeMobileFilters = () => {
+    this.setState({ isMobileFilterOpen: false });
+  };
 
   loadCurrentUser = () => {
     try {
@@ -203,6 +231,14 @@ class PortfolioList extends Component {
     }
 
     this.setState({ isQuickBookingModalOpen: true });
+  };
+
+  isOwnProfile = (portfolio) => {
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    if (!userData || !userData.id) return false;
+
+    const portfolioUserId = portfolio.userId || portfolio._id || portfolio.id;
+    return userData.id === portfolioUserId;
   };
 
   closeQuickBookingModal = () => {
@@ -1117,6 +1153,15 @@ class PortfolioList extends Component {
       return;
     }
 
+    // Check if user is trying to add their own profile
+    if (this.isOwnProfile(portfolio)) {
+      this.showNotification(
+        "You cannot add your own profile to wishlist",
+        "error"
+      );
+      return;
+    }
+
     const { wishlist } = this.state;
     const portfolioId = portfolio.userId || portfolio._id || portfolio.id;
 
@@ -1429,6 +1474,13 @@ class PortfolioList extends Component {
         {this.renderNotification()}
         {this.renderQuickBookingModal()}
 
+        <div
+          className={`mobile-filter-backdrop ${
+            isMobileFilterOpen ? "active" : ""
+          }`}
+          onClick={this.closeMobileFilters}
+        ></div>
+
         <div className="portfolios-main-container">
           {/* Mobile Filter Toggle */}
           <button
@@ -1464,19 +1516,33 @@ class PortfolioList extends Component {
           >
             <div className="filters-header">
               <h3>Filter Freelancers</h3>
-              <button className="reset-filters-btn" onClick={this.resetFilters}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+
+              <div className="filters-header-buttons">
+                <button
+                  className="reset-filters-btn"
+                  onClick={this.resetFilters}
                 >
-                  <path d="M3 6h18M8 12h8M11 18h2" />
-                </svg>
-                Clear All
-              </button>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M3 6h18M8 12h8M11 18h2" />
+                  </svg>
+                  Clear All
+                </button>
+
+                <button
+                  className="mobile-filter-close"
+                  onClick={this.closeMobileFilters}
+                  title="Close Filters"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             {/* Show active filter indicator */}
@@ -1813,6 +1879,7 @@ class PortfolioList extends Component {
                         <Link
                           to={`/my-portfolio/${userId}`}
                           className="view-portfolio-btn"
+                          target="_blank"
                         >
                           View Portfolio
                         </Link>

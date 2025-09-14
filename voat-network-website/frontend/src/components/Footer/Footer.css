@@ -314,4 +314,16 @@
   .footer-content-container {
     gap: 25px;
   }
+
+  .footer-links-container {
+    display: flex;
+    flex-direction: row;
+    align-self: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .footer-bottom-link {
+    font-size: 9px;
+  }
 }

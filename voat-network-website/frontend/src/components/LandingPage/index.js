@@ -527,8 +527,6 @@ class LandingPage extends Component {
         title: (
           <>
             Welcome Back,
-            {/* <br />
-            <span className="landing-page-text-gradient">Freelancer!</span> */}
             <br />
             Showcase Your{" "}
             <span className="landing-page-text-gradient">Skills</span>
@@ -560,11 +558,9 @@ class LandingPage extends Component {
         title: (
           <>
             Welcome Back,
-            {/* <br />
-            <span className="landing-page-text-gradient">Client!</span> */}
             <br />
-            Find Perfect{" "}
-            <span className="landing-page-text-gradient">Talent</span>
+            Find Perfect
+            <span className="landing-page-text-gradient"> Talent</span>
           </>
         ),
         description:
@@ -828,7 +824,15 @@ class LandingPage extends Component {
           <NavBar />
         </ErrorBoundary>
         <div className="landing-page">
-          <section className="landing-page-hero">
+          <section
+            className={`landing-page-hero ${
+              this.state.isLoggedIn && userType === "freelancer"
+                ? "freelancer-hero"
+                : this.state.isLoggedIn && userType === "client"
+                ? "client-hero"
+                : ""
+            }`}
+          >
             {/* Only show carousel for public users */}
             {!this.state.isLoggedIn && (
               <>
