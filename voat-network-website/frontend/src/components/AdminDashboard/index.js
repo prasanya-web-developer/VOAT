@@ -711,13 +711,9 @@ class AdminPanel extends Component {
       if (response.ok) {
         detailedSubmission = await response.json();
         console.log("Detailed submission data:", detailedSubmission);
-      } else {
-        console.warn(
-          "Failed to fetch detailed submission, using original data"
-        );
       }
 
-      // If we have a userId, fetch fresh user data with profile image and works
+      // FIXED: Ensure works are included
       if (detailedSubmission.userId) {
         try {
           const userResponse = await fetch(
@@ -728,12 +724,11 @@ class AdminPanel extends Component {
             const userData = await userResponse.json();
             console.log(`Fresh user data for modal:`, userData);
 
-            // Update submission with fresh profile image and works
             detailedSubmission = {
               ...detailedSubmission,
               profileImage:
                 userData.user?.profileImage || detailedSubmission.profileImage,
-              works: userData.works || detailedSubmission.works || [], // Add works data
+              works: detailedSubmission.works || userData.works || [], // Prioritize submission works
             };
           }
         } catch (error) {

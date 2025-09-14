@@ -920,7 +920,7 @@ app.post(
   upload.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
-    { name: "workFiles", maxCount: 10 }, // ✅ This matches the frontend
+    { name: "workFiles", maxCount: 10 },
   ]),
   async (req, res) => {
     try {
@@ -937,6 +937,8 @@ app.post(
         service,
         hasProfileImage,
         profileImagePath,
+        profileInitials,
+        userName,
       } = req.body;
 
       if (!name || !profession || !email) {
@@ -951,7 +953,7 @@ app.post(
       const coverImageFile = req.files?.coverImage?.[0];
       const workFiles = req.files?.workFiles || [];
 
-      console.log("✅ Work files received:", workFiles.length);
+      console.log("Work files received:", workFiles.length);
 
       // Prepare update data
       const portfolioData = {
@@ -975,10 +977,21 @@ app.post(
         portfolioData.coverImage = `/uploads/${coverImageFile.filename}`;
       }
 
-      // ✅ FIXED: Process work files correctly
-      const workItems = workFiles.map((file) => {
+      // Process work files correctly with file size validation
+      const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+      const workItems = [];
+
+      for (const file of workFiles) {
+        // Check file size
+        if (file.size > MAX_SIZE) {
+          return res.status(400).json({
+            success: false,
+            message: `File "${file.originalname}" exceeds 50MB limit. Please use smaller files.`,
+          });
+        }
+
         const isVideo = file.mimetype.startsWith("video/");
-        return {
+        const workItem = {
           url: `/uploads/${file.filename}`,
           thumbnail: isVideo ? "" : `/uploads/${file.filename}`,
           title: file.originalname.split(".")[0],
@@ -986,9 +999,10 @@ app.post(
           serviceName: "", // Will be filled from form data if available
           uploadedDate: new Date(),
         };
-      });
+        workItems.push(workItem);
+      }
 
-      console.log("✅ Processed work items:", workItems.length);
+      console.log("Processed work items:", workItems.length);
 
       // Set status to pending for new submissions
       if (isNewSubmission === "true") {
@@ -1038,7 +1052,7 @@ app.post(
                 existingPortfolio.services.push(newService);
               }
 
-              // ✅ FIXED: Add work items to existing portfolio
+              // Add work items to existing portfolio
               if (!existingPortfolio.works) {
                 existingPortfolio.works = [];
               }
@@ -1050,7 +1064,7 @@ app.post(
               Object.assign(existingPortfolio, portfolioData);
               portfolio = await existingPortfolio.save();
             } else {
-              // ✅ FIXED: Create new portfolio with works
+              // Create new portfolio with works
               portfolio = new PortfolioSubmission({
                 ...portfolioData,
                 userId,
@@ -1063,7 +1077,7 @@ app.post(
               await portfolio.save();
             }
           } else {
-            // ✅ FIXED: Handle portfolio without service but with works
+            // Handle portfolio without service but with works
             const existingPortfolio = await PortfolioSubmission.findOne({
               userId,
             });
@@ -1095,25 +1109,15 @@ app.post(
           }
         } else {
           // Normal update - add works if any
-          const existingPortfolio = await PortfolioSubmission.findOne({
-            userId,
-          });
+          const updateData = { ...portfolioData };
 
-          if (existingPortfolio && workItems.length > 0) {
-            if (!existingPortfolio.works) {
-              existingPortfolio.works = [];
-            }
-            existingPortfolio.works.push(...workItems);
+          if (workItems.length > 0) {
+            updateData.$push = { works: { $each: workItems } };
           }
 
           portfolio = await PortfolioSubmission.findOneAndUpdate(
             { userId },
-            {
-              ...portfolioData,
-              ...(workItems.length > 0 && {
-                $push: { works: { $each: workItems } },
-              }),
-            },
+            updateData,
             { upsert: true, new: true }
           );
         }
@@ -1142,6 +1146,26 @@ app.post(
           });
         }
         await portfolio.save();
+      }
+
+      // Create notification for portfolio submission
+      if (userId && isNewSubmission === "true") {
+        try {
+          await createNotification({
+            userId: userId,
+            type: "portfolio",
+            title: "Portfolio Submitted",
+            message: "Your portfolio has been submitted and is pending review",
+            relatedId: portfolio._id.toString(),
+            metadata: {
+              action: "portfolio_submission",
+              worksCount: workItems.length,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch (notificationError) {
+          console.error("Error creating notification:", notificationError);
+        }
       }
 
       res.status(200).json({
@@ -1240,7 +1264,7 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the portfolio submission by ID
+    // Find the portfolio submission by ID and populate works
     const submission = await PortfolioSubmission.findById(id);
 
     if (!submission) {
@@ -1249,24 +1273,33 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
 
     // Clean up any potential service duplicates before sending
     if (submission.services && Array.isArray(submission.services)) {
-      // Create a Map to store unique services by name
       const uniqueServicesMap = new Map();
 
       submission.services.forEach((service) => {
-        // Use service name as unique key and only keep the latest version
         if (service.name) {
           uniqueServicesMap.set(service.name, service);
         }
       });
 
-      // Replace the services array with de-duplicated services
       submission.services = Array.from(uniqueServicesMap.values());
-
-      // Save the de-duplicated services back to the database
       await submission.save();
     }
 
-    // Return the cleaned submission
+    // FIXED: Ensure works are properly formatted
+    if (submission.works) {
+      submission.works = submission.works.map((work) => ({
+        ...work,
+        url:
+          work.url && work.url.startsWith("/")
+            ? work.url
+            : `/uploads/${work.url}`,
+        thumbnail:
+          work.thumbnail ||
+          (work.type === "image" ? work.url : "/api/placeholder/150/150"),
+      }));
+    }
+
+    // Return the cleaned submission with works
     res.status(200).json(submission);
   } catch (error) {
     console.error("Error fetching portfolio submission:", error);

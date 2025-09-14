@@ -5700,6 +5700,65 @@ class UserDashboard extends Component {
     }, 500);
   };
 
+  handleWorkFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    const validFiles = [];
+    const previews = [];
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+
+    files.forEach((file) => {
+      // Validate file size
+      if (file.size > MAX_SIZE) {
+        alert(
+          `File "${file.name}" is too large. Maximum file size is 50MB. Please choose a smaller file.`
+        );
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "video/mp4",
+        "video/avi",
+        "video/mov",
+        "video/webm",
+      ];
+
+      if (allowedTypes.includes(file.type)) {
+        validFiles.push(file);
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const preview = {
+            id: Date.now() + Math.random(),
+            file: file,
+            url: e.target.result,
+            type: file.type.startsWith("video/") ? "video" : "image",
+            name: file.name,
+            size: file.size,
+          };
+
+          this.setState((prevState) => ({
+            workPreviews: [...prevState.workPreviews, preview],
+          }));
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert(
+          `File type "${file.type}" is not supported. Please use JPG, PNG, GIF, WebP, MP4, AVI, MOV, or WebM files.`
+        );
+      }
+    });
+
+    this.setState((prevState) => ({
+      selectedWorkFiles: [...prevState.selectedWorkFiles, ...validFiles],
+    }));
+  };
+
   renderDashboardContent() {
     const { activeTab, showPortfolioForm } = this.state;
 

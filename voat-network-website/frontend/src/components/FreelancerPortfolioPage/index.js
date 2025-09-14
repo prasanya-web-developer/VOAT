@@ -262,6 +262,8 @@ class MyPortfolio extends Component {
         throw new Error("User ID not found");
       }
 
+      console.log("Fetching portfolio data for user:", userId);
+
       const response = await fetch(`${this.state.baseUrl}/api/user/${userId}`);
 
       if (!response.ok) {
@@ -270,7 +272,9 @@ class MyPortfolio extends Component {
       }
 
       const data = await response.json();
-      const { user, portfolio, services = [], works = [] } = data; // Add works here
+      console.log("Received data:", data);
+
+      const { user, portfolio, services = [], works = [] } = data;
 
       if (!user) {
         throw new Error("User data not found in server response");
@@ -337,24 +341,58 @@ class MyPortfolio extends Component {
         isOwnProfile: isOwnProfile,
       };
 
-      // Process works data and convert to videos format for compatibility
-      const processedWorks = works.map((work) => ({
-        id: work.id || work._id,
-        url:
-          work.url && work.url.startsWith("/")
-            ? `${this.state.baseUrl}${work.url}`
-            : work.url,
-        thumbnail:
-          work.type === "image"
-            ? work.url && work.url.startsWith("/")
-              ? `${this.state.baseUrl}${work.url}`
-              : work.url
-            : work.thumbnail || "/api/placeholder/150/150",
-        title: work.title || "Untitled Work",
-        type: work.type || "image",
-        serviceName: work.serviceName || "",
-        uploadedDate: work.uploadedDate || new Date().toISOString(),
-      }));
+      // Process works data properly with error handling and validation
+      const processedWorks = works.map((work, index) => {
+        let workUrl = work.url;
+        let thumbnailUrl = work.thumbnail;
+
+        // Handle work URL
+        if (workUrl) {
+          if (!workUrl.startsWith("http") && workUrl.startsWith("/")) {
+            workUrl = `${this.state.baseUrl}${workUrl}`;
+          } else if (!workUrl.startsWith("http") && !workUrl.startsWith("/")) {
+            workUrl = `${this.state.baseUrl}/${workUrl}`;
+          }
+        } else {
+          workUrl = "/api/placeholder/150/150";
+          console.warn(`Work ${index} has no URL`);
+        }
+
+        // Handle thumbnail URL
+        if (work.type === "image") {
+          thumbnailUrl = workUrl;
+        } else if (work.type === "video") {
+          if (thumbnailUrl) {
+            if (
+              !thumbnailUrl.startsWith("http") &&
+              thumbnailUrl.startsWith("/")
+            ) {
+              thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
+            } else if (
+              !thumbnailUrl.startsWith("http") &&
+              !thumbnailUrl.startsWith("/")
+            ) {
+              thumbnailUrl = `${this.state.baseUrl}/${thumbnailUrl}`;
+            }
+          } else {
+            thumbnailUrl = "/api/placeholder/150/150";
+          }
+        } else {
+          thumbnailUrl = workUrl;
+        }
+
+        return {
+          id: work.id || work._id || `work_${index}`,
+          url: workUrl,
+          thumbnail: thumbnailUrl,
+          title: work.title || `Untitled Work ${index + 1}`,
+          type: work.type || "image",
+          serviceName: work.serviceName || "",
+          uploadedDate: work.uploadedDate || new Date().toISOString(),
+        };
+      });
+
+      console.log("Processed works:", processedWorks);
 
       this.setState({
         portfolioData,
@@ -368,11 +406,12 @@ class MyPortfolio extends Component {
         },
         services: serviceNames,
         serviceData: serviceData,
-        videos: processedWorks, // Use processed works data
+        videos: processedWorks,
         isLoading: false,
         activeServiceTab: firstServiceKey,
       });
 
+      // Cache data in localStorage
       localStorage.setItem(`profile_${userId}`, JSON.stringify(portfolioData));
       localStorage.setItem(`services_${userId}`, JSON.stringify(serviceNames));
       localStorage.setItem(
@@ -380,9 +419,20 @@ class MyPortfolio extends Component {
         JSON.stringify(serviceData)
       );
       localStorage.setItem(`videos_${userId}`, JSON.stringify(processedWorks));
+
+      console.log("Portfolio data loaded successfully");
     } catch (error) {
       console.error("Error fetching portfolio data:", error);
-      this.setState({ isLoading: false });
+      this.setState({
+        isLoading: false,
+        portfolioData: null,
+        videos: [],
+        services: [],
+        serviceData: {},
+      });
+
+      // Show user-friendly error message
+      alert("Failed to load portfolio data. Please try refreshing the page.");
     }
   };
 
