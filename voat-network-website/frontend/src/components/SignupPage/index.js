@@ -214,29 +214,11 @@ class SignupPage extends Component {
     if (this.validateForm()) {
       this.setState({ isSubmitting: true });
 
-      this.setState({
-        errors: {
-          ...this.state.errors,
-          general: "Registration failed. Please try again.",
-        },
-        isSubmitting: false,
-      });
-
-      setTimeout(() => {
-        this.setState((prevState) => ({
-          errors: {
-            ...prevState.errors,
-            general: null,
-          },
-        }));
-      }, 10000);
-
       try {
         // Get the current backend URL
         const baseUrl = this.getBackendUrl();
         console.log("Using backend URL for signup:", baseUrl);
 
-        // ONLY use the actual API for signup - no test mode fallback
         console.log("Attempting to sign up with API...");
 
         const response = await axios.post(
@@ -247,7 +229,7 @@ class SignupPage extends Component {
             password: this.state.password,
             role: this.state.role,
             profession: this.state.profession,
-            phone: this.state.phone, // Add this line
+            phone: this.state.phone,
           },
           {
             withCredentials: true,
@@ -295,7 +277,7 @@ class SignupPage extends Component {
           }
 
           // Show welcome card
-          this.setState({ showWelcomeCard: true });
+          this.setState({ showWelcomeCard: true, isSubmitting: false });
 
           // Hide welcome card and redirect after 5 seconds
           setTimeout(() => {
@@ -311,21 +293,42 @@ class SignupPage extends Component {
       } catch (error) {
         console.error("Registration error:", error);
 
+        // Only set error state if there's actually an error
+        let errorMessage = "Registration failed. Please try again.";
+
+        if (error.response) {
+          // Server responded with error status
+          if (error.response.data && error.response.data.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response.status === 400) {
+            errorMessage = "User already exists or invalid data provided.";
+          }
+        } else if (error.message.includes("timeout")) {
+          errorMessage =
+            "Registration timeout. Please check your connection and try again.";
+        } else if (error.message.includes("Network Error")) {
+          errorMessage =
+            "Network error. Please check your connection and try again.";
+        }
+
         // Handle error states
         this.setState({
           errors: {
             ...this.state.errors,
-            general: "Registration failed. Please try again.",
+            general: errorMessage,
           },
           isSubmitting: false,
         });
-      } finally {
-        // Reset submitting state in case redirect doesn't happen
+
+        // Clear error message after 10 seconds
         setTimeout(() => {
-          if (this.state.isSubmitting) {
-            this.setState({ isSubmitting: false });
-          }
-        }, 3000);
+          this.setState((prevState) => ({
+            errors: {
+              ...prevState.errors,
+              general: null,
+            },
+          }));
+        }, 10000);
       }
     }
   };
