@@ -536,6 +536,35 @@ const OrderSchema = new mongoose.Schema(
 
 const Order = mongoose.model("Order", OrderSchema);
 
+// Helper function to calculate total works size for a user
+const calculateUserWorksSize = async (userId) => {
+  try {
+    const portfolio = await PortfolioSubmission.findOne({ userId });
+    if (!portfolio || !portfolio.works) return 0;
+
+    let totalSize = 0;
+
+    for (const work of portfolio.works) {
+      if (work.url && !work.url.startsWith("http")) {
+        const filePath = path.join(__dirname, work.url.replace(/^\/+/, ""));
+        try {
+          if (fs.existsSync(filePath)) {
+            const stats = fs.statSync(filePath);
+            totalSize += stats.size;
+          }
+        } catch (err) {
+          console.error(`Error checking file size for ${filePath}:`, err);
+        }
+      }
+    }
+
+    return totalSize;
+  } catch (error) {
+    console.error("Error calculating user works size:", error);
+    return 0;
+  }
+};
+
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log("Headers:", req.headers);
@@ -5869,6 +5898,31 @@ app.post(
         });
       }
 
+      // Check current total size
+      const currentTotalSize = await calculateUserWorksSize(userId);
+      const newFileSize = workFile.size;
+      const maxSize = 50 * 1024 * 1024; // 50MB in bytes
+
+      if (currentTotalSize + newFileSize > maxSize) {
+        // Delete the uploaded file since we're rejecting it
+        try {
+          fs.unlinkSync(workFile.path);
+        } catch (deleteError) {
+          console.error("Error deleting rejected file:", deleteError);
+        }
+
+        const currentSizeMB = (currentTotalSize / (1024 * 1024)).toFixed(2);
+        const newFileSizeMB = (newFileSize / (1024 * 1024)).toFixed(2);
+
+        return res.status(413).json({
+          success: false,
+          message: `Upload would exceed the 50MB limit. Current total: ${currentSizeMB}MB, New file: ${newFileSizeMB}MB. You can only upload up to 50MB in total.`,
+          currentSize: currentTotalSize,
+          newFileSize: newFileSize,
+          maxSize: maxSize,
+        });
+      }
+
       // Prepare the data for the new work item
       const workData = {
         url: `/uploads/${workFile.filename}`,
@@ -5902,6 +5956,8 @@ app.post(
         workUrl: newWork.url,
         workThumbnail: newWork.thumbnail,
         workType: newWork.type,
+        totalSize: currentTotalSize + newFileSize,
+        remainingSize: maxSize - (currentTotalSize + newFileSize),
       });
     } catch (error) {
       console.error("Error adding work:", error);
@@ -6622,6 +6678,41 @@ app.get("/api/test-razorpay", (req, res) => {
     webhook_secret_configured: !!process.env.RAZORPAY_WEBHOOK_SECRET,
     server_time: new Date().toISOString(),
   });
+});
+
+// Get user's current storage usage
+app.get("/api/portfolio/:userId/storage-info", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const currentSize = await calculateUserWorksSize(userId);
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    const remainingSize = maxSize - currentSize;
+
+    res.status(200).json({
+      success: true,
+      currentSize: currentSize,
+      currentSizeMB: (currentSize / (1024 * 1024)).toFixed(2),
+      maxSize: maxSize,
+      maxSizeMB: 50,
+      remainingSize: remainingSize,
+      remainingSizeMB: (remainingSize / (1024 * 1024)).toFixed(2),
+      usagePercentage: ((currentSize / maxSize) * 100).toFixed(1),
+    });
+  } catch (error) {
+    console.error("Error getting storage info:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get storage information",
+    });
+  }
 });
 
 app.get("/api/debug/order/:orderId", async (req, res) => {

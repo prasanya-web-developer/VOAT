@@ -979,8 +979,9 @@ class MyPortfolio extends Component {
 
   handleAddVideo = async (e) => {
     if (!e.target.files || !e.target.files[0]) {
-      return; // No file selected
+      return;
     }
+
     const file = e.target.files[0];
     const userData = JSON.parse(localStorage.getItem("user"));
 
@@ -989,13 +990,47 @@ class MyPortfolio extends Component {
       return;
     }
 
+    // Check file size before uploading
+    const maxSingleFileSize = 10 * 1024 * 1024; // 10MB for single file
+    if (file.size > maxSingleFileSize) {
+      alert(
+        "Individual file size cannot exceed 10MB. Please choose a smaller file."
+      );
+      e.target.value = "";
+      return;
+    }
+
     // Show loading state
     this.setState({ isLoading: true });
 
+    // Check current storage usage
+    try {
+      const storageResponse = await fetch(
+        `${this.state.baseUrl}/api/portfolio/${userData.id}/storage-info`
+      );
+      const storageInfo = await storageResponse.json();
+
+      if (storageInfo.success) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+
+        if (file.size > storageInfo.remainingSize) {
+          alert(
+            `Upload would exceed the 50MB total limit. Current usage: ${storageInfo.currentSizeMB}MB, File size: ${fileSizeMB}MB. You have ${storageInfo.remainingSizeMB}MB remaining.`
+          );
+          this.setState({ isLoading: false });
+          e.target.value = "";
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("Error checking storage:", error);
+      // Continue with upload if storage check fails
+    }
+
     const formData = new FormData();
-    formData.append("workFile", file); // This key matches your backend multer config
+    formData.append("workFile", file);
     formData.append("userId", userData.id);
-    formData.append("title", file.name.split(".")[0]); // Remove file extension from title
+    formData.append("title", file.name.split(".")[0]);
 
     try {
       const response = await fetch(
@@ -1007,8 +1042,17 @@ class MyPortfolio extends Component {
       );
 
       const result = await response.json();
+
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "File upload failed.");
+        if (response.status === 413) {
+          // Handle size limit exceeded
+          alert(result.message);
+        } else {
+          throw new Error(result.message || "File upload failed.");
+        }
+        this.setState({ isLoading: false });
+        e.target.value = "";
+        return;
       }
 
       const newWorkItem = {
@@ -1030,21 +1074,43 @@ class MyPortfolio extends Component {
         uploadedDate: new Date().toISOString(),
       };
 
-      // Update the state to show the new work immediately
       this.setState((prevState) => ({
         videos: [...prevState.videos, newWorkItem],
         isLoading: false,
       }));
 
-      // Reset file input
       e.target.value = "";
-
       alert("Work added successfully!");
     } catch (error) {
       console.error("Error adding work:", error);
       this.setState({ isLoading: false });
       alert(`Error: ${error.message}`);
+      e.target.value = "";
     }
+  };
+
+  renderStorageIndicator = () => {
+    // This would require fetching storage info and storing in state
+    const { storageInfo } = this.state; // You'd need to fetch this
+
+    if (!storageInfo) return null;
+
+    return (
+      <div
+        className="storage-indicator"
+        style={{
+          margin: "10px 0",
+          padding: "8px 12px",
+          backgroundColor: "#f5f5f5",
+          borderRadius: "4px",
+          fontSize: "12px",
+          color: "#666",
+        }}
+      >
+        Storage: {storageInfo.currentSizeMB}MB / {storageInfo.maxSizeMB}MB used
+        ({storageInfo.usagePercentage}%)
+      </div>
+    );
   };
 
   handleRemoveVideo = async (workId) => {
