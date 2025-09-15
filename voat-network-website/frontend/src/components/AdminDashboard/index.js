@@ -2829,10 +2829,15 @@ class AdminPanel extends Component {
                 </h3>
                 <div className="adminpanel-works-grid">
                   {viewingSubmission.works.map((work, index) => {
+                    // FIXED: Consistent URL construction
                     const workUrl =
-                      work.url && work.url.startsWith("/")
+                      work.url && work.url.startsWith("http")
+                        ? work.url
+                        : work.url && work.url.startsWith("/")
                         ? `${this.state.baseUrl}${work.url}`
-                        : work.url;
+                        : work.url
+                        ? `${this.state.baseUrl}/${work.url}`
+                        : null;
 
                     return (
                       <div
@@ -2842,58 +2847,53 @@ class AdminPanel extends Component {
                         <div className="adminpanel-work-preview">
                           {work.type === "video" ? (
                             <div className="adminpanel-video-container">
-                              <video
-                                src={workUrl}
-                                className="adminpanel-work-media"
-                                controls
-                                preload="metadata"
-                                onError={(e) => {
-                                  console.error(
-                                    "Video failed to load:",
-                                    e.target.src
-                                  );
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                              />
-                              <div
-                                className="adminpanel-media-error"
-                                style={{ display: "none" }}
-                              >
-                                <i className="fas fa-video-slash"></i>
-                                <span>Video unavailable</span>
-                              </div>
+                              {workUrl ? (
+                                <video
+                                  src={workUrl}
+                                  className="adminpanel-work-media"
+                                  controls
+                                  preload="metadata"
+                                  onError={(e) => {
+                                    console.error(
+                                      "Video failed to load:",
+                                      e.target.src
+                                    );
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                />
+                              ) : (
+                                <div className="adminpanel-media-error">
+                                  <i className="fas fa-video-slash"></i>
+                                  <span>Video unavailable</span>
+                                </div>
+                              )}
                               <div className="adminpanel-media-type-badge">
                                 <i className="fas fa-video"></i>
                               </div>
                             </div>
                           ) : (
                             <div className="adminpanel-image-container">
-                              <img
-                                src={workUrl}
-                                alt={work.title || `Work ${index + 1}`}
-                                className="adminpanel-work-media"
-                                onError={(e) => {
-                                  console.error(
-                                    "Image failed to load:",
-                                    e.target.src
-                                  );
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                                onLoad={(e) => {
-                                  if (e.target.nextSibling) {
-                                    e.target.nextSibling.style.display = "none";
-                                  }
-                                }}
-                              />
-                              <div
-                                className="adminpanel-media-error"
-                                style={{ display: "none" }}
-                              >
-                                <i className="fas fa-image-slash"></i>
-                                <span>Image unavailable</span>
-                              </div>
+                              {workUrl ? (
+                                <img
+                                  src={workUrl}
+                                  alt={work.title || `Work ${index + 1}`}
+                                  className="adminpanel-work-media"
+                                  onError={(e) => {
+                                    console.error(
+                                      "Image failed to load:",
+                                      e.target.src
+                                    );
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                />
+                              ) : (
+                                <div className="adminpanel-media-error">
+                                  <i className="fas fa-image-slash"></i>
+                                  <span>Image unavailable</span>
+                                </div>
+                              )}
                               <div className="adminpanel-media-type-badge">
                                 <i className="fas fa-image"></i>
                               </div>
@@ -2928,7 +2928,7 @@ class AdminPanel extends Component {
 
                         <div className="adminpanel-work-details">
                           <h4 className="adminpanel-work-title">
-                            {work.title || `Untitled Work ${index + 1}`}
+                            {work.title || `Work ${index + 1}`}
                           </h4>
                           {work.serviceName && (
                             <p className="adminpanel-work-service">

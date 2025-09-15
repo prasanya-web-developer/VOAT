@@ -219,6 +219,26 @@ class MyPortfolio extends Component {
     }
   }
 
+  getValidImageUrl = (imageUrl) => {
+    // Return null if no valid image URL
+    if (
+      !imageUrl ||
+      imageUrl === "/api/placeholder/150/150" ||
+      imageUrl === "null" ||
+      imageUrl === "undefined"
+    ) {
+      return null;
+    }
+
+    // Handle relative URLs
+    if (imageUrl.startsWith("/") && !imageUrl.startsWith("//")) {
+      return `${this.state.baseUrl}${imageUrl}`;
+    }
+
+    // Return as-is for absolute URLs
+    return imageUrl;
+  };
+
   // Test function to check if backend is reachable
   testBackendConnection = async () => {
     try {
@@ -330,12 +350,7 @@ class MyPortfolio extends Component {
         experience: portfolio?.workExperience || "",
         about: portfolio?.about || "",
         email: portfolio?.email || user.email || "",
-        profileImage:
-          user.profileImage && user.profileImage !== "/api/placeholder/150/150"
-            ? user.profileImage.startsWith("http")
-              ? user.profileImage
-              : `${this.state.baseUrl}/${user.profileImage.replace(/^\//, "")}`
-            : "/api/placeholder/150/150",
+        profileImage: this.getValidImageUrl(user.profileImage),
         services: serviceNames,
         isApproved: portfolio?.status === "approved",
         isOwnProfile: isOwnProfile,
@@ -346,36 +361,41 @@ class MyPortfolio extends Component {
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // Handle work URL
-        if (workUrl) {
-          if (!workUrl.startsWith("http") && workUrl.startsWith("/")) {
+        // FIXED: Consistent URL handling
+        if (workUrl && workUrl !== "null" && workUrl !== "undefined") {
+          if (workUrl.startsWith("http")) {
+            // Already a full URL
+            workUrl = workUrl;
+          } else if (workUrl.startsWith("/")) {
+            // Relative URL starting with /
             workUrl = `${this.state.baseUrl}${workUrl}`;
-          } else if (!workUrl.startsWith("http") && !workUrl.startsWith("/")) {
+          } else {
+            // Relative URL without /
             workUrl = `${this.state.baseUrl}/${workUrl}`;
           }
         } else {
-          workUrl = "/api/placeholder/150/150";
-          console.warn(`Work ${index} has no URL`);
+          console.warn(`Invalid work URL for work ${index}:`, work.url);
+          workUrl = null;
         }
 
         // Handle thumbnail URL
         if (work.type === "image") {
           thumbnailUrl = workUrl;
         } else if (work.type === "video") {
-          if (thumbnailUrl) {
-            if (
-              !thumbnailUrl.startsWith("http") &&
-              thumbnailUrl.startsWith("/")
-            ) {
+          if (
+            thumbnailUrl &&
+            thumbnailUrl !== "null" &&
+            thumbnailUrl !== "undefined"
+          ) {
+            if (thumbnailUrl.startsWith("http")) {
+              thumbnailUrl = thumbnailUrl;
+            } else if (thumbnailUrl.startsWith("/")) {
               thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
-            } else if (
-              !thumbnailUrl.startsWith("http") &&
-              !thumbnailUrl.startsWith("/")
-            ) {
+            } else {
               thumbnailUrl = `${this.state.baseUrl}/${thumbnailUrl}`;
             }
           } else {
-            thumbnailUrl = "/api/placeholder/150/150";
+            thumbnailUrl = null;
           }
         } else {
           thumbnailUrl = workUrl;
@@ -385,7 +405,7 @@ class MyPortfolio extends Component {
           id: work.id || work._id || `work_${index}`,
           url: workUrl,
           thumbnail: thumbnailUrl,
-          title: work.title || `Untitled Work ${index + 1}`,
+          title: work.title || `Work ${index + 1}`,
           type: work.type || "image",
           serviceName: work.serviceName || "",
           uploadedDate: work.uploadedDate || new Date().toISOString(),
@@ -1003,30 +1023,6 @@ class MyPortfolio extends Component {
     // Show loading state
     this.setState({ isLoading: true });
 
-    // Check current storage usage
-    try {
-      const storageResponse = await fetch(
-        `${this.state.baseUrl}/api/portfolio/${userData.id}/storage-info`
-      );
-      const storageInfo = await storageResponse.json();
-
-      if (storageInfo.success) {
-        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-
-        if (file.size > storageInfo.remainingSize) {
-          alert(
-            `Upload would exceed the 50MB total limit. Current usage: ${storageInfo.currentSizeMB}MB, File size: ${fileSizeMB}MB. You have ${storageInfo.remainingSizeMB}MB remaining.`
-          );
-          this.setState({ isLoading: false });
-          e.target.value = "";
-          return;
-        }
-      }
-    } catch (error) {
-      console.error("Error checking storage:", error);
-      // Continue with upload if storage check fails
-    }
-
     const formData = new FormData();
     formData.append("workFile", file);
     formData.append("userId", userData.id);
@@ -1045,7 +1041,6 @@ class MyPortfolio extends Component {
 
       if (!response.ok || !result.success) {
         if (response.status === 413) {
-          // Handle size limit exceeded
           alert(result.message);
         } else {
           throw new Error(result.message || "File upload failed.");
@@ -1055,18 +1050,30 @@ class MyPortfolio extends Component {
         return;
       }
 
+      // FIXED: Ensure proper URL construction
+      const baseUrl = this.state.baseUrl;
+      const workUrl = result.workUrl.startsWith("http")
+        ? result.workUrl
+        : result.workUrl.startsWith("/")
+        ? `${baseUrl}${result.workUrl}`
+        : `${baseUrl}/${result.workUrl}`;
+
+      const thumbnailUrl =
+        result.workType === "image"
+          ? workUrl
+          : result.workThumbnail
+          ? result.workThumbnail.startsWith("http")
+            ? result.workThumbnail
+            : result.workThumbnail.startsWith("/")
+            ? `${baseUrl}${result.workThumbnail}`
+            : `${baseUrl}/${result.workThumbnail}`
+          : null;
+
       const newWorkItem = {
         id: result.workId,
-        url: result.workUrl.startsWith("http")
-          ? result.workUrl
-          : `${this.state.baseUrl}${result.workUrl}`,
-        thumbnail:
-          result.workType === "image"
-            ? result.workUrl.startsWith("http")
-              ? result.workUrl
-              : `${this.state.baseUrl}${result.workUrl}`
-            : result.workThumbnail || "/api/placeholder/150/150",
-        title: result.workId ? file.name.split(".")[0] : file.name,
+        url: workUrl,
+        thumbnail: thumbnailUrl,
+        title: file.name.split(".")[0],
         type:
           result.workType ||
           (file.type.startsWith("video/") ? "video" : "image"),
@@ -1317,11 +1324,7 @@ class MyPortfolio extends Component {
       return <div className="modern-loading">Loading portfolio data...</div>;
     }
 
-    const profileImageUrl =
-      portfolioData.profileImage &&
-      portfolioData.profileImage !== "/api/placeholder/150/150"
-        ? portfolioData.profileImage
-        : null;
+    const profileImageUrl = this.getValidImageUrl(portfolioData.profileImage);
 
     return (
       <div className="modern-hero-section">
@@ -1338,15 +1341,21 @@ class MyPortfolio extends Component {
                   alt={portfolioData.name}
                   className="hero-avatar"
                   onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "/api/placeholder/150/150";
+                    console.error(
+                      "Profile image failed to load:",
+                      e.target.src
+                    );
+                    e.target.style.display = "none";
+                    e.target.nextSibling.style.display = "flex";
                   }}
                 />
-              ) : (
-                <div className="hero-avatar-placeholder">
-                  {this.getInitials(portfolioData.name) || "P"}
-                </div>
-              )}
+              ) : null}
+              <div
+                className="hero-avatar-placeholder"
+                style={{ display: profileImageUrl ? "none" : "flex" }}
+              >
+                {this.getInitials(portfolioData.name) || "P"}
+              </div>
             </div>
 
             <div className="hero-info">
@@ -1615,15 +1624,27 @@ class MyPortfolio extends Component {
               <Settings className="header-icon" size={20} />
               <h2 className="card-title">My Services</h2>
             </div>
-            {isOwnProfile && services.length > 0 && (
-              <button
-                className="header-action-btn"
-                onClick={this.handleEditService}
-                disabled={!effectiveActiveTab}
-                title="Edit Service"
-              >
-                Edit Service
-              </button>
+            {isOwnProfile && (
+              <div className="header-actions">
+                <button
+                  className="header-action-btn"
+                  onClick={this.toggleAddServiceForm}
+                  title="Add Service"
+                >
+                  <Plus className="btn-icon" size={16} />
+                  Add Service
+                </button>
+                {services.length > 0 && (
+                  <button
+                    className="header-action-btn"
+                    onClick={this.handleEditService}
+                    disabled={!effectiveActiveTab}
+                    title="Edit Service"
+                  >
+                    Edit Service
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -1649,7 +1670,6 @@ class MyPortfolio extends Component {
                             className="tab-remove"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Find the actual index in the original services array
                               const actualIndex = services.findIndex(
                                 (s) => s === service
                               );
@@ -1688,6 +1708,15 @@ class MyPortfolio extends Component {
                     ? "Start showcasing your expertise by adding your first service."
                     : "This professional hasn't added any services yet."}
                 </p>
+                {isOwnProfile && (
+                  <button
+                    className="empty-action-btn"
+                    onClick={this.toggleAddServiceForm}
+                  >
+                    <Plus className="btn-icon" size={16} />
+                    Add Your First Service
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1723,45 +1752,70 @@ class MyPortfolio extends Component {
                     <div className="portfolio-thumbnail">
                       {work.type === "video" ? (
                         <div className="video-container">
-                          <video
-                            src={work.url}
-                            className="portfolio-media"
-                            preload="metadata"
-                            onError={(e) => {
-                              console.error(
-                                "Video failed to load:",
-                                e.target.src
-                              );
-                              e.target.style.display = "none";
-                              e.target.nextSibling.style.display = "flex";
-                            }}
-                          />
-                          <div
-                            className="media-error"
-                            style={{ display: "none" }}
-                          >
-                            <Video size={24} />
-                            <p>Video unavailable</p>
-                          </div>
+                          {work.url ? (
+                            <>
+                              <video
+                                src={work.url}
+                                className="portfolio-media"
+                                preload="metadata"
+                                onError={(e) => {
+                                  console.error(
+                                    "Video failed to load:",
+                                    e.target.src
+                                  );
+                                  e.target.style.display = "none";
+                                  e.target.nextSibling.style.display = "flex";
+                                }}
+                              />
+                              <div
+                                className="media-error"
+                                style={{ display: "none" }}
+                              >
+                                <Video size={24} />
+                                <p>Video unavailable</p>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="media-error">
+                              <Video size={24} />
+                              <p>Video unavailable</p>
+                            </div>
+                          )}
                           <div className="media-type-badge video">
                             <Video size={12} />
                           </div>
                         </div>
                       ) : (
                         <div className="image-container">
-                          <img
-                            src={work.url || work.thumbnail}
-                            alt={work.title || "Portfolio work"}
-                            className="portfolio-media"
-                            onError={(e) => {
-                              console.error(
-                                "Image failed to load:",
-                                e.target.src
-                              );
-                              e.target.onerror = null;
-                              e.target.src = "/api/placeholder/150/150";
-                            }}
-                          />
+                          {work.url ? (
+                            <>
+                              <img
+                                src={work.url}
+                                alt={work.title || "Portfolio work"}
+                                className="portfolio-media"
+                                onError={(e) => {
+                                  console.error(
+                                    "Image failed to load:",
+                                    e.target.src
+                                  );
+                                  e.target.style.display = "none";
+                                  e.target.nextSibling.style.display = "flex";
+                                }}
+                              />
+                              <div
+                                className="media-error"
+                                style={{ display: "none" }}
+                              >
+                                <Image size={24} />
+                                <p>Image unavailable</p>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="media-error">
+                              <Image size={24} />
+                              <p>Image unavailable</p>
+                            </div>
+                          )}
                           <div className="media-type-badge image">
                             <Image size={12} />
                           </div>
@@ -1770,13 +1824,15 @@ class MyPortfolio extends Component {
 
                       <div className="portfolio-overlay">
                         <div className="portfolio-actions">
-                          <button
-                            className="portfolio-action-btn view"
-                            onClick={() => window.open(work.url, "_blank")}
-                            title="View Work"
-                          >
-                            <Eye className="action-icon" size={16} />
-                          </button>
+                          {work.url && (
+                            <button
+                              className="portfolio-action-btn view"
+                              onClick={() => window.open(work.url, "_blank")}
+                              title="View Work"
+                            >
+                              <Eye className="action-icon" size={16} />
+                            </button>
+                          )}
                           {isOwnProfile && (
                             <button
                               className="portfolio-action-btn remove"
@@ -1826,34 +1882,52 @@ class MyPortfolio extends Component {
                     ? "Upload your best work to showcase your skills and attract clients."
                     : "This professional hasn't uploaded any work samples yet."}
                 </p>
+                {isOwnProfile && (
+                  <label
+                    className="empty-action-btn"
+                    htmlFor="portfolio-upload-empty"
+                  >
+                    <Upload className="btn-icon" size={16} />
+                    Upload Your First Work
+                    <input
+                      type="file"
+                      id="portfolio-upload-empty"
+                      accept="video/*,image/*"
+                      onChange={this.handleAddVideo}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Call to Action Section */}
-        <div className="modern-card cta-section">
-          <div className="cta-content">
-            <div className="cta-icon">
-              <Briefcase size={32} />
-            </div>
-            <h2 className="cta-title">Ready to Work Together?</h2>
-            <p className="cta-description">
-              Let's discuss your project and bring your ideas to life with
-              professional expertise.
-            </p>
-            <div className="cta-actions">
-              <button className="cta-btn primary">
-                <MessageCircle className="btn-icon" size={16} />
-                Start Conversation
-              </button>
-              <button className="cta-btn secondary">
-                <Phone className="btn-icon" size={16} />
-                Schedule Call
-              </button>
+        {/* Call to Action Section - Only show for other people's profiles */}
+        {!isOwnProfile && (
+          <div className="modern-card cta-section">
+            <div className="cta-content">
+              <div className="cta-icon">
+                <Briefcase size={32} />
+              </div>
+              <h2 className="cta-title">Ready to Work Together?</h2>
+              <p className="cta-description">
+                Let's discuss your project and bring your ideas to life with
+                professional expertise.
+              </p>
+              <div className="cta-actions">
+                <button className="cta-btn primary">
+                  <MessageCircle className="btn-icon" size={16} />
+                  Start Conversation
+                </button>
+                <button className="cta-btn secondary">
+                  <Phone className="btn-icon" size={16} />
+                  Schedule Call
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }

@@ -5898,34 +5898,9 @@ app.post(
         });
       }
 
-      // Check current total size
-      const currentTotalSize = await calculateUserWorksSize(userId);
-      const newFileSize = workFile.size;
-      const maxSize = 50 * 1024 * 1024; // 50MB in bytes
-
-      if (currentTotalSize + newFileSize > maxSize) {
-        // Delete the uploaded file since we're rejecting it
-        try {
-          fs.unlinkSync(workFile.path);
-        } catch (deleteError) {
-          console.error("Error deleting rejected file:", deleteError);
-        }
-
-        const currentSizeMB = (currentTotalSize / (1024 * 1024)).toFixed(2);
-        const newFileSizeMB = (newFileSize / (1024 * 1024)).toFixed(2);
-
-        return res.status(413).json({
-          success: false,
-          message: `Upload would exceed the 50MB limit. Current total: ${currentSizeMB}MB, New file: ${newFileSizeMB}MB. You can only upload up to 50MB in total.`,
-          currentSize: currentTotalSize,
-          newFileSize: newFileSize,
-          maxSize: maxSize,
-        });
-      }
-
-      // Prepare the data for the new work item
+      // FIXED: Consistent URL storage format
       const workData = {
-        url: `/uploads/${workFile.filename}`,
+        url: `/uploads/${workFile.filename}`, // Always store as relative path with leading /
         thumbnail: workFile.mimetype.startsWith("image/")
           ? `/uploads/${workFile.filename}`
           : "",
@@ -5935,7 +5910,6 @@ app.post(
         uploadedDate: new Date(),
       };
 
-      // Find the user's portfolio and push the new work item
       const updatedPortfolio = await PortfolioSubmission.findOneAndUpdate(
         { userId: userId },
         { $push: { works: workData } },
@@ -5946,18 +5920,15 @@ app.post(
         throw new Error("Could not save portfolio work.");
       }
 
-      // Get the ID of the item we just added
       const newWork = updatedPortfolio.works[updatedPortfolio.works.length - 1];
 
       res.status(201).json({
         success: true,
         message: "Work added successfully",
         workId: newWork._id,
-        workUrl: newWork.url,
+        workUrl: newWork.url, // Return relative path
         workThumbnail: newWork.thumbnail,
         workType: newWork.type,
-        totalSize: currentTotalSize + newFileSize,
-        remainingSize: maxSize - (currentTotalSize + newFileSize),
       });
     } catch (error) {
       console.error("Error adding work:", error);
