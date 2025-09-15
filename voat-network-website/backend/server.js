@@ -5900,7 +5900,7 @@ app.post(
 
       // FIXED: Consistent URL storage format
       const workData = {
-        url: `/uploads/${workFile.filename}`, // Always store as relative path with leading /
+        url: `/uploads/${workFile.filename}`, // Ensure leading slash
         thumbnail: workFile.mimetype.startsWith("image/")
           ? `/uploads/${workFile.filename}`
           : "",

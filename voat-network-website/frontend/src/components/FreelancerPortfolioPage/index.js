@@ -225,18 +225,64 @@ class MyPortfolio extends Component {
       !imageUrl ||
       imageUrl === "/api/placeholder/150/150" ||
       imageUrl === "null" ||
-      imageUrl === "undefined"
+      imageUrl === "undefined" ||
+      imageUrl === ""
     ) {
       return null;
     }
 
-    // Handle relative URLs
-    if (imageUrl.startsWith("/") && !imageUrl.startsWith("//")) {
-      return `${this.state.baseUrl}${imageUrl}`;
+    // Handle data URLs (base64)
+    if (imageUrl.startsWith("data:")) {
+      return imageUrl;
     }
 
-    // Return as-is for absolute URLs
-    return imageUrl;
+    // Handle full HTTP URLs
+    if (imageUrl.startsWith("http")) {
+      return imageUrl;
+    }
+
+    // Handle relative paths - ensure single leading slash
+    let cleanPath = imageUrl;
+    if (!cleanPath.startsWith("/")) {
+      cleanPath = "/" + cleanPath;
+    }
+
+    // Remove duplicate slashes
+    cleanPath = cleanPath.replace(/\/+/g, "/");
+
+    return `${this.state.baseUrl}${cleanPath}`;
+  };
+
+  getValidWorkUrl = (workUrl) => {
+    if (
+      !workUrl ||
+      workUrl === "null" ||
+      workUrl === "undefined" ||
+      workUrl === ""
+    ) {
+      return null;
+    }
+
+    // Handle data URLs
+    if (workUrl.startsWith("data:")) {
+      return workUrl;
+    }
+
+    // Handle full HTTP URLs
+    if (workUrl.startsWith("http")) {
+      return workUrl;
+    }
+
+    // Handle relative paths - ensure single leading slash
+    let cleanPath = workUrl;
+    if (!cleanPath.startsWith("/")) {
+      cleanPath = "/" + cleanPath;
+    }
+
+    // Remove duplicate slashes
+    cleanPath = cleanPath.replace(/\/+/g, "/");
+
+    return `${this.state.baseUrl}${cleanPath}`;
   };
 
   // Test function to check if backend is reachable
@@ -361,21 +407,15 @@ class MyPortfolio extends Component {
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // FIXED: Consistent URL handling
+        // Handle work URL
         if (workUrl && workUrl !== "null" && workUrl !== "undefined") {
-          if (workUrl.startsWith("http")) {
-            // Already a full URL
-            workUrl = workUrl;
-          } else if (workUrl.startsWith("/")) {
-            // Relative URL starting with /
+          if (!workUrl.startsWith("http") && workUrl.startsWith("/")) {
             workUrl = `${this.state.baseUrl}${workUrl}`;
-          } else {
-            // Relative URL without /
+          } else if (!workUrl.startsWith("http") && !workUrl.startsWith("/")) {
             workUrl = `${this.state.baseUrl}/${workUrl}`;
           }
         } else {
-          console.warn(`Invalid work URL for work ${index}:`, work.url);
-          workUrl = null;
+          workUrl = null; // Set to null instead of placeholder
         }
 
         // Handle thumbnail URL
@@ -387,15 +427,19 @@ class MyPortfolio extends Component {
             thumbnailUrl !== "null" &&
             thumbnailUrl !== "undefined"
           ) {
-            if (thumbnailUrl.startsWith("http")) {
-              thumbnailUrl = thumbnailUrl;
-            } else if (thumbnailUrl.startsWith("/")) {
+            if (
+              !thumbnailUrl.startsWith("http") &&
+              thumbnailUrl.startsWith("/")
+            ) {
               thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
-            } else {
+            } else if (
+              !thumbnailUrl.startsWith("http") &&
+              !thumbnailUrl.startsWith("/")
+            ) {
               thumbnailUrl = `${this.state.baseUrl}/${thumbnailUrl}`;
             }
           } else {
-            thumbnailUrl = null;
+            thumbnailUrl = null; // Set to null instead of placeholder
           }
         } else {
           thumbnailUrl = workUrl;
@@ -405,7 +449,7 @@ class MyPortfolio extends Component {
           id: work.id || work._id || `work_${index}`,
           url: workUrl,
           thumbnail: thumbnailUrl,
-          title: work.title || `Work ${index + 1}`,
+          title: work.title || `Untitled Work ${index + 1}`,
           type: work.type || "image",
           serviceName: work.serviceName || "",
           uploadedDate: work.uploadedDate || new Date().toISOString(),
@@ -1626,14 +1670,6 @@ class MyPortfolio extends Component {
             </div>
             {isOwnProfile && (
               <div className="header-actions">
-                <button
-                  className="header-action-btn"
-                  onClick={this.toggleAddServiceForm}
-                  title="Add Service"
-                >
-                  <Plus className="btn-icon" size={16} />
-                  Add Service
-                </button>
                 {services.length > 0 && (
                   <button
                     className="header-action-btn"
@@ -1747,129 +1783,156 @@ class MyPortfolio extends Component {
           <div className="card-body">
             {videos.length > 0 ? (
               <div className="portfolio-grid">
-                {videos.map((work) => (
-                  <div key={work.id} className="portfolio-item">
-                    <div className="portfolio-thumbnail">
-                      {work.type === "video" ? (
-                        <div className="video-container">
-                          {work.url ? (
-                            <>
-                              <video
-                                src={work.url}
-                                className="portfolio-media"
-                                preload="metadata"
-                                onError={(e) => {
-                                  console.error(
-                                    "Video failed to load:",
-                                    e.target.src
-                                  );
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                              />
-                              <div
-                                className="media-error"
-                                style={{ display: "none" }}
-                              >
+                {videos.map((work) => {
+                  // Use the helper function for consistent URL handling
+                  const workUrl = this.getValidWorkUrl(work.url);
+                  const thumbnailUrl =
+                    work.type === "image"
+                      ? workUrl
+                      : this.getValidWorkUrl(work.thumbnail);
+
+                  return (
+                    <div key={work.id} className="portfolio-item">
+                      <div className="portfolio-thumbnail">
+                        {work.type === "video" ? (
+                          <div className="video-container">
+                            {workUrl ? (
+                              <>
+                                <video
+                                  src={workUrl}
+                                  className="portfolio-media"
+                                  preload="metadata"
+                                  onError={(e) => {
+                                    console.error(
+                                      "Video failed to load:",
+                                      e.target.src
+                                    );
+                                    e.target.style.display = "none";
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display =
+                                        "flex";
+                                    }
+                                  }}
+                                  onLoad={(e) => {
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display =
+                                        "none";
+                                    }
+                                  }}
+                                />
+                                <div
+                                  className="media-error"
+                                  style={{ display: "none" }}
+                                >
+                                  <Video size={24} />
+                                  <p>Video unavailable</p>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="media-error">
                                 <Video size={24} />
                                 <p>Video unavailable</p>
                               </div>
-                            </>
-                          ) : (
-                            <div className="media-error">
-                              <Video size={24} />
-                              <p>Video unavailable</p>
+                            )}
+                            <div className="media-type-badge video">
+                              <Video size={12} />
                             </div>
-                          )}
-                          <div className="media-type-badge video">
-                            <Video size={12} />
                           </div>
-                        </div>
-                      ) : (
-                        <div className="image-container">
-                          {work.url ? (
-                            <>
-                              <img
-                                src={work.url}
-                                alt={work.title || "Portfolio work"}
-                                className="portfolio-media"
-                                onError={(e) => {
-                                  console.error(
-                                    "Image failed to load:",
-                                    e.target.src
-                                  );
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                              />
-                              <div
-                                className="media-error"
-                                style={{ display: "none" }}
-                              >
+                        ) : (
+                          <div className="image-container">
+                            {workUrl ? (
+                              <>
+                                <img
+                                  src={workUrl}
+                                  alt={work.title || "Portfolio work"}
+                                  className="portfolio-media"
+                                  onError={(e) => {
+                                    console.error(
+                                      "Image failed to load:",
+                                      e.target.src
+                                    );
+                                    e.target.style.display = "none";
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display =
+                                        "flex";
+                                    }
+                                  }}
+                                  onLoad={(e) => {
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display =
+                                        "none";
+                                    }
+                                  }}
+                                />
+                                <div
+                                  className="media-error"
+                                  style={{ display: "none" }}
+                                >
+                                  <Image size={24} />
+                                  <p>Image unavailable</p>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="media-error">
                                 <Image size={24} />
                                 <p>Image unavailable</p>
                               </div>
-                            </>
-                          ) : (
-                            <div className="media-error">
-                              <Image size={24} />
-                              <p>Image unavailable</p>
+                            )}
+                            <div className="media-type-badge image">
+                              <Image size={12} />
                             </div>
-                          )}
-                          <div className="media-type-badge image">
-                            <Image size={12} />
+                          </div>
+                        )}
+
+                        <div className="portfolio-overlay">
+                          <div className="portfolio-actions">
+                            {workUrl && (
+                              <button
+                                className="portfolio-action-btn view"
+                                onClick={() => window.open(workUrl, "_blank")}
+                                title="View Work"
+                              >
+                                <Eye className="action-icon" size={16} />
+                              </button>
+                            )}
+                            {isOwnProfile && (
+                              <button
+                                className="portfolio-action-btn remove"
+                                onClick={() => this.handleRemoveVideo(work.id)}
+                                title="Remove Work"
+                              >
+                                <Trash2 className="action-icon" size={16} />
+                              </button>
+                            )}
                           </div>
                         </div>
-                      )}
+                      </div>
 
-                      <div className="portfolio-overlay">
-                        <div className="portfolio-actions">
-                          {work.url && (
-                            <button
-                              className="portfolio-action-btn view"
-                              onClick={() => window.open(work.url, "_blank")}
-                              title="View Work"
-                            >
-                              <Eye className="action-icon" size={16} />
-                            </button>
-                          )}
-                          {isOwnProfile && (
-                            <button
-                              className="portfolio-action-btn remove"
-                              onClick={() => this.handleRemoveVideo(work.id)}
-                              title="Remove Work"
-                            >
-                              <Trash2 className="action-icon" size={16} />
-                            </button>
+                      <div className="portfolio-info">
+                        <h4 className="work-title">
+                          {work.title || "Untitled Work"}
+                        </h4>
+                        {work.serviceName && (
+                          <p className="work-service">
+                            <Tag className="service-icon" size={12} />
+                            {work.serviceName}
+                          </p>
+                        )}
+                        <div className="work-meta">
+                          <span className="work-type">
+                            {work.type === "video" ? "Video" : "Image"}
+                          </span>
+                          {work.uploadedDate && (
+                            <span className="work-date">
+                              <Calendar className="date-icon" size={10} />
+                              {new Date(work.uploadedDate).toLocaleDateString()}
+                            </span>
                           )}
                         </div>
                       </div>
                     </div>
-
-                    <div className="portfolio-info">
-                      <h4 className="work-title">
-                        {work.title || "Untitled Work"}
-                      </h4>
-                      {work.serviceName && (
-                        <p className="work-service">
-                          <Tag className="service-icon" size={12} />
-                          {work.serviceName}
-                        </p>
-                      )}
-                      <div className="work-meta">
-                        <span className="work-type">
-                          {work.type === "video" ? "Video" : "Image"}
-                        </span>
-                        {work.uploadedDate && (
-                          <span className="work-date">
-                            <Calendar className="date-icon" size={10} />
-                            {new Date(work.uploadedDate).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="empty-state">
@@ -1951,6 +2014,12 @@ class MyPortfolio extends Component {
         ? services[0].toLowerCase().replace(/\s+/g, "-")
         : "");
 
+    // FIXED: Move serviceName declaration before the early return
+    const serviceName = services.find(
+      (service) =>
+        service.toLowerCase().replace(/\s+/g, "-") === effectiveActiveTab
+    );
+
     if (!effectiveActiveTab || !serviceData[effectiveActiveTab]) {
       return (
         <div className="modern-right-column">
@@ -1961,7 +2030,9 @@ class MyPortfolio extends Component {
                 <h2 className="pricing-title">Pricing Plans</h2>
               </div>
               <div className="service-badge">
-                <span className="badge-text">{serviceName}</span>
+                <span className="badge-text">
+                  {serviceName || "Select Service"}
+                </span>
               </div>
             </div>
             <div className="pricing-body">
@@ -1980,10 +2051,6 @@ class MyPortfolio extends Component {
     }
 
     const currentServicePricing = serviceData[effectiveActiveTab].pricing || [];
-    const serviceName = services.find(
-      (service) =>
-        service.toLowerCase().replace(/\s+/g, "-") === effectiveActiveTab
-    );
 
     const isOwnProfile = portfolioData?.isOwnProfile;
     const canInteract = currentUserId && !isOwnProfile;

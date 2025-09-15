@@ -999,7 +999,7 @@
   font-size: 1.4rem;
   font-weight: 700;
   margin: 0;
-  color: white;
+  color: #0f0f23 !important;
 }
 
 .modal-close-btn {
@@ -1057,7 +1057,7 @@
   box-sizing: border-box;
   font-family: inherit;
   background: rgba(255, 255, 255, 0.05) !important;
-  color: white;
+  color: white !important;
   backdrop-filter: blur(10px);
 }
 
@@ -1543,7 +1543,7 @@
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 780px) {
   .modern-container {
     padding: 0 12px;
     margin-top: 100px;
@@ -2315,4 +2315,38 @@
 
 .media-type-badge.image {
   background: rgba(0, 123, 255, 0.9);
+}
+
+.empty-action-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  font-size: 1rem !important;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3);
+}
+
+.empty-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px rgba(102, 126, 234, 0.4);
+}
+
+@media screen and (max-width: 780px) {
+  .empty-action-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 12px !important;
+    gap: 2px;
+  }
+
+  .modern-hero-section {
+    height: 400px;
+  }
 }

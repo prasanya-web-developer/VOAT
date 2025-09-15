@@ -63,7 +63,12 @@ class AdminPanel extends Component {
   getProfileImageSrc = (profileImage) => {
     console.log("Processing profile image:", profileImage);
 
-    if (!profileImage) {
+    if (
+      !profileImage ||
+      profileImage === "null" ||
+      profileImage === "undefined" ||
+      profileImage === ""
+    ) {
       console.log("No profile image provided");
       return null;
     }
@@ -86,15 +91,45 @@ class AdminPanel extends Component {
       return profileImage;
     }
 
-    // Handle relative paths from database - ensure leading slash
+    // Handle relative paths from database - ensure single leading slash
     let imagePath = profileImage;
     if (!imagePath.startsWith("/")) {
       imagePath = "/" + imagePath;
     }
 
+    // Remove duplicate slashes
+    imagePath = imagePath.replace(/\/+/g, "/");
+
     const constructedUrl = `${this.state.baseUrl}${imagePath}`;
     console.log("Constructed URL from database path:", constructedUrl);
     return constructedUrl;
+  };
+
+  getWorkUrl = (workUrl) => {
+    if (
+      !workUrl ||
+      workUrl === "null" ||
+      workUrl === "undefined" ||
+      workUrl === ""
+    ) {
+      return null;
+    }
+
+    // Handle full HTTP URLs
+    if (workUrl.startsWith("http")) {
+      return workUrl;
+    }
+
+    // Handle relative paths - ensure single leading slash
+    let cleanPath = workUrl;
+    if (!cleanPath.startsWith("/")) {
+      cleanPath = "/" + cleanPath;
+    }
+
+    // Remove duplicate slashes
+    cleanPath = cleanPath.replace(/\/+/g, "/");
+
+    return `${this.state.baseUrl}${cleanPath}`;
   };
 
   checkAuthentication = () => {
@@ -1851,10 +1886,7 @@ class AdminPanel extends Component {
                   </h3>
                   <div className="adminpanel-works-grid">
                     {viewingRecommendedProfile.works.map((work, index) => {
-                      const workUrl =
-                        work.url && work.url.startsWith("/")
-                          ? `${this.state.baseUrl}${work.url}`
-                          : work.url;
+                      const workUrl = this.getWorkUrl(work.url);
 
                       return (
                         <div
@@ -2829,15 +2861,7 @@ class AdminPanel extends Component {
                 </h3>
                 <div className="adminpanel-works-grid">
                   {viewingSubmission.works.map((work, index) => {
-                    // FIXED: Consistent URL construction
-                    const workUrl =
-                      work.url && work.url.startsWith("http")
-                        ? work.url
-                        : work.url && work.url.startsWith("/")
-                        ? `${this.state.baseUrl}${work.url}`
-                        : work.url
-                        ? `${this.state.baseUrl}/${work.url}`
-                        : null;
+                    const workUrl = this.getWorkUrl(work.url);
 
                     return (
                       <div
