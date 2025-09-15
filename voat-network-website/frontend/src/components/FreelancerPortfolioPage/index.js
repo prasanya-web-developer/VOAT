@@ -341,17 +341,27 @@ class MyPortfolio extends Component {
         isOwnProfile: isOwnProfile,
       };
 
-      // Process works data properly with error handling and validation
+      // FIXED: Process works data with better error handling and validation
+      console.log("Raw works data:", works);
+
       const processedWorks = works.map((work, index) => {
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // Handle work URL
+        // Handle work URL - ensure it's properly formatted
         if (workUrl) {
-          if (!workUrl.startsWith("http") && workUrl.startsWith("/")) {
+          if (workUrl.startsWith("http")) {
+            // Already a full URL, use as is
+            workUrl = workUrl;
+          } else if (workUrl.startsWith("/uploads/")) {
+            // Relative path with /uploads/, construct full URL
             workUrl = `${this.state.baseUrl}${workUrl}`;
-          } else if (!workUrl.startsWith("http") && !workUrl.startsWith("/")) {
-            workUrl = `${this.state.baseUrl}/${workUrl}`;
+          } else if (workUrl.startsWith("/")) {
+            // Other relative path, construct full URL
+            workUrl = `${this.state.baseUrl}${workUrl}`;
+          } else {
+            // No leading slash, add uploads prefix
+            workUrl = `${this.state.baseUrl}/uploads/${workUrl}`;
           }
         } else {
           workUrl = "/api/placeholder/150/150";
@@ -360,19 +370,18 @@ class MyPortfolio extends Component {
 
         // Handle thumbnail URL
         if (work.type === "image") {
-          thumbnailUrl = workUrl;
+          thumbnailUrl = workUrl; // For images, thumbnail is the same as main URL
         } else if (work.type === "video") {
           if (thumbnailUrl) {
-            if (
-              !thumbnailUrl.startsWith("http") &&
-              thumbnailUrl.startsWith("/")
-            ) {
+            if (thumbnailUrl.startsWith("http")) {
+              // Already full URL
+              thumbnailUrl = thumbnailUrl;
+            } else if (thumbnailUrl.startsWith("/uploads/")) {
               thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
-            } else if (
-              !thumbnailUrl.startsWith("http") &&
-              !thumbnailUrl.startsWith("/")
-            ) {
-              thumbnailUrl = `${this.state.baseUrl}/${thumbnailUrl}`;
+            } else if (thumbnailUrl.startsWith("/")) {
+              thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
+            } else {
+              thumbnailUrl = `${this.state.baseUrl}/uploads/${thumbnailUrl}`;
             }
           } else {
             thumbnailUrl = "/api/placeholder/150/150";
@@ -381,7 +390,7 @@ class MyPortfolio extends Component {
           thumbnailUrl = workUrl;
         }
 
-        return {
+        const processedWork = {
           id: work.id || work._id || `work_${index}`,
           url: workUrl,
           thumbnail: thumbnailUrl,
@@ -390,9 +399,12 @@ class MyPortfolio extends Component {
           serviceName: work.serviceName || "",
           uploadedDate: work.uploadedDate || new Date().toISOString(),
         };
+
+        console.log(`Processed work ${index + 1}:`, processedWork);
+        return processedWork;
       });
 
-      console.log("Processed works:", processedWorks);
+      console.log("Final processed works:", processedWorks);
 
       this.setState({
         portfolioData,
@@ -406,12 +418,12 @@ class MyPortfolio extends Component {
         },
         services: serviceNames,
         serviceData: serviceData,
-        videos: processedWorks,
+        videos: processedWorks, // This should now contain all works
         isLoading: false,
         activeServiceTab: firstServiceKey,
       });
 
-      // Cache data in localStorage
+      // Cache data in localStorage with works included
       localStorage.setItem(`profile_${userId}`, JSON.stringify(portfolioData));
       localStorage.setItem(`services_${userId}`, JSON.stringify(serviceNames));
       localStorage.setItem(
@@ -420,18 +432,21 @@ class MyPortfolio extends Component {
       );
       localStorage.setItem(`videos_${userId}`, JSON.stringify(processedWorks));
 
-      console.log("Portfolio data loaded successfully");
+      console.log(
+        "Portfolio data loaded successfully with",
+        processedWorks.length,
+        "works"
+      );
     } catch (error) {
       console.error("Error fetching portfolio data:", error);
       this.setState({
         isLoading: false,
         portfolioData: null,
-        videos: [],
+        videos: [], // Ensure videos is always an array
         services: [],
         serviceData: {},
       });
 
-      // Show user-friendly error message
       alert("Failed to load portfolio data. Please try refreshing the page.");
     }
   };
