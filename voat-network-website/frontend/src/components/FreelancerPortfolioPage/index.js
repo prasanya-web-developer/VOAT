@@ -322,6 +322,20 @@ class MyPortfolio extends Component {
         : null;
       const isOwnProfile = loggedInUserId === userId;
 
+      // Helper function to construct proper image URL
+      const getImageUrl = (imagePath) => {
+        if (!imagePath) return "/api/placeholder/150/150";
+        if (imagePath === "/api/placeholder/150/150") return imagePath;
+        if (imagePath.startsWith("http")) return imagePath;
+        if (imagePath.startsWith("/uploads/")) {
+          return `${this.state.baseUrl}${imagePath}`;
+        }
+        if (imagePath.startsWith("/")) {
+          return `${this.state.baseUrl}${imagePath}`;
+        }
+        return `${this.state.baseUrl}/uploads/${imagePath}`;
+      };
+
       const portfolioData = {
         name: portfolio?.name || user.name || "",
         headline: portfolio?.headline || "",
@@ -330,64 +344,35 @@ class MyPortfolio extends Component {
         experience: portfolio?.workExperience || "",
         about: portfolio?.about || "",
         email: portfolio?.email || user.email || "",
-        profileImage:
-          user.profileImage && user.profileImage !== "/api/placeholder/150/150"
-            ? user.profileImage.startsWith("http")
-              ? user.profileImage
-              : `${this.state.baseUrl}/${user.profileImage.replace(/^\//, "")}`
-            : "/api/placeholder/150/150",
+        profileImage: getImageUrl(user.profileImage),
         services: serviceNames,
         isApproved: portfolio?.status === "approved",
         isOwnProfile: isOwnProfile,
       };
 
-      // FIXED: Process works data with better error handling and validation
-      console.log("Raw works data:", works);
+      // CORRECTED: Process works data with proper URL handling and validation
+      console.log("Raw works data from backend:", works);
 
       const processedWorks = works.map((work, index) => {
+        // The backend now sends properly formatted relative paths
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // Handle work URL - ensure it's properly formatted
-        if (workUrl) {
-          if (workUrl.startsWith("http")) {
-            // Already a full URL, use as is
-            workUrl = workUrl;
-          } else if (workUrl.startsWith("/uploads/")) {
-            // Relative path with /uploads/, construct full URL
-            workUrl = `${this.state.baseUrl}${workUrl}`;
-          } else if (workUrl.startsWith("/")) {
-            // Other relative path, construct full URL
-            workUrl = `${this.state.baseUrl}${workUrl}`;
+        // Convert relative paths to full URLs for frontend display
+        if (workUrl && !workUrl.startsWith("http")) {
+          if (workUrl === "/api/placeholder/150/150") {
+            workUrl = workUrl; // Keep placeholder as is
           } else {
-            // No leading slash, add uploads prefix
-            workUrl = `${this.state.baseUrl}/uploads/${workUrl}`;
+            workUrl = `${this.state.baseUrl}${workUrl}`;
           }
-        } else {
-          workUrl = "/api/placeholder/150/150";
-          console.warn(`Work ${index} has no URL`);
         }
 
-        // Handle thumbnail URL
-        if (work.type === "image") {
-          thumbnailUrl = workUrl; // For images, thumbnail is the same as main URL
-        } else if (work.type === "video") {
-          if (thumbnailUrl) {
-            if (thumbnailUrl.startsWith("http")) {
-              // Already full URL
-              thumbnailUrl = thumbnailUrl;
-            } else if (thumbnailUrl.startsWith("/uploads/")) {
-              thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
-            } else if (thumbnailUrl.startsWith("/")) {
-              thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
-            } else {
-              thumbnailUrl = `${this.state.baseUrl}/uploads/${thumbnailUrl}`;
-            }
+        if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
+          if (thumbnailUrl === "/api/placeholder/150/150") {
+            thumbnailUrl = thumbnailUrl; // Keep placeholder as is
           } else {
-            thumbnailUrl = "/api/placeholder/150/150";
+            thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
           }
-        } else {
-          thumbnailUrl = workUrl;
         }
 
         const processedWork = {
@@ -400,11 +385,15 @@ class MyPortfolio extends Component {
           uploadedDate: work.uploadedDate || new Date().toISOString(),
         };
 
-        console.log(`Processed work ${index + 1}:`, processedWork);
+        console.log(`Processed work ${index + 1}:`, {
+          original: work,
+          processed: processedWork,
+        });
+
         return processedWork;
       });
 
-      console.log("Final processed works:", processedWorks);
+      console.log("Final processed works count:", processedWorks.length);
 
       this.setState({
         portfolioData,
@@ -418,12 +407,12 @@ class MyPortfolio extends Component {
         },
         services: serviceNames,
         serviceData: serviceData,
-        videos: processedWorks, // This should now contain all works
+        videos: processedWorks,
         isLoading: false,
         activeServiceTab: firstServiceKey,
       });
 
-      // Cache data in localStorage with works included
+      // Cache data in localStorage
       localStorage.setItem(`profile_${userId}`, JSON.stringify(portfolioData));
       localStorage.setItem(`services_${userId}`, JSON.stringify(serviceNames));
       localStorage.setItem(
@@ -442,7 +431,7 @@ class MyPortfolio extends Component {
       this.setState({
         isLoading: false,
         portfolioData: null,
-        videos: [], // Ensure videos is always an array
+        videos: [],
         services: [],
         serviceData: {},
       });
@@ -671,6 +660,15 @@ class MyPortfolio extends Component {
       setTimeout(() => {
         this.setState({ cartMessage: "" });
       }, 5000);
+    }
+  };
+
+  handleImageError = (e) => {
+    console.log("Image failed to load:", e.target.src);
+    // Don't set error image for placeholder URLs to prevent infinite loops
+    if (!e.target.src.includes("/api/placeholder/")) {
+      e.target.onerror = null; // Prevent infinite loop
+      e.target.src = "/api/placeholder/150/150";
     }
   };
 

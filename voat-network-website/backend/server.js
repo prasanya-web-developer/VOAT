@@ -1296,19 +1296,21 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
       submission.services = Array.from(uniqueServicesMap.values());
     }
 
-    // FIXED: Ensure works are properly formatted with full URLs
+    // CORRECTED: Ensure works are properly formatted with relative paths
     if (submission.works && submission.works.length > 0) {
       submission.works = submission.works.map((work) => {
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // Fix work URL
+        // Fix work URL - keep as relative path
         if (workUrl && !workUrl.startsWith("http")) {
-          if (workUrl.startsWith("/uploads/")) {
-            workUrl = workUrl; // Keep as is for relative path
-          } else if (!workUrl.startsWith("/")) {
+          if (!workUrl.startsWith("/")) {
             workUrl = `/uploads/${workUrl}`;
           }
+          // Clean up multiple slashes
+          workUrl = workUrl.replace(/\/+/g, "/");
+        } else if (!workUrl) {
+          workUrl = "/api/placeholder/150/150";
         }
 
         // Fix thumbnail URL
@@ -1317,11 +1319,13 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
             if (!thumbnailUrl.startsWith("/")) {
               thumbnailUrl = `/uploads/${thumbnailUrl}`;
             }
+            thumbnailUrl = thumbnailUrl.replace(/\/+/g, "/");
           } else if (!thumbnailUrl) {
             thumbnailUrl = "/api/placeholder/150/150";
           }
         } else {
-          thumbnailUrl = workUrl; // For images, thumbnail is the same as image
+          // For images, thumbnail is the same as image URL
+          thumbnailUrl = workUrl;
         }
 
         return {
@@ -1335,7 +1339,7 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
         };
       });
 
-      console.log("Formatted works:", submission.works.length);
+      console.log("Formatted works for admin:", submission.works.length);
     } else {
       console.log("No works found for this submission");
       submission.works = []; // Ensure works is always an array
@@ -2768,31 +2772,36 @@ app.get("/api/user/:userId", async (req, res) => {
     const services = portfolio?.services || [];
     const works = portfolio?.works || [];
 
-    // FIXED: Format works with consistent URL construction
+    // CORRECTED: Format works with relative paths (not full URLs)
     const formattedWorks = works.map((work) => {
       let workUrl = work.url;
       let thumbnailUrl = work.thumbnail;
 
-      // Ensure consistent URL formatting
+      // Handle work URL - keep as relative path
       if (workUrl && !workUrl.startsWith("http")) {
-        // Remove leading slashes and add single leading slash
-        workUrl = "/" + workUrl.replace(/^\/+/, "");
-        // Construct full URL for external access
-        workUrl = `${req.protocol}://${req.get("host")}${workUrl}`;
+        // Ensure proper relative path format
+        if (!workUrl.startsWith("/")) {
+          workUrl = `/uploads/${workUrl}`;
+        }
+        // Clean up any double slashes
+        workUrl = workUrl.replace(/\/+/g, "/");
+      } else if (!workUrl) {
+        workUrl = "/api/placeholder/150/150";
       }
 
+      // Handle thumbnail URL
       if (work.type === "video") {
-        thumbnailUrl = thumbnailUrl || "/api/placeholder/150/150";
-        if (
-          thumbnailUrl &&
-          !thumbnailUrl.startsWith("http") &&
-          !thumbnailUrl.includes("placeholder")
-        ) {
-          thumbnailUrl = "/" + thumbnailUrl.replace(/^\/+/, "");
-          thumbnailUrl = `${req.protocol}://${req.get("host")}${thumbnailUrl}`;
+        if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
+          if (!thumbnailUrl.startsWith("/")) {
+            thumbnailUrl = `/uploads/${thumbnailUrl}`;
+          }
+          thumbnailUrl = thumbnailUrl.replace(/\/+/g, "/");
+        } else if (!thumbnailUrl) {
+          thumbnailUrl = "/api/placeholder/150/150";
         }
       } else {
-        thumbnailUrl = workUrl; // For images, thumbnail is the same as the image
+        // For images, thumbnail is the same as the image URL
+        thumbnailUrl = workUrl;
       }
 
       return {
@@ -2814,7 +2823,7 @@ app.get("/api/user/:userId", async (req, res) => {
       role: user.role,
       profession: user.profession,
       phone: user.phone,
-      profileImage: user.profileImage,
+      profileImage: user.profileImage, // Keep as relative path
       voatId: user.voatId,
       voatPoints: user.voatPoints,
       badge: user.badge,
@@ -2828,7 +2837,7 @@ app.get("/api/user/:userId", async (req, res) => {
       user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      works: formattedWorks, // Include properly formatted works
+      works: formattedWorks,
       worksCount: formattedWorks.length,
     });
   } catch (error) {
