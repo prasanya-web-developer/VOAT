@@ -966,6 +966,8 @@ app.post(
         service,
         hasProfileImage,
         profileImagePath,
+        profileInitials,
+        userName,
       } = req.body;
 
       if (!name || !profession || !email) {
@@ -993,7 +995,7 @@ app.post(
         portfolioLink,
       };
 
-      // Handle profile image
+      // Handle profile image - prioritize existing user profile image
       if (hasProfileImage === "true" && profileImagePath) {
         portfolioData.profileImage = profileImagePath;
       } else if (profileImageFile) {
@@ -1004,15 +1006,16 @@ app.post(
         portfolioData.coverImage = `/uploads/${coverImageFile.filename}`;
       }
 
-      // Process work files with file size validation
+      // Process work files correctly with file size validation
       const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
       const workItems = [];
 
       for (const file of workFiles) {
+        // Check file size
         if (file.size > MAX_SIZE) {
           return res.status(400).json({
             success: false,
-            message: `File "${file.originalname}" exceeds 50MB limit.`,
+            message: `File "${file.originalname}" exceeds 50MB limit. Please use smaller files.`,
           });
         }
 
@@ -1022,7 +1025,7 @@ app.post(
           thumbnail: isVideo ? "" : `/uploads/${file.filename}`,
           title: file.originalname.split(".")[0],
           type: isVideo ? "video" : "image",
-          serviceName: "",
+          serviceName: "", // Will be filled from form data if available
           uploadedDate: new Date(),
         };
         workItems.push(workItem);
@@ -1030,125 +1033,147 @@ app.post(
 
       console.log("Processed work items:", workItems.length);
 
-      // Set status for new submissions
+      // Set status to pending for new submissions
       if (isNewSubmission === "true") {
         portfolioData.status = "pending";
         portfolioData.submittedDate = new Date();
       }
 
-      // Handle service data
+      // Handle service data if provided
       let serviceData = null;
       if (service) {
         try {
           serviceData = JSON.parse(service);
+          console.log("Parsed service data:", serviceData);
         } catch (err) {
           console.error("Error parsing service JSON:", err);
         }
       }
 
+      // Find and update, or create new if doesn't exist
       let portfolio;
       if (userId) {
-        // Find existing portfolio
-        const existingPortfolio = await PortfolioSubmission.findOne({ userId });
-
-        if (existingPortfolio) {
-          console.log(
-            "Existing portfolio found with",
-            existingPortfolio.works?.length || 0,
-            "works"
-          );
-
-          // FIXED: Preserve existing works when updating
-          if (workItems.length > 0) {
-            // Add new works to existing works instead of replacing
-            if (!existingPortfolio.works) {
-              existingPortfolio.works = [];
-            }
-            existingPortfolio.works.push(...workItems);
-          }
-
-          // Handle services
+        if (isNewSubmission === "true") {
+          // If we have a service to add and it's a new submission
           if (serviceData) {
-            if (!existingPortfolio.services) {
-              existingPortfolio.services = [];
-            }
-
             const newService = {
               name: serviceData.name,
               description: serviceData.description,
               pricing: serviceData.pricing || [],
             };
 
-            const existingServiceIndex = existingPortfolio.services.findIndex(
-              (service) => service.name === newService.name
-            );
+            const existingPortfolio = await PortfolioSubmission.findOne({
+              userId,
+            });
 
-            if (existingServiceIndex >= 0) {
-              existingPortfolio.services[existingServiceIndex] = newService;
+            if (existingPortfolio) {
+              if (!existingPortfolio.services) {
+                existingPortfolio.services = [];
+              }
+
+              const existingServiceIndex = existingPortfolio.services.findIndex(
+                (service) => service.name === newService.name
+              );
+
+              if (existingServiceIndex >= 0) {
+                existingPortfolio.services[existingServiceIndex] = newService;
+              } else {
+                existingPortfolio.services.push(newService);
+              }
+
+              // Add work items to existing portfolio
+              if (!existingPortfolio.works) {
+                existingPortfolio.works = [];
+              }
+              existingPortfolio.works.push(...workItems);
+
+              existingPortfolio.status = "pending";
+              existingPortfolio.submittedDate = new Date();
+
+              Object.assign(existingPortfolio, portfolioData);
+              portfolio = await existingPortfolio.save();
             } else {
-              existingPortfolio.services.push(newService);
+              // Create new portfolio with works
+              portfolio = new PortfolioSubmission({
+                ...portfolioData,
+                userId,
+                services: [newService],
+                works: workItems,
+                status: "pending",
+                submittedDate: new Date(),
+              });
+
+              await portfolio.save();
+            }
+          } else {
+            // Handle portfolio without service but with works
+            const existingPortfolio = await PortfolioSubmission.findOne({
+              userId,
+            });
+
+            if (existingPortfolio) {
+              if (!existingPortfolio.works) {
+                existingPortfolio.works = [];
+              }
+              existingPortfolio.works.push(...workItems);
+
+              Object.assign(existingPortfolio, {
+                ...portfolioData,
+                status: "pending",
+                submittedDate: new Date(),
+              });
+
+              portfolio = await existingPortfolio.save();
+            } else {
+              portfolio = new PortfolioSubmission({
+                ...portfolioData,
+                userId,
+                works: workItems,
+                status: "pending",
+                submittedDate: new Date(),
+              });
+
+              await portfolio.save();
             }
           }
+        } else {
+          // Normal update - add works if any
+          const updateData = { ...portfolioData };
 
-          // Update other fields
-          Object.assign(existingPortfolio, portfolioData);
-
-          // Set submission status for new submissions
-          if (isNewSubmission === "true") {
-            existingPortfolio.status = "pending";
-            existingPortfolio.submittedDate = new Date();
+          if (workItems.length > 0) {
+            updateData.$push = { works: { $each: workItems } };
           }
 
-          portfolio = await existingPortfolio.save();
-          console.log(
-            "Updated portfolio with",
-            portfolio.works?.length || 0,
-            "total works"
+          portfolio = await PortfolioSubmission.findOneAndUpdate(
+            { userId },
+            updateData,
+            { upsert: true, new: true }
           );
-        } else {
-          // Create new portfolio
-          const newPortfolioData = {
+        }
+      } else {
+        // For non-logged in users, always create new submission
+        if (serviceData) {
+          portfolio = new PortfolioSubmission({
             ...portfolioData,
-            userId,
-            works: workItems,
-            status: isNewSubmission === "true" ? "pending" : "draft",
-            submittedDate: isNewSubmission === "true" ? new Date() : undefined,
-          };
-
-          if (serviceData) {
-            newPortfolioData.services = [
+            services: [
               {
                 name: serviceData.name,
                 description: serviceData.description,
                 pricing: serviceData.pricing || [],
               },
-            ];
-          }
-
-          portfolio = new PortfolioSubmission(newPortfolioData);
-          await portfolio.save();
-          console.log("Created new portfolio with", workItems.length, "works");
+            ],
+            works: workItems,
+            status: "pending",
+            submittedDate: new Date(),
+          });
+        } else {
+          portfolio = new PortfolioSubmission({
+            ...portfolioData,
+            works: workItems,
+            status: "pending",
+            submittedDate: new Date(),
+          });
         }
-      } else {
-        // For non-logged in users
-        const newPortfolioData = {
-          ...portfolioData,
-          works: workItems,
-          status: "pending",
-          submittedDate: new Date(),
-        };
-
-        if (serviceData) {
-          newPortfolioData.services = [
-            {
-              name: serviceData.name,
-              description: serviceData.description,
-              pricing: serviceData.pricing || [],
-            },
-          ];
-        }
-
-        portfolio = new PortfolioSubmission(newPortfolioData);
         await portfolio.save();
       }
 
@@ -1164,7 +1189,6 @@ app.post(
             metadata: {
               action: "portfolio_submission",
               worksCount: workItems.length,
-              totalWorksCount: portfolio.works?.length || 0,
               timestamp: new Date().toISOString(),
             },
           });
@@ -1181,7 +1205,6 @@ app.post(
             : "Portfolio updated successfully",
         portfolio: portfolio,
         worksUploaded: workItems.length,
-        totalWorks: portfolio.works?.length || 0,
       });
     } catch (error) {
       console.error("Portfolio operation error:", error);
@@ -1270,18 +1293,12 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log("=== FETCHING ADMIN PORTFOLIO SUBMISSION ===");
-    console.log("Submission ID:", id);
-
-    // Find the portfolio submission by ID
+    // Find the portfolio submission by ID and populate works
     const submission = await PortfolioSubmission.findById(id);
 
     if (!submission) {
       return res.status(404).json({ message: "Submission not found" });
     }
-
-    console.log("Found submission for:", submission.name);
-    console.log("Works count:", submission.works ? submission.works.length : 0);
 
     // Clean up any potential service duplicates before sending
     if (submission.services && Array.isArray(submission.services)) {
@@ -1294,62 +1311,25 @@ app.get("/api/admin/portfolio-submission/:id", async (req, res) => {
       });
 
       submission.services = Array.from(uniqueServicesMap.values());
+      await submission.save();
     }
 
-    // CORRECTED: Ensure works are properly formatted with relative paths
-    if (submission.works && submission.works.length > 0) {
-      submission.works = submission.works.map((work) => {
-        let workUrl = work.url;
-        let thumbnailUrl = work.thumbnail;
-
-        // Fix work URL - keep as relative path
-        if (workUrl && !workUrl.startsWith("http")) {
-          if (!workUrl.startsWith("/")) {
-            workUrl = `/uploads/${workUrl}`;
-          }
-          // Clean up multiple slashes
-          workUrl = workUrl.replace(/\/+/g, "/");
-        } else if (!workUrl) {
-          workUrl = "/api/placeholder/150/150";
-        }
-
-        // Fix thumbnail URL
-        if (work.type === "video") {
-          if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
-            if (!thumbnailUrl.startsWith("/")) {
-              thumbnailUrl = `/uploads/${thumbnailUrl}`;
-            }
-            thumbnailUrl = thumbnailUrl.replace(/\/+/g, "/");
-          } else if (!thumbnailUrl) {
-            thumbnailUrl = "/api/placeholder/150/150";
-          }
-        } else {
-          // For images, thumbnail is the same as image URL
-          thumbnailUrl = workUrl;
-        }
-
-        return {
-          _id: work._id,
-          url: workUrl,
-          thumbnail: thumbnailUrl,
-          title: work.title || "Untitled Work",
-          type: work.type || "image",
-          serviceName: work.serviceName || "",
-          uploadedDate: work.uploadedDate || new Date(),
-        };
-      });
-
-      console.log("Formatted works for admin:", submission.works.length);
-    } else {
-      console.log("No works found for this submission");
-      submission.works = []; // Ensure works is always an array
+    // FIXED: Ensure works are properly formatted
+    if (submission.works) {
+      submission.works = submission.works.map((work) => ({
+        ...work,
+        url:
+          work.url && work.url.startsWith("/")
+            ? work.url
+            : `/uploads/${work.url}`,
+        thumbnail:
+          work.thumbnail ||
+          (work.type === "image" ? work.url : "/api/placeholder/150/150"),
+      }));
     }
 
-    // Convert to plain object to ensure all fields are included
-    const submissionData = submission.toObject();
-
-    // Return the submission with properly formatted works
-    res.status(200).json(submissionData);
+    // Return the cleaned submission with works
+    res.status(200).json(submission);
   } catch (error) {
     console.error("Error fetching portfolio submission:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -2772,48 +2752,16 @@ app.get("/api/user/:userId", async (req, res) => {
     const services = portfolio?.services || [];
     const works = portfolio?.works || [];
 
-    // CORRECTED: Format works with relative paths (not full URLs)
-    const formattedWorks = works.map((work) => {
-      let workUrl = work.url;
-      let thumbnailUrl = work.thumbnail;
-
-      // Handle work URL - keep as relative path
-      if (workUrl && !workUrl.startsWith("http")) {
-        // Ensure proper relative path format
-        if (!workUrl.startsWith("/")) {
-          workUrl = `/uploads/${workUrl}`;
-        }
-        // Clean up any double slashes
-        workUrl = workUrl.replace(/\/+/g, "/");
-      } else if (!workUrl) {
-        workUrl = "/api/placeholder/150/150";
-      }
-
-      // Handle thumbnail URL
-      if (work.type === "video") {
-        if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
-          if (!thumbnailUrl.startsWith("/")) {
-            thumbnailUrl = `/uploads/${thumbnailUrl}`;
-          }
-          thumbnailUrl = thumbnailUrl.replace(/\/+/g, "/");
-        } else if (!thumbnailUrl) {
-          thumbnailUrl = "/api/placeholder/150/150";
-        }
-      } else {
-        // For images, thumbnail is the same as the image URL
-        thumbnailUrl = workUrl;
-      }
-
-      return {
-        id: work._id,
-        url: workUrl,
-        thumbnail: thumbnailUrl,
-        title: work.title || "Untitled Work",
-        type: work.type || "image",
-        serviceName: work.serviceName || "",
-        uploadedDate: work.uploadedDate || new Date(),
-      };
-    });
+    // Format works for frontend consumption
+    const formattedWorks = works.map((work) => ({
+      id: work._id,
+      url: work.url,
+      thumbnail: work.thumbnail || work.url,
+      title: work.title,
+      type: work.type,
+      serviceName: work.serviceName,
+      uploadedDate: work.uploadedDate,
+    }));
 
     // Prepare complete user data response
     const userResponse = {
@@ -2823,13 +2771,16 @@ app.get("/api/user/:userId", async (req, res) => {
       role: user.role,
       profession: user.profession,
       phone: user.phone,
-      profileImage: user.profileImage, // Keep as relative path
+      profileImage: user.profileImage,
       voatId: user.voatId,
       voatPoints: user.voatPoints,
       badge: user.badge,
     };
 
-    console.log("Sending works count:", formattedWorks.length);
+    console.log(
+      "Sending user data with profile image:",
+      userResponse.profileImage
+    );
 
     // Return user data with their portfolio information including works
     res.status(200).json({
@@ -2837,8 +2788,8 @@ app.get("/api/user/:userId", async (req, res) => {
       user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      works: formattedWorks,
-      worksCount: formattedWorks.length,
+      works: formattedWorks, // Include works in the response
+      worksCount: formattedWorks.length, // Add count for convenience
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
@@ -6847,97 +6798,6 @@ app.get("/api/debug/check-voat-ids", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-});
-
-app.get("/api/debug/works/:userId", async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    console.log("=== DEBUG WORKS ENDPOINT ===");
-    console.log("User ID:", userId);
-
-    // Find the portfolio submission
-    const portfolio = await PortfolioSubmission.findOne({ userId: userId });
-
-    if (!portfolio) {
-      return res.json({
-        error: "Portfolio not found",
-        userId: userId,
-      });
-    }
-
-    console.log("Portfolio found:", portfolio.name);
-    console.log(
-      "Works in database:",
-      portfolio.works ? portfolio.works.length : 0
-    );
-
-    const debugInfo = {
-      portfolioId: portfolio._id,
-      portfolioName: portfolio.name,
-      portfolioStatus: portfolio.status,
-      isHold: portfolio.isHold,
-      totalWorks: portfolio.works ? portfolio.works.length : 0,
-      works: portfolio.works
-        ? portfolio.works.map((work, index) => ({
-            index: index,
-            id: work._id,
-            title: work.title,
-            type: work.type,
-            url: work.url,
-            thumbnail: work.thumbnail,
-            serviceName: work.serviceName,
-            uploadedDate: work.uploadedDate,
-            urlExists: work.url ? true : false,
-            urlStartsWithUploads: work.url
-              ? work.url.startsWith("/uploads/")
-              : false,
-          }))
-        : [],
-      services: portfolio.services ? portfolio.services.length : 0,
-      submittedDate: portfolio.submittedDate,
-      updatedDate: portfolio.updatedDate,
-    };
-
-    res.json({
-      success: true,
-      debug: debugInfo,
-    });
-  } catch (error) {
-    console.error("Debug works endpoint error:", error);
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack,
-    });
-  }
-});
-
-// Add a file existence check endpoint
-app.get("/api/debug/file-exists/*", async (req, res) => {
-  try {
-    const filePath = req.params[0]; // This captures everything after /file-exists/
-    const fullPath = path.join(__dirname, "uploads", filePath);
-
-    const exists = fs.existsSync(fullPath);
-    const stats = exists ? fs.statSync(fullPath) : null;
-
-    res.json({
-      requestedPath: filePath,
-      fullPath: fullPath,
-      exists: exists,
-      stats: stats
-        ? {
-            size: stats.size,
-            created: stats.birthtime,
-            modified: stats.mtime,
-          }
-        : null,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
   }
 });
 

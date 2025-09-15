@@ -322,20 +322,6 @@ class MyPortfolio extends Component {
         : null;
       const isOwnProfile = loggedInUserId === userId;
 
-      // Helper function to construct proper image URL
-      const getImageUrl = (imagePath) => {
-        if (!imagePath) return "/api/placeholder/150/150";
-        if (imagePath === "/api/placeholder/150/150") return imagePath;
-        if (imagePath.startsWith("http")) return imagePath;
-        if (imagePath.startsWith("/uploads/")) {
-          return `${this.state.baseUrl}${imagePath}`;
-        }
-        if (imagePath.startsWith("/")) {
-          return `${this.state.baseUrl}${imagePath}`;
-        }
-        return `${this.state.baseUrl}/uploads/${imagePath}`;
-      };
-
       const portfolioData = {
         name: portfolio?.name || user.name || "",
         headline: portfolio?.headline || "",
@@ -344,38 +330,58 @@ class MyPortfolio extends Component {
         experience: portfolio?.workExperience || "",
         about: portfolio?.about || "",
         email: portfolio?.email || user.email || "",
-        profileImage: getImageUrl(user.profileImage),
+        profileImage:
+          user.profileImage && user.profileImage !== "/api/placeholder/150/150"
+            ? user.profileImage.startsWith("http")
+              ? user.profileImage
+              : `${this.state.baseUrl}/${user.profileImage.replace(/^\//, "")}`
+            : "/api/placeholder/150/150",
         services: serviceNames,
         isApproved: portfolio?.status === "approved",
         isOwnProfile: isOwnProfile,
       };
 
-      // CORRECTED: Process works data with proper URL handling and validation
-      console.log("Raw works data from backend:", works);
-
+      // Process works data properly with error handling and validation
       const processedWorks = works.map((work, index) => {
-        // The backend now sends properly formatted relative paths
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // Convert relative paths to full URLs for frontend display
-        if (workUrl && !workUrl.startsWith("http")) {
-          if (workUrl === "/api/placeholder/150/150") {
-            workUrl = workUrl; // Keep placeholder as is
-          } else {
+        // Handle work URL
+        if (workUrl) {
+          if (!workUrl.startsWith("http") && workUrl.startsWith("/")) {
             workUrl = `${this.state.baseUrl}${workUrl}`;
+          } else if (!workUrl.startsWith("http") && !workUrl.startsWith("/")) {
+            workUrl = `${this.state.baseUrl}/${workUrl}`;
           }
+        } else {
+          workUrl = "/api/placeholder/150/150";
+          console.warn(`Work ${index} has no URL`);
         }
 
-        if (thumbnailUrl && !thumbnailUrl.startsWith("http")) {
-          if (thumbnailUrl === "/api/placeholder/150/150") {
-            thumbnailUrl = thumbnailUrl; // Keep placeholder as is
+        // Handle thumbnail URL
+        if (work.type === "image") {
+          thumbnailUrl = workUrl;
+        } else if (work.type === "video") {
+          if (thumbnailUrl) {
+            if (
+              !thumbnailUrl.startsWith("http") &&
+              thumbnailUrl.startsWith("/")
+            ) {
+              thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
+            } else if (
+              !thumbnailUrl.startsWith("http") &&
+              !thumbnailUrl.startsWith("/")
+            ) {
+              thumbnailUrl = `${this.state.baseUrl}/${thumbnailUrl}`;
+            }
           } else {
-            thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
+            thumbnailUrl = "/api/placeholder/150/150";
           }
+        } else {
+          thumbnailUrl = workUrl;
         }
 
-        const processedWork = {
+        return {
           id: work.id || work._id || `work_${index}`,
           url: workUrl,
           thumbnail: thumbnailUrl,
@@ -384,16 +390,9 @@ class MyPortfolio extends Component {
           serviceName: work.serviceName || "",
           uploadedDate: work.uploadedDate || new Date().toISOString(),
         };
-
-        console.log(`Processed work ${index + 1}:`, {
-          original: work,
-          processed: processedWork,
-        });
-
-        return processedWork;
       });
 
-      console.log("Final processed works count:", processedWorks.length);
+      console.log("Processed works:", processedWorks);
 
       this.setState({
         portfolioData,
@@ -421,11 +420,7 @@ class MyPortfolio extends Component {
       );
       localStorage.setItem(`videos_${userId}`, JSON.stringify(processedWorks));
 
-      console.log(
-        "Portfolio data loaded successfully with",
-        processedWorks.length,
-        "works"
-      );
+      console.log("Portfolio data loaded successfully");
     } catch (error) {
       console.error("Error fetching portfolio data:", error);
       this.setState({
@@ -436,6 +431,7 @@ class MyPortfolio extends Component {
         serviceData: {},
       });
 
+      // Show user-friendly error message
       alert("Failed to load portfolio data. Please try refreshing the page.");
     }
   };
@@ -660,15 +656,6 @@ class MyPortfolio extends Component {
       setTimeout(() => {
         this.setState({ cartMessage: "" });
       }, 5000);
-    }
-  };
-
-  handleImageError = (e) => {
-    console.log("Image failed to load:", e.target.src);
-    // Don't set error image for placeholder URLs to prevent infinite loops
-    if (!e.target.src.includes("/api/placeholder/")) {
-      e.target.onerror = null; // Prevent infinite loop
-      e.target.src = "/api/placeholder/150/150";
     }
   };
 
