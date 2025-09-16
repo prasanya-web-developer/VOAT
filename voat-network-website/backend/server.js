@@ -2760,6 +2760,47 @@ app.get("/api/user/:userId", async (req, res) => {
     }
 
     console.log("User found:", user.name, "Profile Image:", user.profileImage);
+    console.log("VOAT Points from DB:", user.voatPoints);
+    console.log("Badge from DB:", user.badge);
+
+    // Ensure VOAT fields have default values if missing
+    let needsUpdate = false;
+
+    if (!user.voatId) {
+      const randomPart = uuidv4().substring(0, 9).toUpperCase();
+      user.voatId = `VOAT-${randomPart.substring(0, 4)}-${randomPart.substring(
+        4,
+        8
+      )}`;
+      needsUpdate = true;
+    }
+
+    if (user.voatPoints === undefined || user.voatPoints === null) {
+      user.voatPoints = 0;
+      needsUpdate = true;
+    }
+
+    if (!user.badge) {
+      user.badge = calculateBadge(user.voatPoints);
+      needsUpdate = true;
+    } else {
+      // Verify badge is correct based on current points
+      const correctBadge = calculateBadge(user.voatPoints);
+      if (user.badge !== correctBadge) {
+        user.badge = correctBadge;
+        needsUpdate = true;
+      }
+    }
+
+    // Save updates if needed
+    if (needsUpdate) {
+      await user.save();
+      console.log("User VOAT data updated:", {
+        voatId: user.voatId,
+        voatPoints: user.voatPoints,
+        badge: user.badge,
+      });
+    }
 
     // Get the user's portfolio submission if it exists
     const portfolio = await PortfolioSubmission.findOne({ userId: userId });
@@ -2784,7 +2825,7 @@ app.get("/api/user/:userId", async (req, res) => {
       uploadedDate: work.uploadedDate,
     }));
 
-    // Prepare complete user data response
+    // Prepare complete user data response with guaranteed VOAT fields
     const userResponse = {
       id: user._id,
       name: user.name,
@@ -2794,14 +2835,15 @@ app.get("/api/user/:userId", async (req, res) => {
       phone: user.phone,
       profileImage: user.profileImage,
       voatId: user.voatId,
-      voatPoints: user.voatPoints,
-      badge: user.badge,
+      voatPoints: user.voatPoints || 0, // Always ensure a number
+      badge: user.badge || "bronze", // Always ensure a badge
     };
 
-    console.log(
-      "Sending user data with profile image:",
-      userResponse.profileImage
-    );
+    console.log("Final user response VOAT data:", {
+      voatId: userResponse.voatId,
+      voatPoints: userResponse.voatPoints,
+      badge: userResponse.badge,
+    });
 
     // Return user data with their portfolio information including works
     res.status(200).json({
@@ -2809,8 +2851,8 @@ app.get("/api/user/:userId", async (req, res) => {
       user: userResponse,
       portfolio: portfolio || null,
       services: services,
-      works: formattedWorks, // Include works in the response
-      worksCount: formattedWorks.length, // Add count for convenience
+      works: formattedWorks,
+      worksCount: formattedWorks.length,
     });
   } catch (error) {
     console.error("Error fetching user data:", error);
@@ -6823,6 +6865,27 @@ app.get("/api/debug/check-voat-ids", async (req, res) => {
         name: u.name,
         email: u.email,
       })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/debug/voat-points/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      userId: user._id,
+      voatId: user.voatId,
+      voatPoints: user.voatPoints,
+      badge: user.badge,
+      rawUserData: user,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

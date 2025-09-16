@@ -95,6 +95,7 @@ class UserDashboard extends Component {
         this.fetchWishlist(); // Regular fetch on mount
         this.fetchNotifications();
         this.refreshUserPoints();
+        this.refreshVoatPoints();
 
         // Add a small delay to ensure userData is properly set
         setTimeout(() => {
@@ -139,6 +140,10 @@ class UserDashboard extends Component {
       this.fetchNotifications();
     }, 30000);
 
+    this.voatPointsRefreshInterval = setInterval(() => {
+      this.refreshVoatPoints();
+    }, 30000);
+
     // Event handlers
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
@@ -165,6 +170,10 @@ class UserDashboard extends Component {
     }
     if (this.notificationRefreshInterval) {
       clearInterval(this.notificationRefreshInterval);
+    }
+
+    if (this.voatPointsRefreshInterval) {
+      clearInterval(this.voatPointsRefreshInterval);
     }
     if (this.dataRefreshInterval) {
       clearInterval(this.dataRefreshInterval);
@@ -549,7 +558,8 @@ class UserDashboard extends Component {
 
           userData.voatId = voatId;
           userData.voatPoints = userData.voatPoints || 0;
-          userData.badge = userData.badge || this.calculateBadge(0);
+          userData.badge =
+            userData.badge || this.calculateBadge(userData.voatPoints || 0);
 
           localStorage.setItem("user", JSON.stringify(userData));
 
@@ -571,6 +581,7 @@ class UserDashboard extends Component {
           previewImage: null,
         });
 
+        // FIXED: Always fetch fresh user data from database
         const freshUserData = await this.refreshUserFromDatabase();
 
         if (freshUserData) {
@@ -699,12 +710,16 @@ class UserDashboard extends Component {
       const userData = JSON.parse(localStorage.getItem("user"));
       if (!userData || !userData.id) return null;
 
+      console.log("Refreshing user data from database for user:", userData.id);
+
       const response = await fetch(
         `${this.state.baseUrl}/api/user/${userData.id}`
       );
 
       if (response.ok) {
         const result = await response.json();
+        console.log("Fresh user data from database:", result.user);
+
         const updatedUserData = {
           ...userData,
           ...result.user,
@@ -714,9 +729,18 @@ class UserDashboard extends Component {
             result.user.voatPoints !== undefined
               ? result.user.voatPoints
               : userData.voatPoints || 0,
-          badge: result.user.badge || userData.badge || this.calculateBadge(0),
+          badge:
+            result.user.badge ||
+            this.calculateBadge(
+              result.user.voatPoints || userData.voatPoints || 0
+            ),
           profileImage: result.user.profileImage,
         };
+
+        console.log(
+          "Updated user data with VOAT points:",
+          updatedUserData.voatPoints
+        );
 
         localStorage.setItem("user", JSON.stringify(updatedUserData));
         return updatedUserData;
@@ -5834,6 +5858,42 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error refreshing user points:", error);
+    }
+  };
+
+  refreshVoatPoints = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user"));
+      if (!userData || !userData.id) return;
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/user/${userData.id}`
+      );
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.user) {
+          const currentPoints = result.user.voatPoints || 0;
+          const currentBadge = this.calculateBadge(currentPoints);
+
+          // Update state if points have changed
+          if (this.state.userData.voatPoints !== currentPoints) {
+            console.log(
+              `VOAT points updated: ${this.state.userData.voatPoints} -> ${currentPoints}`
+            );
+
+            const updatedUserData = {
+              ...this.state.userData,
+              voatPoints: currentPoints,
+              badge: currentBadge,
+            };
+
+            this.setState({ userData: updatedUserData });
+            localStorage.setItem("user", JSON.stringify(updatedUserData));
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing VOAT points:", error);
     }
   };
 
