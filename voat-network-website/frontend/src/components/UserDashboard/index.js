@@ -302,9 +302,9 @@ class UserDashboard extends Component {
 
   updateStats = () => {
     const {
-      orders,
-      wishlist,
-      bookings,
+      orders = [],
+      wishlist = [],
+      bookings = [],
       myBookings = [],
       receivedOrders = [],
     } = this.state;
@@ -314,7 +314,8 @@ class UserDashboard extends Component {
       (order) => order.status === "Completed" || order.status === "completed"
     );
 
-    const totalSpent = completedOrders.reduce(
+    // FIXED: Total spent should include ALL paid orders, not just completed ones
+    const totalSpent = orders.reduce(
       (sum, order) => sum + (order.amount || 0),
       0
     );
@@ -323,29 +324,40 @@ class UserDashboard extends Component {
       (order) =>
         order.status === "In Progress" ||
         order.status === "Pending" ||
-        order.status === "pending"
+        order.status === "pending" ||
+        order.status === "accepted"
     ).length;
 
-    // Calculate stats for My Bookings (separate from orders)
+    // Calculate stats for My Bookings (all booking requests made by user)
     const totalMyBookings = Array.isArray(myBookings) ? myBookings.length : 0;
     const pendingMyBookings = Array.isArray(myBookings)
       ? myBookings.filter((b) => b.status === "pending").length
       : 0;
 
-    // Freelancer-specific stats (orders received)
+    // Freelancer-specific stats (orders received and booking requests)
     let totalEarned = 0;
     let completedProjects = 0;
+    let totalBookingRequests = 0;
 
     if (this.isFreelancer()) {
+      // FIXED: Total earned should be from ACCEPTED orders (when freelancer accepts the order)
       totalEarned = Array.isArray(receivedOrders)
         ? receivedOrders
-            .filter((order) => order.status === "completed")
+            .filter(
+              (order) =>
+                order.status === "accepted" ||
+                order.status === "completed" ||
+                order.status === "in-progress"
+            )
             .reduce((sum, order) => sum + (order.servicePrice || 0), 0)
         : 0;
 
       completedProjects = Array.isArray(receivedOrders)
         ? receivedOrders.filter((order) => order.status === "completed").length
         : 0;
+
+      // FIXED: Total booking requests count (all requests received by freelancer)
+      totalBookingRequests = Array.isArray(bookings) ? bookings.length : 0;
     }
 
     const myOrdersCount = orders.length;
@@ -361,9 +373,7 @@ class UserDashboard extends Component {
         // Freelancer stats
         totalEarned,
         completedProjects,
-        bookingRequestsCount: Array.isArray(bookings)
-          ? bookings.filter((booking) => booking.status === "pending").length
-          : 0,
+        bookingRequestsCount: totalBookingRequests,
         myOrdersCount,
       },
     });
@@ -774,7 +784,7 @@ class UserDashboard extends Component {
 
         this.setState({ orders: formattedOrders }, () => {
           console.log("Orders set in state:", this.state.orders);
-          this.updateStats();
+          this.updateStats(); // This callback is already there, keep it
         });
       } else {
         console.log("Failed to fetch orders, status:", response.status);
@@ -5757,6 +5767,27 @@ class UserDashboard extends Component {
     this.setState((prevState) => ({
       selectedWorkFiles: [...prevState.selectedWorkFiles, ...validFiles],
     }));
+  };
+
+  refreshAfterPayment = () => {
+    console.log("=== REFRESHING DATA AFTER PAYMENT ===");
+
+    // Refresh all order-related data
+    this.fetchOrders(); // My Orders (as client)
+    this.fetchMyBookings(); // My Bookings
+    this.fetchNotifications();
+
+    if (this.isFreelancer()) {
+      this.fetchBookingRequests(); // Booking Requests (as freelancer)
+      this.fetchFreelancerOrders(); // Orders Received (as freelancer)
+    }
+
+    // Update stats after data refresh
+    setTimeout(() => {
+      this.updateStats();
+    }, 2000);
+
+    console.log("Data refresh completed after payment");
   };
 
   renderDashboardContent() {

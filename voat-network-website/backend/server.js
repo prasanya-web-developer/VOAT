@@ -4141,18 +4141,25 @@ app.put("/api/booking/:bookingId/action", async (req, res) => {
       },
     });
 
-    // Create notification for the freelancer
+    // Enhanced freelancer notification for accepted bookings
     await createNotification({
       userId: booking.freelancerId,
-      type: "system",
-      title: `Booking Request ${action === "accept" ? "Accepted" : "Rejected"}`,
-      message: `You have ${action}ed the booking request from ${booking.clientName} for "${booking.serviceName}"`,
+      type: action === "accept" ? "system" : "booking",
+      title:
+        action === "accept"
+          ? "Booking Accepted - Potential Earnings"
+          : `Booking Request ${action === "accept" ? "Accepted" : "Rejected"}`,
+      message:
+        action === "accept"
+          ? `You have accepted the booking from ${booking.clientName} for "${booking.serviceName}" (₹${booking.servicePrice}). This will count towards your earnings once converted to a paid order.`
+          : `You have ${action}ed the booking request from ${booking.clientName} for "${booking.serviceName}"`,
       relatedId: booking._id.toString(),
       metadata: {
         bookingId: booking._id,
         serviceName: booking.serviceName,
         clientName: booking.clientName,
         action: action,
+        amount: booking.servicePrice,
         timestamp: new Date().toISOString(),
       },
     });
@@ -4827,6 +4834,7 @@ app.post("/api/orders/create", async (req, res) => {
           freelancerName: freelancer.name,
           serviceName,
           totalAmount,
+          action: "purchase_made", // This triggers stats update
         },
       });
     } catch (notificationError) {
@@ -5160,8 +5168,8 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
 
       switch (status) {
         case "accepted":
-          freelancerTitle = "Order Accepted";
-          freelancerMessage = `You have accepted the order from ${order.clientName} for "${order.serviceName}"`;
+          freelancerTitle = "Order Accepted - Earnings Updated";
+          freelancerMessage = `You have accepted the order from ${order.clientName} for "${order.serviceName}" and earned ₹${order.totalAmount}`;
           break;
         case "rejected":
           freelancerTitle = "Order Declined";
@@ -5176,10 +5184,10 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
           freelancerMessage = `You have updated the order status for "${order.serviceName}" to ${status}`;
       }
 
-      // Create freelancer notification
+      // Create freelancer notification with earnings update metadata
       await createNotification({
         userId: order.freelancerId,
-        type: "system",
+        type: status === "accepted" ? "system" : "order",
         title: freelancerTitle,
         message: freelancerMessage,
         relatedId: order._id.toString(),
@@ -5187,7 +5195,8 @@ app.put("/api/orders/:orderId/status", async (req, res) => {
           orderId: order._id,
           serviceName: order.serviceName,
           clientName: order.clientName,
-          action: status,
+          action: status === "accepted" ? "earnings_update" : status,
+          amount: status === "accepted" ? order.totalAmount : undefined,
           timestamp: new Date().toISOString(),
         },
       });
@@ -6364,7 +6373,7 @@ app.post("/api/payment/verify-payment", async (req, res) => {
             await createNotification({
               userId: freelancerId,
               type: "order",
-              title: "New Order Received",
+              title: "New Paid Order Received",
               message: `You have received a new paid order from ${user.name} for "${serviceName}"`,
               relatedId: savedOrder._id.toString(),
               metadata: {
@@ -6376,18 +6385,20 @@ app.post("/api/payment/verify-payment", async (req, res) => {
               },
             });
 
-            // Create notification for client
+            // Enhanced client notification with purchase tracking
             await createNotification({
               userId: userId,
               type: "order",
-              title: "Order Placed Successfully",
-              message: `Your order for "${serviceName}" has been placed and payment confirmed`,
+              title: "Order Placed and Payment Confirmed",
+              message: `Your order for "${serviceName}" has been placed and payment of ₹${totalAmount} confirmed`,
               relatedId: savedOrder._id.toString(),
               metadata: {
                 orderId: savedOrder._id,
                 freelancerName: freelancerName,
                 serviceName: serviceName,
                 amount: totalAmount,
+                action: "purchase_made", // This triggers stats update
+                paymentConfirmed: true,
               },
             });
 
