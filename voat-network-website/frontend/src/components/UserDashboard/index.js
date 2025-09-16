@@ -35,10 +35,11 @@ class UserDashboard extends Component {
       savedItems: 0,
       totalBookings: 0,
       pendingBookings: 0,
-      // NEW: Additional stats for freelancers
+      //stats for freelancers
       totalEarned: 0,
       completedProjects: 0,
       bookingRequestsCount: 0,
+      totalOrdersReceived: 0,
       myOrdersCount: 0,
     },
 
@@ -93,6 +94,7 @@ class UserDashboard extends Component {
         this.fetchMyBookings();
         this.fetchWishlist(); // Regular fetch on mount
         this.fetchNotifications();
+        this.refreshUserPoints();
 
         // Add a small delay to ensure userData is properly set
         setTimeout(() => {
@@ -314,7 +316,7 @@ class UserDashboard extends Component {
       (order) => order.status === "Completed" || order.status === "completed"
     );
 
-    // FIXED: Total spent should include ALL paid orders, not just completed ones
+    // Total spent should include ALL paid orders, not just completed ones
     const totalSpent = orders.reduce(
       (sum, order) => sum + (order.amount || 0),
       0
@@ -325,7 +327,8 @@ class UserDashboard extends Component {
         order.status === "In Progress" ||
         order.status === "Pending" ||
         order.status === "pending" ||
-        order.status === "accepted"
+        order.status === "accepted" ||
+        order.status === "in-progress"
     ).length;
 
     // Calculate stats for My Bookings (all booking requests made by user)
@@ -338,9 +341,10 @@ class UserDashboard extends Component {
     let totalEarned = 0;
     let completedProjects = 0;
     let totalBookingRequests = 0;
+    let totalOrdersReceived = 0;
 
     if (this.isFreelancer()) {
-      // FIXED: Total earned should be from ACCEPTED orders (when freelancer accepts the order)
+      // Total earned from ACCEPTED orders (when freelancer accepts the order)
       totalEarned = Array.isArray(receivedOrders)
         ? receivedOrders
             .filter(
@@ -352,12 +356,18 @@ class UserDashboard extends Component {
             .reduce((sum, order) => sum + (order.servicePrice || 0), 0)
         : 0;
 
+      // Completed projects count
       completedProjects = Array.isArray(receivedOrders)
         ? receivedOrders.filter((order) => order.status === "completed").length
         : 0;
 
-      // FIXED: Total booking requests count (all requests received by freelancer)
+      // Total booking requests count (all requests received by freelancer)
       totalBookingRequests = Array.isArray(bookings) ? bookings.length : 0;
+
+      // Total orders received count (all paid orders received by freelancer)
+      totalOrdersReceived = Array.isArray(receivedOrders)
+        ? receivedOrders.length
+        : 0;
     }
 
     const myOrdersCount = orders.length;
@@ -374,6 +384,7 @@ class UserDashboard extends Component {
         totalEarned,
         completedProjects,
         bookingRequestsCount: totalBookingRequests,
+        totalOrdersReceived,
         myOrdersCount,
       },
     });
@@ -634,9 +645,15 @@ class UserDashboard extends Component {
           this.updateStats();
         }
       );
-      console.log("Dashboard wishlist updated from cart sync");
     } else {
       this.fetchWishlist();
+    }
+
+    // Refresh user points when receiving notifications
+    if (event.detail && event.detail.type === "points_earned") {
+      setTimeout(() => {
+        this.refreshUserPoints();
+      }, 1000);
     }
   };
 
@@ -729,9 +746,9 @@ class UserDashboard extends Component {
   };
 
   calculateBadge = (points) => {
-    if (points >= 500) return "platinum";
-    if (points >= 250) return "gold";
-    if (points >= 100) return "silver";
+    if (points >= 4000) return "platinum";
+    if (points >= 2000) return "gold";
+    if (points >= 500) return "silver";
     return "bronze";
   };
 
@@ -1065,6 +1082,7 @@ class UserDashboard extends Component {
       }
     }
   };
+
   fetchPortfolioStatus = async () => {
     try {
       if (!this.state.userData || !this.state.userData.id) {
@@ -1679,15 +1697,16 @@ class UserDashboard extends Component {
                           <div className="stat-label">Total Earned</div>
                         </div>
                       </div>
+
                       <div className="activity-stat">
-                        <div className="stat-icon orders">
-                          <i className="fas fa-clipboard-list"></i>
+                        <div className="stat-icon received">
+                          <i className="fas fa-inbox"></i>
                         </div>
                         <div className="stat-details">
                           <div className="stat-value">
-                            {stats.activeOrders || 0}
+                            {stats.totalOrdersReceived || 0}
                           </div>
-                          <div className="stat-label">Active Orders</div>
+                          <div className="stat-label">Orders Received</div>
                         </div>
                       </div>
                       <div className="activity-stat">
@@ -5788,6 +5807,34 @@ class UserDashboard extends Component {
     }, 2000);
 
     console.log("Data refresh completed after payment");
+  };
+
+  refreshUserPoints = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem("user"));
+      if (!userData || !userData.id) return;
+
+      const response = await fetch(
+        `${this.state.baseUrl}/api/user/${userData.id}`
+      );
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const updatedUserData = {
+            ...userData,
+            voatPoints: result.user.voatPoints || 0,
+            badge:
+              result.user.badge ||
+              this.calculateBadge(result.user.voatPoints || 0),
+          };
+
+          localStorage.setItem("user", JSON.stringify(updatedUserData));
+          this.setState({ userData: updatedUserData });
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing user points:", error);
+    }
   };
 
   renderDashboardContent() {

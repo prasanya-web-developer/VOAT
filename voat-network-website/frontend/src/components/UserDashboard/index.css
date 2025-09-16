@@ -6060,3 +6060,41 @@ textarea {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
 }
+
+/* Badges */
+
+.user-badge.bronze {
+  background-color: #cd7f32;
+  color: white;
+}
+
+.user-badge.silver {
+  background-color: #c0c0c0;
+  color: #333;
+}
+
+.user-badge.gold {
+  background-color: #ffd700;
+  color: #333;
+}
+
+.user-badge.platinum {
+  background-color: #e5e4e2;
+  color: #333;
+}
+
+.profile-badge.bronze {
+  background-color: #cd7f32;
+}
+
+.profile-badge.silver {
+  background-color: #c0c0c0;
+}
+
+.profile-badge.gold {
+  background-color: #ffd700;
+}
+
+.profile-badge.platinum {
+  background-color: #e5e4e2;
+}

@@ -545,6 +545,18 @@ const OrderSchema = new mongoose.Schema(
 
 const Order = mongoose.model("Order", OrderSchema);
 
+const calculateBadge = (voatPoints) => {
+  if (voatPoints >= 4000) return "platinum";
+  if (voatPoints >= 2000) return "gold";
+  if (voatPoints >= 500) return "silver";
+  return "bronze";
+};
+
+// Helper function to calculate VOAT points from amount (1% of amount)
+const calculateVoatPoints = (amount) => {
+  return Math.floor(amount * 0.01); // 1% of amount as points
+};
+
 // Helper function to calculate total works size for a user
 const calculateUserWorksSize = async (userId) => {
   try {
