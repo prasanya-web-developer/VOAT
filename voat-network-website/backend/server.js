@@ -54,17 +54,26 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add specific headers for static file serving
+app.use("/uploads", (req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  next();
+});
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true, mode: 0o755 });
+  console.log("Created uploads directory with proper permissions");
 }
 
 // Create resumes directory if it doesn't exist
-const resumesDir = path.join(__dirname, "uploads/resumes");
-if (!fs.existsSync(resumesDir)) {
-  fs.mkdirSync(resumesDir, { recursive: true });
-}
+// const resumesDir = path.join(__dirname, "uploads/resumes");
+// if (!fs.existsSync(resumesDir)) {
+//   fs.mkdirSync(resumesDir, { recursive: true });
+// }
 
 // Multer for file uploads
 const storage = multer.diskStorage({
@@ -6746,6 +6755,31 @@ app.get("/api/debug/order/:orderId", async (req, res) => {
       error: "Debug endpoint failed",
       message: error.message,
       stack: error.stack,
+    });
+  }
+});
+
+// Debug endpoint to check if uploaded files exist
+app.get("/api/debug/check-file/:filename", (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(__dirname, "uploads", filename);
+
+  const exists = fs.existsSync(filePath);
+
+  if (exists) {
+    const stats = fs.statSync(filePath);
+    res.json({
+      exists: true,
+      path: filePath,
+      size: stats.size,
+      modified: stats.mtime,
+      accessible: true,
+    });
+  } else {
+    res.json({
+      exists: false,
+      path: filePath,
+      suggestion: "File may have been deleted or never uploaded properly",
     });
   }
 });

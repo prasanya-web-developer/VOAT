@@ -407,15 +407,18 @@ class MyPortfolio extends Component {
         let workUrl = work.url;
         let thumbnailUrl = work.thumbnail;
 
-        // Handle work URL
+        // Ensure work URL is properly formatted
         if (workUrl && workUrl !== "null" && workUrl !== "undefined") {
-          if (!workUrl.startsWith("http") && workUrl.startsWith("/")) {
-            workUrl = `${this.state.baseUrl}${workUrl}`;
-          } else if (!workUrl.startsWith("http") && !workUrl.startsWith("/")) {
-            workUrl = `${this.state.baseUrl}/${workUrl}`;
+          // Don't modify if it's already a full URL
+          if (!workUrl.startsWith("http")) {
+            // Ensure it starts with /
+            if (!workUrl.startsWith("/")) {
+              workUrl = "/" + workUrl;
+            }
+            // Don't add baseUrl here - let getValidWorkUrl handle it
           }
         } else {
-          workUrl = null; // Set to null instead of placeholder
+          workUrl = null;
         }
 
         // Handle thumbnail URL
@@ -427,19 +430,13 @@ class MyPortfolio extends Component {
             thumbnailUrl !== "null" &&
             thumbnailUrl !== "undefined"
           ) {
-            if (
-              !thumbnailUrl.startsWith("http") &&
-              thumbnailUrl.startsWith("/")
-            ) {
-              thumbnailUrl = `${this.state.baseUrl}${thumbnailUrl}`;
-            } else if (
-              !thumbnailUrl.startsWith("http") &&
-              !thumbnailUrl.startsWith("/")
-            ) {
-              thumbnailUrl = `${this.state.baseUrl}/${thumbnailUrl}`;
+            if (!thumbnailUrl.startsWith("http")) {
+              if (!thumbnailUrl.startsWith("/")) {
+                thumbnailUrl = "/" + thumbnailUrl;
+              }
             }
           } else {
-            thumbnailUrl = null; // Set to null instead of placeholder
+            thumbnailUrl = null;
           }
         } else {
           thumbnailUrl = workUrl;
@@ -447,7 +444,7 @@ class MyPortfolio extends Component {
 
         return {
           id: work.id || work._id || `work_${index}`,
-          url: workUrl,
+          url: workUrl, // Store the clean path
           thumbnail: thumbnailUrl,
           title: work.title || `Untitled Work ${index + 1}`,
           type: work.type || "image",
@@ -1807,6 +1804,30 @@ class MyPortfolio extends Component {
                                       "Video failed to load:",
                                       e.target.src
                                     );
+                                    console.log(
+                                      "Trying to load from baseUrl:",
+                                      this.state.baseUrl
+                                    );
+
+                                    // Try to access the debug endpoint to check if file exists
+                                    const filename =
+                                      e.target.src.split("/uploads/")[1];
+                                    if (filename) {
+                                      fetch(
+                                        `${this.state.baseUrl}/api/debug/check-file/${filename}`
+                                      )
+                                        .then((res) => res.json())
+                                        .then((data) =>
+                                          console.log(
+                                            "File check result:",
+                                            data
+                                          )
+                                        )
+                                        .catch((err) =>
+                                          console.log("File check failed:", err)
+                                        );
+                                    }
+
                                     e.target.style.display = "none";
                                     if (e.target.nextSibling) {
                                       e.target.nextSibling.style.display =
@@ -1851,6 +1872,30 @@ class MyPortfolio extends Component {
                                       "Image failed to load:",
                                       e.target.src
                                     );
+                                    console.log(
+                                      "Trying to load from baseUrl:",
+                                      this.state.baseUrl
+                                    );
+
+                                    // Try to access the debug endpoint to check if file exists
+                                    const filename =
+                                      e.target.src.split("/uploads/")[1];
+                                    if (filename) {
+                                      fetch(
+                                        `${this.state.baseUrl}/api/debug/check-file/${filename}`
+                                      )
+                                        .then((res) => res.json())
+                                        .then((data) =>
+                                          console.log(
+                                            "File check result:",
+                                            data
+                                          )
+                                        )
+                                        .catch((err) =>
+                                          console.log("File check failed:", err)
+                                        );
+                                    }
+
                                     e.target.style.display = "none";
                                     if (e.target.nextSibling) {
                                       e.target.nextSibling.style.display =
