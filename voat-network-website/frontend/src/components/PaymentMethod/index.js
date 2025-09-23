@@ -309,12 +309,12 @@ const PaymentGateway = () => {
       console.log("Order data items:", orderData.items);
 
       const baseUrl = getBaseUrl();
+      const createdOrders = [];
 
       // Create orders for each cart item
-      const orderPromises = orderData.items.map(async (item) => {
+      for (const item of orderData.items) {
         console.log("Creating order for item:", item);
 
-        // Validate required IDs before sending
         if (!item.freelancerId) {
           throw new Error(`Missing freelancerId for item: ${item.name}`);
         }
@@ -322,9 +322,6 @@ const PaymentGateway = () => {
         if (!currentUser.id) {
           throw new Error("Missing current user ID");
         }
-
-        console.log("Freelancer ID:", item.freelancerId);
-        console.log("Client ID:", currentUser.id);
 
         const orderPayload = {
           clientId: currentUser.id,
@@ -353,24 +350,63 @@ const PaymentGateway = () => {
           body: JSON.stringify(orderPayload),
         });
 
-        console.log("Order creation response status:", response.status);
-
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Order creation failed:", errorText);
           throw new Error(
-            `Failed to create order for ${item.serviceName || item.name}: ${
-              response.status
-            } - ${errorText}`
+            `Failed to create order for ${item.serviceName || item.name}`
           );
         }
 
         const result = await response.json();
         console.log("Order created successfully:", result);
-        return result;
-      });
+        createdOrders.push(result);
+      }
 
-      const createdOrders = await Promise.all(orderPromises);
+      // ADD VOAT POINTS AFTER ALL ORDERS ARE CREATED
+      const totalAmount = orderData.total;
+      const voatPointsEarned = Math.floor(totalAmount * 0.01);
+
+      if (voatPointsEarned > 0) {
+        try {
+          // Add points to user
+          const pointsResponse = await fetch(
+            `${baseUrl}/api/user/add-voat-points`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                userId: currentUser.id,
+                points: voatPointsEarned,
+                reason: "purchase",
+                amount: totalAmount,
+              }),
+            }
+          );
+
+          if (pointsResponse.ok) {
+            console.log("✅ VOAT Points added successfully:", voatPointsEarned);
+
+            // Trigger points update event
+            window.dispatchEvent(
+              new CustomEvent("voatPointsUpdated", {
+                detail: {
+                  userId: currentUser.id,
+                  pointsEarned: voatPointsEarned,
+                  totalAmount: totalAmount,
+                },
+              })
+            );
+          } else {
+            console.warn("Failed to add VOAT points");
+          }
+        } catch (pointsError) {
+          console.error("Error adding VOAT points:", pointsError);
+        }
+      }
+
       console.log("All orders created successfully:", createdOrders);
       return createdOrders;
     } catch (error) {

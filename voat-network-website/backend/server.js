@@ -4820,6 +4820,7 @@ app.post("/api/orders/create", async (req, res) => {
     console.log("Request body:", req.body);
     console.log("Client ID:", clientId, "Type:", typeof clientId);
     console.log("Freelancer ID:", freelancerId, "Type:", typeof freelancerId);
+    console.log("Total Amount:", totalAmount);
 
     // Validate required fields
     if (!clientId || !freelancerId || !serviceName || !totalAmount) {
@@ -4877,6 +4878,7 @@ app.post("/api/orders/create", async (req, res) => {
     console.log("Client found:", client.name);
     console.log("Freelancer found:", freelancer.name);
 
+    // Create the order
     const newOrder = new Order({
       clientId,
       clientName: clientName || client.name,
@@ -4895,8 +4897,54 @@ app.post("/api/orders/create", async (req, res) => {
     const savedOrder = await newOrder.save();
     console.log("Order saved successfully:", savedOrder._id);
 
-    // Create notifications
+    // ADD VOAT POINTS IF PAYMENT IS COMPLETED
+    if (paymentStatus === "paid") {
+      const voatPoints = Math.floor(parseFloat(totalAmount) * 0.01); // 1% of amount as points
+
+      console.log(
+        "Adding VOAT points:",
+        voatPoints,
+        "for amount:",
+        totalAmount
+      );
+
+      if (voatPoints > 0) {
+        try {
+          const pointsResult = await addVoatPointsToUser(
+            clientId,
+            voatPoints,
+            "purchase"
+          );
+          console.log("✅ VOAT Points added to user:", pointsResult);
+
+          // Create specific notification for VOAT points
+          await createNotification({
+            userId: clientId,
+            type: "system",
+            title: "VOAT Points Earned!",
+            message: `You earned ${voatPoints} VOAT Points from your purchase of ₹${totalAmount.toLocaleString()}`,
+            relatedId: savedOrder._id.toString(),
+            metadata: {
+              action: "voat_points_earned",
+              pointsEarned: voatPoints,
+              reason: "purchase",
+              amount: totalAmount,
+              orderId: savedOrder._id,
+              newTotal: pointsResult ? pointsResult.newTotal : null,
+              newBadge: pointsResult ? pointsResult.newBadge : null,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch (pointsError) {
+          console.error("❌ Error adding VOAT points:", pointsError);
+          // Don't fail the order creation if points addition fails
+        }
+      }
+    }
+
+    // Create order notifications
     try {
+      // Notification for freelancer
       await createNotification({
         userId: freelancerId,
         type: "order",
@@ -4908,9 +4956,12 @@ app.post("/api/orders/create", async (req, res) => {
           clientName: client.name,
           serviceName,
           totalAmount,
+          serviceLevel: serviceLevel || "Standard",
+          timestamp: new Date().toISOString(),
         },
       });
 
+      // Notification for client
       await createNotification({
         userId: clientId,
         type: "order",
@@ -4922,24 +4973,34 @@ app.post("/api/orders/create", async (req, res) => {
           freelancerName: freelancer.name,
           serviceName,
           totalAmount,
-          action: "purchase_made", // This triggers stats update
+          action: "purchase_made",
+          serviceLevel: serviceLevel || "Standard",
+          timestamp: new Date().toISOString(),
         },
       });
     } catch (notificationError) {
-      console.error("Error creating notifications:", notificationError);
+      console.error("❌ Error creating notifications:", notificationError);
+      // Don't fail the order creation if notifications fail
     }
+
+    console.log("✅ Order creation completed successfully");
 
     res.status(201).json({
       success: true,
       order: savedOrder,
       message: "Order created successfully",
+      voatPointsEarned:
+        paymentStatus === "paid"
+          ? Math.floor(parseFloat(totalAmount) * 0.01)
+          : 0,
     });
   } catch (error) {
-    console.error("Error creating order:", error);
+    console.error("❌ Error creating order:", error);
     res.status(500).json({
       success: false,
       message: "Failed to create order",
       error: error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 });
@@ -6254,6 +6315,78 @@ app.post("/api/payment/create-razorpay-order", async (req, res) => {
 });
 
 // Verify Razorpay Payment
+
+// Add this endpoint after your existing payment endpoints
+app.post("/api/payment/verify-payment", async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      userId,
+    } = req.body;
+
+    console.log("=== VERIFYING PAYMENT ===");
+    console.log("Payment data:", {
+      razorpay_order_id,
+      razorpay_payment_id,
+      userId,
+    });
+
+    // Verify signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    const isAuthentic = expectedSignature === razorpay_signature;
+
+    if (isAuthentic) {
+      // Find and update transaction
+      const transaction = await PaymentTransaction.findOneAndUpdate(
+        { razorpayOrderId: razorpay_order_id },
+        {
+          razorpayPaymentId: razorpay_payment_id,
+          razorpaySignature: razorpay_signature,
+          status: "paid",
+        },
+        { new: true }
+      );
+
+      if (transaction) {
+        // Calculate and add VOAT points (1% of amount)
+        const voatPoints = Math.floor(transaction.amount * 0.01);
+
+        const pointsResult = await addVoatPointsToUser(
+          userId,
+          voatPoints,
+          "purchase"
+        );
+
+        console.log("✅ VOAT Points added:", pointsResult);
+
+        res.json({
+          success: true,
+          message: "Payment verified successfully",
+          voatPointsEarned: voatPoints,
+          transaction: transaction,
+        });
+      } else {
+        throw new Error("Transaction not found");
+      }
+    } else {
+      throw new Error("Payment verification failed");
+    }
+  } catch (error) {
+    console.error("Payment verification error:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message || "Payment verification failed",
+    });
+  }
+});
+
 // Admin endpoint to update existing users' VOAT points based on their order history
 app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
   try {
@@ -6360,6 +6493,62 @@ app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
       success: false,
       message: "Failed to update existing user VOAT points",
       error: error.message,
+    });
+  }
+});
+
+// Add this endpoint to handle VOAT points addition
+app.post("/api/user/add-voat-points", async (req, res) => {
+  try {
+    const { userId, points, reason = "purchase", amount } = req.body;
+
+    console.log("=== ADDING VOAT POINTS ===");
+    console.log("User ID:", userId, "Points:", points, "Reason:", reason);
+
+    if (!userId || !points) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID and points are required",
+      });
+    }
+
+    // Add points to user
+    const result = await addVoatPointsToUser(userId, points, reason);
+
+    if (result) {
+      // Create notification
+      await createNotification({
+        userId: userId,
+        type: "system",
+        title: "VOAT Points Earned!",
+        message: `You earned ${points} VOAT Points from your purchase of ₹${amount}`,
+        relatedId: userId,
+        metadata: {
+          action: "voat_points_earned",
+          pointsEarned: points,
+          reason: reason,
+          amount: amount,
+          newTotal: result.newTotal,
+          newBadge: result.newBadge,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      res.json({
+        success: true,
+        message: "VOAT Points added successfully",
+        pointsAdded: points,
+        newTotal: result.newTotal,
+        newBadge: result.newBadge,
+      });
+    } else {
+      throw new Error("Failed to add VOAT points");
+    }
+  } catch (error) {
+    console.error("Error adding VOAT points:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to add VOAT points",
     });
   }
 });

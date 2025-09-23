@@ -5916,14 +5916,30 @@ class UserDashboard extends Component {
       const userData = JSON.parse(localStorage.getItem("user"));
       if (!userData || !userData.id) return;
 
+      console.log("=== REFRESHING VOAT POINTS ===");
+
       const response = await fetch(
-        `${this.state.baseUrl}/api/user/${userData.id}`
+        `${this.state.baseUrl}/api/user/${userData.id}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+          },
+        }
       );
+
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.user) {
           const currentPoints = result.user.voatPoints || 0;
           const currentBadge = this.calculateBadge(currentPoints);
+
+          console.log("Current points from DB:", currentPoints);
+          console.log(
+            "Current points in state:",
+            this.state.userData.voatPoints
+          );
 
           // Always update if there's any difference
           if (
@@ -5943,9 +5959,10 @@ class UserDashboard extends Component {
             this.setState({ userData: updatedUserData });
             localStorage.setItem("user", JSON.stringify(updatedUserData));
 
-            // Trigger a re-render of stats
+            // Force stats update
             setTimeout(() => {
               this.updateStats();
+              this.forceUpdate(); // Force component re-render
             }, 100);
           }
         }
