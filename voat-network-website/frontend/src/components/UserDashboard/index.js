@@ -156,6 +156,10 @@ class UserDashboard extends Component {
       this.refreshVoatPoints();
     }, 30000);
 
+    this.voatPointsInterval = setInterval(() => {
+      this.refreshVoatPoints();
+    }, 15000);
+
     // Event handlers
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
@@ -195,6 +199,11 @@ class UserDashboard extends Component {
     if (this.voatPointsRefreshInterval) {
       clearInterval(this.voatPointsRefreshInterval);
     }
+
+    if (this.voatPointsInterval) {
+      clearInterval(this.voatPointsInterval);
+    }
+
     if (this.dataRefreshInterval) {
       clearInterval(this.dataRefreshInterval);
     }
@@ -6211,25 +6220,6 @@ class UserDashboard extends Component {
                   </div>
                   <div className="points-label">VOAT Points</div>
                 </div>
-                {/* ADD THIS DEBUG BUTTON - Remove after testing */}
-                <button
-                  className="debug-refresh-btn"
-                  onClick={() => {
-                    console.log("Manual refresh clicked");
-                    this.refreshVoatPoints();
-                  }}
-                  style={{
-                    fontSize: "10px",
-                    padding: "2px 6px",
-                    marginTop: "4px",
-                    background: "#025ba5",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "3px",
-                  }}
-                >
-                  Refresh Points
-                </button>
               </div>
             </div>
           </div>

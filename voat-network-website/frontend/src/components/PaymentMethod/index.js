@@ -365,7 +365,7 @@ const PaymentGateway = () => {
 
       // ADD VOAT POINTS AFTER ALL ORDERS ARE CREATED
       const totalAmount = orderData.total;
-      const voatPointsEarned = Math.floor(totalAmount * 0.01);
+      const voatPointsEarned = Math.floor(totalAmount * 0.001);
 
       if (voatPointsEarned > 0) {
         try {
@@ -541,7 +541,7 @@ const PaymentGateway = () => {
               new CustomEvent("voatPointsUpdated", {
                 detail: {
                   userId: currentUser.id,
-                  pointsEarned: Math.floor(orderData.total * 0.01),
+                  pointsEarned: Math.floor(orderData.total * 0.001),
                   totalAmount: orderData.total,
                 },
               })
@@ -902,7 +902,7 @@ const PaymentGateway = () => {
                 <div className="paymentpage-rewards-info">
                   <span className="paymentpage-rewards-text">You'll earn</span>
                   <span className="paymentpage-rewards-points">
-                    {Math.floor(orderData.total * 0.01)} VOAT Points
+                    {Math.floor(orderData.total * 0.001)} VOAT Points
                   </span>
                 </div>
               </div>

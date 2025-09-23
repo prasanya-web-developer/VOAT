@@ -588,7 +588,7 @@ const addVoatPointsToUser = async (userId, points, reason = "purchase") => {
 
 // Helper function to calculate VOAT points from amount (1% of amount)
 const calculateVoatPoints = (amount) => {
-  return Math.floor(amount * 0.01); // 1% of amount as points
+  return Math.floor(amount * 0.001); // 0.1% of amount as points (1 point per 1000)
 };
 
 // Helper function to calculate total works size for a user
@@ -4899,7 +4899,7 @@ app.post("/api/orders/create", async (req, res) => {
 
     // ADD VOAT POINTS IF PAYMENT IS COMPLETED
     if (paymentStatus === "paid") {
-      const voatPoints = Math.floor(parseFloat(totalAmount) * 0.01); // 1% of amount as points
+      const voatPoints = Math.floor(parseFloat(totalAmount) * 0.001); // 1% of amount as points
 
       console.log(
         "Adding VOAT points:",
@@ -6356,7 +6356,7 @@ app.post("/api/payment/verify-payment", async (req, res) => {
 
       if (transaction) {
         // Calculate and add VOAT points (1% of amount)
-        const voatPoints = Math.floor(transaction.amount * 0.01);
+        const voatPoints = Math.floor(transaction.amount * 0.001);
 
         const pointsResult = await addVoatPointsToUser(
           userId,
@@ -6415,7 +6415,7 @@ app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
           );
 
           // Calculate VOAT points (1% of total spent)
-          const voatPointsEarned = Math.floor(totalSpent * 0.01);
+          const voatPointsEarned = Math.floor(totalSpent * 0.001);
 
           if (voatPointsEarned > 0) {
             const previousPoints = user.voatPoints || 0;
@@ -7043,6 +7043,57 @@ app.get("/api/debug/routes", (req, res) => {
     }
   });
   res.json(routes);
+});
+
+app.post("/api/admin/recalculate-all-voat-points", async (req, res) => {
+  try {
+    console.log("=== RECALCULATING ALL USER VOAT POINTS ===");
+
+    const users = await User.find({});
+    let updatedUsers = 0;
+
+    for (const user of users) {
+      try {
+        const userOrders = await Order.find({
+          clientId: user._id,
+          paymentStatus: "paid",
+        });
+
+        if (userOrders.length > 0) {
+          const totalSpent = userOrders.reduce(
+            (sum, order) => sum + order.totalAmount,
+            0
+          );
+
+          const correctVoatPoints = Math.floor(totalSpent * 0.001);
+
+          user.voatPoints = correctVoatPoints;
+          user.badge = calculateBadge(user.voatPoints);
+          await user.save();
+
+          updatedUsers++;
+          console.log(
+            `Updated user ${user.name}: ${correctVoatPoints} points for ₹${totalSpent} spent`
+          );
+        }
+      } catch (userError) {
+        console.error(`Error processing user ${user.email}:`, userError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "VOAT points recalculated successfully",
+      updatedUsers: updatedUsers,
+    });
+  } catch (error) {
+    console.error("Error recalculating VOAT points:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to recalculate VOAT points",
+      error: error.message,
+    });
+  }
 });
 
 // Validate Razorpay configuration
