@@ -108,15 +108,25 @@ class UserDashboard extends Component {
           }
         }, 500);
 
+        // Force refresh VOAT points after everything loads
         setTimeout(() => {
+          console.log("=== FORCING VOAT POINTS REFRESH ===");
+          this.refreshVoatPoints();
           this.updateStats();
-        }, 1000);
+        }, 2000);
+
+        // Additional refresh after 5 seconds to catch any delayed updates
+        setTimeout(() => {
+          console.log("=== DELAYED VOAT POINTS REFRESH ===");
+          this.refreshVoatPoints();
+        }, 5000);
       });
     });
 
     // Check if coming from successful payment
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("payment") === "success") {
+      console.log("=== PAYMENT SUCCESS DETECTED ===");
       setTimeout(() => {
         this.refreshAfterPayment();
       }, 3000);
@@ -125,6 +135,8 @@ class UserDashboard extends Component {
     // Auto-refresh data every 30 seconds
     this.dataRefreshInterval = setInterval(() => {
       this.refreshOrderData();
+      // Also refresh VOAT points periodically
+      this.refreshVoatPoints();
     }, 30000);
 
     this.checkWishlistConsistency();
@@ -148,6 +160,14 @@ class UserDashboard extends Component {
     this.handleWishlistUpdate = this.handleWishlistUpdate.bind(this);
     window.addEventListener("wishlistUpdated", this.handleWishlistUpdate);
     window.addEventListener("cartUpdated", this.handleCartUpdate);
+
+    // Add VOAT points update listener
+    window.addEventListener("voatPointsUpdated", (event) => {
+      console.log("VOAT points update event received:", event.detail);
+      setTimeout(() => {
+        this.refreshVoatPoints();
+      }, 1000);
+    });
 
     this.cartStatusInterval = setInterval(() => {
       if (this.state.activeTab === "wishlist") {
@@ -613,6 +633,12 @@ class UserDashboard extends Component {
               ? this.getFullImageUrl(freshUserData.profileImage)
               : null,
           });
+
+          // ADD THIS - Log the points for debugging
+          console.log(
+            "Fresh user data loaded with points:",
+            freshUserData.voatPoints
+          );
         } else {
           this.setState({
             isLoading: false,
@@ -6163,9 +6189,30 @@ class UserDashboard extends Component {
                   <i className="fas fa-award"></i>
                 </div>
                 <div className="points-info">
-                  <div className="points-value">{userData.voatPoints || 0}</div>
+                  <div className="points-value">
+                    {this.state.userData?.voatPoints || 0}
+                  </div>
                   <div className="points-label">VOAT Points</div>
                 </div>
+                {/* ADD THIS DEBUG BUTTON - Remove after testing */}
+                <button
+                  className="debug-refresh-btn"
+                  onClick={() => {
+                    console.log("Manual refresh clicked");
+                    this.refreshVoatPoints();
+                  }}
+                  style={{
+                    fontSize: "10px",
+                    padding: "2px 6px",
+                    marginTop: "4px",
+                    background: "#025ba5",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "3px",
+                  }}
+                >
+                  Refresh Points
+                </button>
               </div>
             </div>
           </div>

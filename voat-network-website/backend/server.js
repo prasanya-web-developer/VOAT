@@ -6254,395 +6254,111 @@ app.post("/api/payment/create-razorpay-order", async (req, res) => {
 });
 
 // Verify Razorpay Payment
-app.post("/api/payment/verify-payment", async (req, res) => {
+// Admin endpoint to update existing users' VOAT points based on their order history
+app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
   try {
-    const {
-      razorpay_payment_id,
-      razorpay_order_id,
-      razorpay_signature,
-      userId,
-      cartItems, // Add this parameter
-    } = req.body;
+    console.log("=== UPDATING EXISTING USER VOAT POINTS ===");
 
-    console.log("=== VERIFY PAYMENT REQUEST ===");
-    console.log("Payment ID:", razorpay_payment_id);
-    console.log("Order ID:", razorpay_order_id);
-    console.log("User ID:", userId);
-    console.log("Cart Items received:", cartItems);
+    // Get all users
+    const users = await User.find({});
+    console.log(`Found ${users.length} users to process`);
 
-    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing payment verification parameters",
-      });
-    }
+    let updatedUsers = 0;
+    let totalPointsAdded = 0;
 
-    // Verify signature
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
-
-    const isValid = expectedSignature === razorpay_signature;
-
-    if (!isValid) {
-      await PaymentTransaction.findOneAndUpdate(
-        { razorpayOrderId: razorpay_order_id },
-        {
-          status: "failed",
-          failureReason: "Invalid signature",
-        }
-      );
-
-      return res.status(400).json({
-        success: false,
-        message: "Payment verification failed",
-      });
-    }
-
-    // Get payment details from Razorpay
-    const payment = await razorpay.payments.fetch(razorpay_payment_id);
-
-    // Update transaction in database
-    const transaction = await PaymentTransaction.findOneAndUpdate(
-      { razorpayOrderId: razorpay_order_id },
-      {
-        razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature,
-        status: payment.status === "captured" ? "paid" : "attempted",
-        paymentMethod: payment.method,
-        metadata: {
-          bank: payment.bank,
-          wallet: payment.wallet,
-          vpa: payment.vpa,
-        },
-      },
-      { new: true }
-    );
-
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: "Transaction not found",
-      });
-    }
-
-    // CREATE ORDERS FROM CART ITEMS - ONLY IF PAYMENT IS CAPTURED
-    if (payment.status === "captured" && cartItems && cartItems.length > 0) {
-      console.log("=== STARTING ORDER CREATION ===");
-
-      const user = await User.findById(userId);
-      if (!user) {
-        console.error("User not found:", userId);
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
+    for (const user of users) {
+      try {
+        // Find all completed/paid orders for this user
+        const userOrders = await Order.find({
+          clientId: user._id,
+          paymentStatus: "paid",
         });
-      }
 
-      console.log("User found:", user.name);
-
-      const createdOrders = [];
-      const failedOrders = [];
-
-      for (let i = 0; i < cartItems.length; i++) {
-        const item = cartItems[i];
-
-        try {
-          console.log(
-            `=== PROCESSING CART ITEM ${i + 1}/${cartItems.length} ===`
-          );
-          console.log("Raw item data:", item);
-
-          // Extract freelancer ID properly
-          let freelancerId = item.freelancerId;
-
-          // Handle different freelancerId formats
-          if (typeof freelancerId === "object" && freelancerId !== null) {
-            if (freelancerId._id) {
-              freelancerId = freelancerId._id;
-            } else if (freelancerId.id) {
-              freelancerId = freelancerId.id;
-            } else if (freelancerId.$oid) {
-              freelancerId = freelancerId.$oid;
-            } else {
-              freelancerId = freelancerId.toString();
-            }
-          }
-
-          // From originalData if available
-          if (item.originalData && item.originalData.freelancerId) {
-            freelancerId = item.originalData.freelancerId;
-          }
-
-          console.log("Extracted freelancerId:", freelancerId);
-          console.log("FreelancerId type:", typeof freelancerId);
-
-          // Validate freelancer ID format
-          if (!freelancerId || !mongoose.Types.ObjectId.isValid(freelancerId)) {
-            console.error(`Invalid freelancer ID format: ${freelancerId}`);
-            failedOrders.push({
-              item: item,
-              error: `Invalid freelancer ID format: ${freelancerId}`,
-            });
-            continue;
-          }
-
-          // Get freelancer details
-          const freelancer = await User.findById(freelancerId);
-          if (!freelancer) {
-            console.error(`Freelancer not found: ${freelancerId}`);
-            failedOrders.push({
-              item: item,
-              error: `Freelancer not found: ${freelancerId}`,
-            });
-            continue;
-          }
-
-          console.log("Freelancer found:", freelancer.name);
-
-          // Prepare order data
-          const serviceName =
-            item.originalData?.serviceName || item.serviceName || item.category;
-          const serviceLevel =
-            item.originalData?.serviceLevel || item.serviceLevel || "Standard";
-          const totalAmount = parseFloat(
-            item.originalData?.selectedPaymentAmount ||
-              item.selectedPaymentAmount ||
-              item.price ||
-              item.basePrice
-          );
-          const freelancerName =
-            item.originalData?.freelancerName ||
-            item.freelancerName ||
-            item.seller ||
-            freelancer.name;
-
-          // Validate required fields
-          if (!serviceName || !totalAmount || isNaN(totalAmount)) {
-            console.error("Missing required order data:", {
-              serviceName,
-              totalAmount,
-              freelancerName,
-            });
-            failedOrders.push({
-              item: item,
-              error: "Missing required order data",
-            });
-            continue;
-          }
-
-          const orderData = {
-            clientId: userId,
-            clientName: user.name,
-            clientEmail: user.email,
-            freelancerId: freelancerId,
-            freelancerName: freelancerName,
-            freelancerEmail: freelancer.email,
-            serviceName: serviceName,
-            serviceLevel: serviceLevel,
-            totalAmount: totalAmount,
-            status: "pending",
-            paymentStatus: "paid",
-            orderDate: new Date(),
-          };
-
-          console.log("Creating order with data:", orderData);
-
-          // Create order
-          const newOrder = new Order(orderData);
-          const savedOrder = await newOrder.save();
-          createdOrders.push(savedOrder);
-
-          console.log(`Order created successfully: ${savedOrder._id}`);
-
-          // Create notification for freelancer
-          try {
-            await createNotification({
-              userId: freelancerId,
-              type: "order",
-              title: "New Paid Order Received",
-              message: `You have received a new paid order from ${user.name} for "${serviceName}"`,
-              relatedId: savedOrder._id.toString(),
-              metadata: {
-                orderId: savedOrder._id,
-                clientName: user.name,
-                serviceName: serviceName,
-                amount: totalAmount,
-                paymentId: razorpay_payment_id,
-              },
-            });
-
-            // Enhanced client notification with purchase tracking
-            await createNotification({
-              userId: userId,
-              type: "order",
-              title: "Order Placed and Payment Confirmed",
-              message: `Your order for "${serviceName}" has been placed and payment of ₹${totalAmount} confirmed`,
-              relatedId: savedOrder._id.toString(),
-              metadata: {
-                orderId: savedOrder._id,
-                freelancerName: freelancerName,
-                serviceName: serviceName,
-                amount: totalAmount,
-                action: "purchase_made", // This triggers stats update
-                paymentConfirmed: true,
-              },
-            });
-
-            console.log("Notifications created successfully");
-          } catch (notificationError) {
-            console.error("Error creating notifications:", notificationError);
-            // Don't fail the order creation for notification errors
-          }
-        } catch (orderError) {
-          console.error("Error creating individual order:", orderError);
-          console.error("Failed item:", item);
-          failedOrders.push({
-            item: item,
-            error: orderError.message,
-          });
-        }
-      }
-
-      console.log(`=== ORDER CREATION SUMMARY ===`);
-      console.log(`Total items: ${cartItems.length}`);
-      console.log(`Orders created: ${createdOrders.length}`);
-      console.log(`Orders failed: ${failedOrders.length}`);
-
-      // Add VOAT points for the user after successful payment
-      if (payment.status === "captured" && createdOrders.length > 0) {
-        try {
-          // Calculate total VOAT points (1% of total amount)
-          const totalAmountSpent = createdOrders.reduce(
+        if (userOrders.length > 0) {
+          // Calculate total amount spent by this user
+          const totalSpent = userOrders.reduce(
             (sum, order) => sum + order.totalAmount,
             0
           );
-          const voatPointsEarned = calculateVoatPoints(totalAmountSpent);
 
-          console.log(`=== ADDING VOAT POINTS ===`);
-          console.log(`Total amount spent: ₹${totalAmountSpent}`);
-          console.log(`VOAT points to be added: ${voatPointsEarned}`);
+          // Calculate VOAT points (1% of total spent)
+          const voatPointsEarned = Math.floor(totalSpent * 0.01);
 
-          // Add VOAT points to user
-          const pointsResult = await addVoatPointsToUser(
-            userId,
-            voatPointsEarned,
-            "purchase"
-          );
+          if (voatPointsEarned > 0) {
+            const previousPoints = user.voatPoints || 0;
 
-          if (pointsResult) {
-            // Create a notification about points earned
-            await createNotification({
-              userId: userId,
-              type: "system",
-              title: "VOAT Points Earned!",
-              message: `You earned ${voatPointsEarned} VOAT Points from your purchase of ₹${totalAmountSpent}`,
-              relatedId: transaction._id.toString(),
-              metadata: {
-                action: "points_earned",
-                pointsEarned: voatPointsEarned,
-                totalAmount: totalAmountSpent,
-                newTotal: pointsResult.newTotal,
-                newBadge: pointsResult.newBadge,
-                timestamp: new Date().toISOString(),
-              },
-            });
+            // Only add points if user doesn't already have the correct amount
+            // This prevents duplicate points if the script is run multiple times
+            const expectedPoints = voatPointsEarned;
 
-            console.log(
-              `✅ VOAT Points notification created for user ${userId}`
-            );
-          }
-        } catch (pointsError) {
-          console.error(
-            "Error adding VOAT points (non-critical):",
-            pointsError
-          );
-          // Don't fail the payment for points error
-        }
-      }
+            if (previousPoints < expectedPoints) {
+              const pointsToAdd = expectedPoints - previousPoints;
 
-      if (failedOrders.length > 0) {
-        console.log("Failed orders:", failedOrders);
-      }
+              // Update user's VOAT points
+              user.voatPoints = expectedPoints;
+              user.badge = calculateBadge(user.voatPoints);
+              await user.save();
 
-      // Clear cart items that were successfully converted to orders
-      if (createdOrders.length > 0) {
-        try {
-          // Remove items from cart based on the items that were successfully processed
-          const successfulItemIds = cartItems
-            .filter(
-              (_, index) =>
-                index <
-                createdOrders.length +
-                  failedOrders.filter((f, i) => i < index).length
-            )
-            .map((item) => item.id || item._id);
-
-          console.log("Removing cart items with IDs:", successfulItemIds);
-
-          const cartUpdateResult = await Cart.findOneAndUpdate(
-            { userId: userId },
-            {
-              $pull: {
-                items: {
-                  _id: {
-                    $in: successfulItemIds.filter((id) =>
-                      mongoose.Types.ObjectId.isValid(id)
-                    ),
-                  },
+              // Create notification for the user
+              await createNotification({
+                userId: user._id,
+                type: "system",
+                title: "VOAT Points Updated!",
+                message: `You've been awarded ${pointsToAdd} VOAT Points based on your past purchases (₹${totalSpent} total spent)`,
+                relatedId: user._id.toString(),
+                metadata: {
+                  action: "retroactive_points",
+                  pointsAdded: pointsToAdd,
+                  totalSpent: totalSpent,
+                  newTotal: user.voatPoints,
+                  newBadge: user.badge,
+                  orderCount: userOrders.length,
+                  timestamp: new Date().toISOString(),
                 },
-              },
-            },
-            { new: true }
-          );
+              });
 
-          console.log(
-            "Cart update result:",
-            cartUpdateResult ? "Success" : "Failed"
-          );
-        } catch (cartError) {
-          console.error("Error clearing cart:", cartError);
-          // Don't fail the entire operation for cart clearing errors
+              updatedUsers++;
+              totalPointsAdded += pointsToAdd;
+
+              console.log(`Updated user ${user.name}:`, {
+                email: user.email,
+                totalSpent: totalSpent,
+                orderCount: userOrders.length,
+                pointsAdded: pointsToAdd,
+                newTotal: user.voatPoints,
+                newBadge: user.badge,
+              });
+            } else {
+              console.log(
+                `User ${user.name} already has correct points: ${previousPoints}`
+              );
+            }
+          }
         }
+      } catch (userError) {
+        console.error(`Error processing user ${user.email}:`, userError);
       }
-
-      // Store order creation results in transaction metadata
-      await PaymentTransaction.findByIdAndUpdate(transaction._id, {
-        $set: {
-          "metadata.ordersCreated": createdOrders.length,
-          "metadata.ordersFailed": failedOrders.length,
-          "metadata.orderIds": createdOrders.map((order) => order._id),
-        },
-      });
     }
 
-    // Create notification for successful payment
-    await createNotification({
-      userId: userId,
-      type: "payment",
-      title: "Payment Successful",
-      message: `Your payment of ₹${transaction.amount} has been processed successfully`,
-      relatedId: transaction._id.toString(),
-      metadata: {
-        paymentId: razorpay_payment_id,
-        amount: transaction.amount,
-        method: payment.method,
-      },
-    });
-
-    console.log("Payment verified successfully:", razorpay_payment_id);
+    console.log("=== VOAT POINTS UPDATE SUMMARY ===");
+    console.log(`Users processed: ${users.length}`);
+    console.log(`Users updated: ${updatedUsers}`);
+    console.log(`Total points added: ${totalPointsAdded}`);
 
     res.status(200).json({
       success: true,
-      message: "Payment verified successfully",
-      transaction: transaction,
+      message: "VOAT points update completed",
+      summary: {
+        totalUsers: users.length,
+        usersUpdated: updatedUsers,
+        totalPointsAdded: totalPointsAdded,
+      },
     });
   } catch (error) {
-    console.error("Error verifying payment:", error);
+    console.error("Error updating existing user VOAT points:", error);
     res.status(500).json({
       success: false,
-      message: "Payment verification failed",
+      message: "Failed to update existing user VOAT points",
       error: error.message,
     });
   }
@@ -6972,6 +6688,28 @@ app.get("/api/debug/voat-points/:userId", async (req, res) => {
       voatPoints: user.voatPoints,
       badge: user.badge,
       rawUserData: user,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add this debug endpoint after your existing routes
+app.get("/api/debug/user-points/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      userId: user._id,
+      voatId: user.voatId,
+      voatPoints: user.voatPoints,
+      badge: user.badge,
+      lastUpdated: user.updatedAt,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
