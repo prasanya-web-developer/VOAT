@@ -720,6 +720,70 @@ class MyPortfolio extends Component {
     }
   };
 
+  // Pay Now functionality - Direct checkout for single item
+  handlePayNow = async () => {
+    const {
+      selectedPricing,
+      currentUserId,
+      freelancerData,
+      services,
+      activeServiceTab,
+    } = this.state;
+
+    // Validation checks
+    if (!currentUserId) {
+      alert("Please login to proceed with payment");
+      return;
+    }
+
+    if (currentUserId === freelancerData?.id) {
+      alert("You cannot purchase your own services");
+      return;
+    }
+
+    if (!selectedPricing) {
+      alert("Please select a pricing option first");
+      return;
+    }
+
+    const serviceName = services.find(
+      (service) =>
+        service.toLowerCase().replace(/\s+/g, "-") === activeServiceTab
+    );
+
+    if (!serviceName) {
+      alert("Please select a service first");
+      return;
+    }
+
+    try {
+      // Create checkout item for payment
+      const checkoutItem = {
+        id: `direct_${Date.now()}`, // Temporary ID for direct payment
+        freelancerId: freelancerData.id,
+        freelancerName: freelancerData.name,
+        freelancerProfileImage: freelancerData.profileImage,
+        serviceName: serviceName,
+        serviceLevel: selectedPricing.level,
+        selectedPaymentAmount: parseFloat(selectedPricing.price),
+        basePrice: parseFloat(selectedPricing.price),
+      };
+
+      console.log("Direct payment checkout item:", checkoutItem);
+
+      // Store checkout data for payment page
+      localStorage.setItem("checkout_items", JSON.stringify([checkoutItem]));
+      localStorage.setItem("checkout_user_id", currentUserId);
+      localStorage.setItem("checkout_type", "direct"); // Flag for direct payment
+
+      // Redirect to payment page
+      window.location.href = "/payment";
+    } catch (error) {
+      console.error("Error processing direct payment:", error);
+      alert("Failed to process payment. Please try again.");
+    }
+  };
+
   // Add service form handlers
   handleAddServiceFormChange = (e, field, index) => {
     if (field === "name") {
@@ -2212,21 +2276,31 @@ class MyPortfolio extends Component {
                     </div>
                   ) : (
                     <>
+                      <div className="action-buttons-row">
+                        <button
+                          className="action-btn primary"
+                          onClick={this.handleAddToCart}
+                          disabled={!selectedPricing || isAddingToCart}
+                        >
+                          <ShoppingCart className="btn-icon" size={16} />
+                          {isAddingToCart ? "Adding..." : "Add to Cart"}
+                        </button>
+                        <button
+                          className="action-btn secondary"
+                          onClick={this.handleBookNow}
+                          disabled={!selectedPricing || isAddingToCart}
+                        >
+                          <Zap className="btn-icon" size={16} />
+                          Book Now
+                        </button>
+                      </div>
                       <button
-                        className="action-btn primary"
-                        onClick={this.handleAddToCart}
+                        className="action-btn pay-now full-width"
+                        onClick={this.handlePayNow}
                         disabled={!selectedPricing || isAddingToCart}
                       >
-                        <ShoppingCart className="btn-icon" size={16} />
-                        {isAddingToCart ? "Adding..." : "Add to Cart"}
-                      </button>
-                      <button
-                        className="action-btn secondary"
-                        onClick={this.handleBookNow}
-                        disabled={!selectedPricing || isAddingToCart}
-                      >
-                        <Zap className="btn-icon" size={16} />
-                        Book Now
+                        <span className="btn-icon">💳</span>
+                        Pay Now
                       </button>
                     </>
                   )}

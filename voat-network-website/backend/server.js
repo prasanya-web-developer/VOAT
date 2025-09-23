@@ -552,6 +552,40 @@ const calculateBadge = (voatPoints) => {
   return "bronze";
 };
 
+const addVoatPointsToUser = async (userId, points, reason = "purchase") => {
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error("User not found for VOAT points update:", userId);
+      return false;
+    }
+
+    const previousPoints = user.voatPoints || 0;
+    user.voatPoints = previousPoints + points;
+    user.badge = calculateBadge(user.voatPoints);
+
+    await user.save();
+
+    console.log(`✅ VOAT Points added to user ${userId}:`, {
+      previousPoints,
+      pointsAdded: points,
+      newTotal: user.voatPoints,
+      newBadge: user.badge,
+      reason,
+    });
+
+    return {
+      previousPoints,
+      pointsAdded: points,
+      newTotal: user.voatPoints,
+      newBadge: user.badge,
+    };
+  } catch (error) {
+    console.error("Error adding VOAT points:", error);
+    return false;
+  }
+};
+
 // Helper function to calculate VOAT points from amount (1% of amount)
 const calculateVoatPoints = (amount) => {
   return Math.floor(amount * 0.01); // 1% of amount as points
@@ -6475,6 +6509,58 @@ app.post("/api/payment/verify-payment", async (req, res) => {
       console.log(`Total items: ${cartItems.length}`);
       console.log(`Orders created: ${createdOrders.length}`);
       console.log(`Orders failed: ${failedOrders.length}`);
+
+      // Add VOAT points for the user after successful payment
+      if (payment.status === "captured" && createdOrders.length > 0) {
+        try {
+          // Calculate total VOAT points (1% of total amount)
+          const totalAmountSpent = createdOrders.reduce(
+            (sum, order) => sum + order.totalAmount,
+            0
+          );
+          const voatPointsEarned = calculateVoatPoints(totalAmountSpent);
+
+          console.log(`=== ADDING VOAT POINTS ===`);
+          console.log(`Total amount spent: ₹${totalAmountSpent}`);
+          console.log(`VOAT points to be added: ${voatPointsEarned}`);
+
+          // Add VOAT points to user
+          const pointsResult = await addVoatPointsToUser(
+            userId,
+            voatPointsEarned,
+            "purchase"
+          );
+
+          if (pointsResult) {
+            // Create a notification about points earned
+            await createNotification({
+              userId: userId,
+              type: "system",
+              title: "VOAT Points Earned!",
+              message: `You earned ${voatPointsEarned} VOAT Points from your purchase of ₹${totalAmountSpent}`,
+              relatedId: transaction._id.toString(),
+              metadata: {
+                action: "points_earned",
+                pointsEarned: voatPointsEarned,
+                totalAmount: totalAmountSpent,
+                newTotal: pointsResult.newTotal,
+                newBadge: pointsResult.newBadge,
+                timestamp: new Date().toISOString(),
+              },
+            });
+
+            console.log(
+              `✅ VOAT Points notification created for user ${userId}`
+            );
+          }
+        } catch (pointsError) {
+          console.error(
+            "Error adding VOAT points (non-critical):",
+            pointsError
+          );
+          // Don't fail the payment for points error
+        }
+      }
 
       if (failedOrders.length > 0) {
         console.log("Failed orders:", failedOrders);

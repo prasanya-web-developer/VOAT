@@ -340,6 +340,11 @@ class UserDashboard extends Component {
         order.status === "in-progress"
     ).length;
 
+    // NEW: Calculate pending orders count
+    const pendingOrders = orders.filter(
+      (order) => order.status.toLowerCase() === "pending"
+    ).length;
+
     // Calculate stats for My Bookings (all booking requests made by user)
     const totalMyBookings = Array.isArray(myBookings) ? myBookings.length : 0;
     const pendingMyBookings = Array.isArray(myBookings)
@@ -351,6 +356,7 @@ class UserDashboard extends Component {
     let completedProjects = 0;
     let totalBookingRequests = 0;
     let totalOrdersReceived = 0;
+    let pendingBookingRequests = 0; // NEW: Calculate pending booking requests
 
     if (this.isFreelancer()) {
       // Total earned from ACCEPTED orders (when freelancer accepts the order)
@@ -372,6 +378,11 @@ class UserDashboard extends Component {
 
       // Total booking requests count (all requests received by freelancer)
       totalBookingRequests = Array.isArray(bookings) ? bookings.length : 0;
+
+      // NEW: Pending booking requests count
+      pendingBookingRequests = Array.isArray(bookings)
+        ? bookings.filter((b) => b.status === "pending").length
+        : 0;
 
       // Total orders received count (all paid orders received by freelancer)
       totalOrdersReceived = Array.isArray(receivedOrders)
@@ -395,6 +406,9 @@ class UserDashboard extends Component {
         bookingRequestsCount: totalBookingRequests,
         totalOrdersReceived,
         myOrdersCount,
+        // NEW: Added pending counts
+        pendingOrders,
+        pendingBookingRequests,
       },
     });
   };
@@ -3261,13 +3275,13 @@ class UserDashboard extends Component {
                         <i className="fas fa-eye"></i>
                         <span>View Details</span>
                       </button>
-                      <button
+                      {/* <button
                         className="action-btn-compact primary"
                         onClick={() => this.addToCartFromBooking(booking)}
                       >
                         <i className="fas fa-shopping-cart"></i>
                         <span>Add to Cart</span>
-                      </button>
+                      </button> */}
                       <button
                         className="action-btn-compact cancel"
                         onClick={() => this.handleCancelBooking(booking._id)}
@@ -5728,14 +5742,24 @@ class UserDashboard extends Component {
     console.log("=== REFRESHING DATA AFTER PAYMENT ===");
 
     // Refresh all order-related data
-    this.fetchOrders(); // My Orders (as client)
-    this.fetchMyBookings(); // My Bookings
+    this.fetchOrders();
+    this.fetchMyBookings();
     this.fetchNotifications();
 
     if (this.isFreelancer()) {
-      this.fetchBookingRequests(); // Booking Requests (as freelancer)
-      this.fetchFreelancerOrders(); // Orders Received (as freelancer)
+      this.fetchBookingRequests();
+      this.fetchFreelancerOrders();
     }
+
+    // ADD THESE LINES:
+    // Add immediate and delayed VOAT points refresh
+    setTimeout(() => {
+      this.refreshVoatPoints();
+    }, 1000);
+
+    setTimeout(() => {
+      this.refreshVoatPoints();
+    }, 3000);
 
     // Update stats after data refresh
     setTimeout(() => {
@@ -5753,85 +5777,85 @@ class UserDashboard extends Component {
     }, 500);
   };
 
-  handleWorkFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    const validFiles = [];
-    const previews = [];
-    const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+  // handleWorkFileChange = (e) => {
+  //   const files = Array.from(e.target.files);
+  //   const validFiles = [];
+  //   const previews = [];
+  //   const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
 
-    files.forEach((file) => {
-      // Validate file size
-      if (file.size > MAX_SIZE) {
-        alert(
-          `File "${file.name}" is too large. Maximum file size is 50MB. Please choose a smaller file.`
-        );
-        return;
-      }
+  //   files.forEach((file) => {
+  //     // Validate file size
+  //     if (file.size > MAX_SIZE) {
+  //       alert(
+  //         `File "${file.name}" is too large. Maximum file size is 50MB. Please choose a smaller file.`
+  //       );
+  //       return;
+  //     }
 
-      // Validate file type
-      const allowedTypes = [
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-        "video/mp4",
-        "video/avi",
-        "video/mov",
-        "video/webm",
-      ];
+  //     // Validate file type
+  //     const allowedTypes = [
+  //       "image/jpeg",
+  //       "image/png",
+  //       "image/gif",
+  //       "image/webp",
+  //       "video/mp4",
+  //       "video/avi",
+  //       "video/mov",
+  //       "video/webm",
+  //     ];
 
-      if (allowedTypes.includes(file.type)) {
-        validFiles.push(file);
+  //     if (allowedTypes.includes(file.type)) {
+  //       validFiles.push(file);
 
-        // Create preview
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const preview = {
-            id: Date.now() + Math.random(),
-            file: file,
-            url: e.target.result,
-            type: file.type.startsWith("video/") ? "video" : "image",
-            name: file.name,
-            size: file.size,
-          };
+  //       // Create preview
+  //       const reader = new FileReader();
+  //       reader.onload = (e) => {
+  //         const preview = {
+  //           id: Date.now() + Math.random(),
+  //           file: file,
+  //           url: e.target.result,
+  //           type: file.type.startsWith("video/") ? "video" : "image",
+  //           name: file.name,
+  //           size: file.size,
+  //         };
 
-          this.setState((prevState) => ({
-            workPreviews: [...prevState.workPreviews, preview],
-          }));
-        };
-        reader.readAsDataURL(file);
-      } else {
-        alert(
-          `File type "${file.type}" is not supported. Please use JPG, PNG, GIF, WebP, MP4, AVI, MOV, or WebM files.`
-        );
-      }
-    });
+  //         this.setState((prevState) => ({
+  //           workPreviews: [...prevState.workPreviews, preview],
+  //         }));
+  //       };
+  //       reader.readAsDataURL(file);
+  //     } else {
+  //       alert(
+  //         `File type "${file.type}" is not supported. Please use JPG, PNG, GIF, WebP, MP4, AVI, MOV, or WebM files.`
+  //       );
+  //     }
+  //   });
 
-    this.setState((prevState) => ({
-      selectedWorkFiles: [...prevState.selectedWorkFiles, ...validFiles],
-    }));
-  };
+  //   this.setState((prevState) => ({
+  //     selectedWorkFiles: [...prevState.selectedWorkFiles, ...validFiles],
+  //   }));
+  // };
 
-  refreshAfterPayment = () => {
-    console.log("=== REFRESHING DATA AFTER PAYMENT ===");
+  // refreshAfterPayment = () => {
+  //   console.log("=== REFRESHING DATA AFTER PAYMENT ===");
 
-    // Refresh all order-related data
-    this.fetchOrders(); // My Orders (as client)
-    this.fetchMyBookings(); // My Bookings
-    this.fetchNotifications();
+  //   // Refresh all order-related data
+  //   this.fetchOrders(); // My Orders (as client)
+  //   this.fetchMyBookings(); // My Bookings
+  //   this.fetchNotifications();
 
-    if (this.isFreelancer()) {
-      this.fetchBookingRequests(); // Booking Requests (as freelancer)
-      this.fetchFreelancerOrders(); // Orders Received (as freelancer)
-    }
+  //   if (this.isFreelancer()) {
+  //     this.fetchBookingRequests(); // Booking Requests (as freelancer)
+  //     this.fetchFreelancerOrders(); // Orders Received (as freelancer)
+  //   }
 
-    // Update stats after data refresh
-    setTimeout(() => {
-      this.updateStats();
-    }, 2000);
+  //   // Update stats after data refresh
+  //   setTimeout(() => {
+  //     this.updateStats();
+  //   }, 2000);
 
-    console.log("Data refresh completed after payment");
-  };
+  //   console.log("Data refresh completed after payment");
+  // };
 
   refreshUserPoints = async () => {
     try {
@@ -5875,8 +5899,11 @@ class UserDashboard extends Component {
           const currentPoints = result.user.voatPoints || 0;
           const currentBadge = this.calculateBadge(currentPoints);
 
-          // Update state if points have changed
-          if (this.state.userData.voatPoints !== currentPoints) {
+          // Always update if there's any difference
+          if (
+            this.state.userData.voatPoints !== currentPoints ||
+            this.state.userData.badge !== currentBadge
+          ) {
             console.log(
               `VOAT points updated: ${this.state.userData.voatPoints} -> ${currentPoints}`
             );
@@ -5889,6 +5916,11 @@ class UserDashboard extends Component {
 
             this.setState({ userData: updatedUserData });
             localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+            // Trigger a re-render of stats
+            setTimeout(() => {
+              this.updateStats();
+            }, 100);
           }
         }
       }
@@ -6040,11 +6072,18 @@ class UserDashboard extends Component {
               >
                 <i className="fas fa-shopping-cart nav-icon"></i>
                 <span className="nav-text">My Orders</span>
-                {this.state.stats.myOrdersCount > 0 && (
-                  <span className="nav-badge">
-                    {this.state.stats.myOrdersCount}
-                  </span>
-                )}
+                {this.state.orders &&
+                  this.state.orders.filter(
+                    (o) => o.status.toLowerCase() === "pending"
+                  ).length > 0 && (
+                    <span className="nav-badge">
+                      {
+                        this.state.orders.filter(
+                          (o) => o.status.toLowerCase() === "pending"
+                        ).length
+                      }
+                    </span>
+                  )}
               </button>
 
               {/* FREELANCER-ONLY TABS - Only freelancers see these */}
@@ -6058,11 +6097,17 @@ class UserDashboard extends Component {
                   >
                     <i className="fas fa-inbox nav-icon"></i>
                     <span className="nav-text">Booking Requests</span>
-                    {this.state.stats.bookingRequestsCount > 0 && (
-                      <span className="nav-badge">
-                        {this.state.stats.bookingRequestsCount}
-                      </span>
-                    )}
+                    {this.state.bookings &&
+                      this.state.bookings.filter((b) => b.status === "pending")
+                        .length > 0 && (
+                        <span className="nav-badge">
+                          {
+                            this.state.bookings.filter(
+                              (b) => b.status === "pending"
+                            ).length
+                          }
+                        </span>
+                      )}
                   </button>
 
                   <button
@@ -6097,11 +6142,11 @@ class UserDashboard extends Component {
               >
                 <i className="fas fa-heart nav-icon"></i>
                 <span className="nav-text">Wishlist</span>
-                {this.state.stats.savedItems > 0 && (
+                {/* {this.state.stats.savedItems > 0 && (
                   <span className="nav-badge">
                     {this.state.stats.savedItems}
                   </span>
-                )}
+                )} */}
               </button>
 
               <button className="nav-item" onClick={this.handleLogout}>

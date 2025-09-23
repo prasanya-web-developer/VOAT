@@ -501,6 +501,16 @@ const PaymentGateway = () => {
             await createOrdersFromCartItems();
             console.log("Orders created successfully");
 
+            window.dispatchEvent(
+              new CustomEvent("voatPointsUpdated", {
+                detail: {
+                  userId: currentUser.id,
+                  pointsEarned: Math.floor(orderData.total * 0.01),
+                  totalAmount: orderData.total,
+                },
+              })
+            );
+
             // Try to clear cart, but don't fail if it doesn't work
             try {
               await processCartCheckout();
