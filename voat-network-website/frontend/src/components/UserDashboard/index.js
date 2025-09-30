@@ -121,6 +121,31 @@ class UserDashboard extends Component {
           this.refreshVoatPoints();
         }, 5000);
       });
+
+      window.addEventListener("orderCreated", this.handleOrderCreated);
+      window.addEventListener("orderAccepted", this.handleOrderStatusChange);
+      window.addEventListener("orderRejected", this.handleOrderStatusChange);
+      window.addEventListener("orderCompleted", this.handleOrderStatusChange);
+      window.addEventListener("orderCancelled", this.handleOrderStatusChange);
+      window.addEventListener("bookingCreated", this.handleBookingCreated);
+      window.addEventListener(
+        "bookingAccepted",
+        this.handleBookingStatusChange
+      );
+      window.addEventListener(
+        "bookingRejected",
+        this.handleBookingStatusChange
+      );
+      window.addEventListener(
+        "bookingCancelled",
+        this.handleBookingStatusChange
+      );
+
+      // Visibility change for instant refresh when tab becomes active
+      document.addEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange
+      );
     });
 
     // Check if coming from successful payment
@@ -211,6 +236,29 @@ class UserDashboard extends Component {
     window.removeEventListener("wishlistUpdated", this.handleWishlistUpdate);
     window.removeEventListener("cartUpdated", this.handleCartUpdate);
     document.removeEventListener("click", this.handleClickOutside);
+
+    window.removeEventListener("orderCreated", this.handleOrderCreated);
+    window.removeEventListener("orderAccepted", this.handleOrderStatusChange);
+    window.removeEventListener("orderRejected", this.handleOrderStatusChange);
+    window.removeEventListener("orderCompleted", this.handleOrderStatusChange);
+    window.removeEventListener("orderCancelled", this.handleOrderStatusChange);
+    window.removeEventListener("bookingCreated", this.handleBookingCreated);
+    window.removeEventListener(
+      "bookingAccepted",
+      this.handleBookingStatusChange
+    );
+    window.removeEventListener(
+      "bookingRejected",
+      this.handleBookingStatusChange
+    );
+    window.removeEventListener(
+      "bookingCancelled",
+      this.handleBookingStatusChange
+    );
+    document.removeEventListener(
+      "visibilitychange",
+      this.handleVisibilityChange
+    );
   }
 
   handleClickOutside = (event) => {
@@ -3515,6 +3563,14 @@ class UserDashboard extends Component {
   };
 
   handleCancelBooking = async (bookingId) => {
+    if (!bookingId) {
+      this.showNotification(
+        "Unable to cancel booking: Invalid booking ID",
+        "error"
+      );
+      return;
+    }
+
     const confirmCancel = window.confirm(
       "Are you sure you want to cancel this booking? The client will be notified."
     );
@@ -3551,6 +3607,13 @@ class UserDashboard extends Component {
           ),
         }));
 
+        // Dispatch real-time event
+        window.dispatchEvent(
+          new CustomEvent("bookingCancelled", {
+            detail: { bookingId, userId: userData.id },
+          })
+        );
+
         this.addNotification({
           type: "system",
           message: "Booking cancelled successfully. Client has been notified.",
@@ -3558,7 +3621,7 @@ class UserDashboard extends Component {
         });
 
         // Refresh bookings from server
-        this.fetchBookings();
+        this.fetchBookingRequests();
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to cancel booking");
@@ -3592,6 +3655,16 @@ class UserDashboard extends Component {
           `Booking request ${action}ed successfully!`,
           "success"
         );
+
+        // ADD THESE LINES:
+        const eventName =
+          action === "accept" ? "bookingAccepted" : "bookingRejected";
+        window.dispatchEvent(
+          new CustomEvent(eventName, {
+            detail: { bookingId, action },
+          })
+        );
+
         setTimeout(() => {
           this.refreshNotifications();
         }, 1000);
@@ -5525,6 +5598,13 @@ class UserDashboard extends Component {
           ),
         }));
 
+        // Dispatch real-time event
+        window.dispatchEvent(
+          new CustomEvent("orderRejected", {
+            detail: { orderId, freelancerId: userData.id },
+          })
+        );
+
         this.showNotification("Order rejected successfully", "success");
 
         // Refresh data after a short delay
@@ -5616,6 +5696,13 @@ class UserDashboard extends Component {
           ),
         }));
 
+        // Dispatch real-time event
+        window.dispatchEvent(
+          new CustomEvent("orderAccepted", {
+            detail: { orderId, freelancerId: userData.id },
+          })
+        );
+
         this.showNotification("Order accepted successfully!", "success");
 
         // Refresh data after a short delay
@@ -5681,6 +5768,13 @@ class UserDashboard extends Component {
       if (response.ok) {
         const result = await response.json();
         console.log("Order marked complete successfully:", result);
+
+        // Dispatch real-time event
+        window.dispatchEvent(
+          new CustomEvent("orderCompleted", {
+            detail: { orderId, freelancerId: userData.id },
+          })
+        );
 
         this.showNotification("Order marked as completed!", "success");
 
@@ -5978,6 +6072,72 @@ class UserDashboard extends Component {
       }
     } catch (error) {
       console.error("Error refreshing VOAT points:", error);
+    }
+  };
+
+  // Real time updates
+
+  handleOrderCreated = (event) => {
+    console.log("=== ORDER CREATED EVENT ===", event.detail);
+    this.fetchOrders();
+    if (this.isFreelancer()) {
+      this.fetchFreelancerOrders();
+    }
+    setTimeout(() => {
+      this.updateStats();
+      this.fetchNotifications();
+      this.refreshVoatPoints();
+    }, 1000);
+  };
+
+  handleOrderStatusChange = (event) => {
+    console.log("=== ORDER STATUS CHANGED ===", event.detail);
+    this.fetchOrders();
+    if (this.isFreelancer()) {
+      this.fetchFreelancerOrders();
+    }
+    setTimeout(() => {
+      this.updateStats();
+      this.fetchNotifications();
+    }, 1000);
+  };
+
+  handleBookingCreated = (event) => {
+    console.log("=== BOOKING CREATED EVENT ===", event.detail);
+    this.fetchMyBookings();
+    if (this.isFreelancer()) {
+      this.fetchBookingRequests();
+    }
+    setTimeout(() => {
+      this.updateStats();
+      this.fetchNotifications();
+    }, 1000);
+  };
+
+  handleBookingStatusChange = (event) => {
+    console.log("=== BOOKING STATUS CHANGED ===", event.detail);
+    this.fetchMyBookings();
+    if (this.isFreelancer()) {
+      this.fetchBookingRequests();
+    }
+    setTimeout(() => {
+      this.updateStats();
+      this.fetchNotifications();
+    }, 1000);
+  };
+
+  handleVisibilityChange = () => {
+    if (!document.hidden) {
+      console.log("=== TAB VISIBLE - AUTO REFRESH ===");
+      this.fetchOrders();
+      this.fetchMyBookings();
+      this.fetchNotifications();
+      this.refreshVoatPoints();
+      if (this.isFreelancer()) {
+        this.fetchBookingRequests();
+        this.fetchFreelancerOrders();
+      }
+      this.updateStats();
     }
   };
 

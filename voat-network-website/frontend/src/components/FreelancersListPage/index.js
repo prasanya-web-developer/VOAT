@@ -1251,11 +1251,11 @@ class PortfolioList extends Component {
 
     try {
       const bookingData = {
-        clientId: currentUser.id, // ✅ This should match your backend expectation
+        clientId: currentUser.id,
         clientName: currentUser.name,
         clientEmail: currentUser.email,
         clientProfileImage: currentUser.profileImage,
-        freelancerId: freelancerId, // ✅ This should match your backend expectation
+        freelancerId: freelancerId,
         freelancerName: portfolio.name,
         freelancerEmail: portfolio.email,
         serviceName: portfolio.profession || "Service",
@@ -1275,6 +1275,18 @@ class PortfolioList extends Component {
       if (response.ok) {
         const result = await response.json();
         console.log("Booking created successfully:", result);
+
+        // Dispatch real-time event
+        window.dispatchEvent(
+          new CustomEvent("bookingCreated", {
+            detail: {
+              booking: result,
+              clientId: currentUser.id,
+              freelancerId: freelancerId,
+            },
+          })
+        );
+
         this.showNotification("Booking request sent successfully!");
       } else {
         const errorData = await response.json();

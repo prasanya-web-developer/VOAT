@@ -698,6 +698,17 @@ class MyPortfolio extends Component {
 
       console.log("Booking created successfully:", result);
 
+      // Dispatch real-time event
+      window.dispatchEvent(
+        new CustomEvent("bookingCreated", {
+          detail: {
+            booking: result,
+            clientId: currentUserId,
+            freelancerId: freelancerData.id,
+          },
+        })
+      );
+
       this.setState({
         cartMessage: "✅ Booking request sent successfully!",
         selectedPricing: null,

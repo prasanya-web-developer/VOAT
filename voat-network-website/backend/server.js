@@ -561,7 +561,7 @@ const addVoatPointsToUser = async (userId, points, reason = "purchase") => {
     }
 
     const previousPoints = user.voatPoints || 0;
-    user.voatPoints = previousPoints + points;
+    user.voatPoints = previousPoints + points; // ✅ Make sure this is ADDING not setting
     user.badge = calculateBadge(user.voatPoints);
 
     await user.save();
@@ -588,7 +588,7 @@ const addVoatPointsToUser = async (userId, points, reason = "purchase") => {
 
 // Helper function to calculate VOAT points from amount (1% of amount)
 const calculateVoatPoints = (amount) => {
-  return Math.floor(amount * 0.001); // 0.1% of amount as points (1 point per 1000)
+  return Math.floor(amount / 1000); // 1 point per 1000 rupees
 };
 
 // Helper function to calculate total works size for a user
@@ -6391,8 +6391,53 @@ app.post("/api/payment/verify-payment", async (req, res) => {
 app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
   try {
     console.log("=== UPDATING EXISTING USER VOAT POINTS ===");
+    const savedOrder = await newOrder.save();
+    console.log("Order saved successfully:", savedOrder._id);
 
-    // Get all users
+    if (paymentStatus === "paid") {
+      // ✅ CORRECT CALCULATION: 1 point per ₹1000
+      const voatPoints = Math.floor(parseFloat(totalAmount) / 1000);
+
+      console.log(
+        "Adding VOAT points:",
+        voatPoints,
+        "for amount:",
+        totalAmount
+      );
+
+      if (voatPoints > 0) {
+        try {
+          const pointsResult = await addVoatPointsToUser(
+            clientId,
+            voatPoints,
+            "purchase"
+          );
+          console.log("✅ VOAT Points added to user:", pointsResult);
+
+          // Create notification
+          await createNotification({
+            userId: clientId,
+            type: "system",
+            title: "VOAT Points Earned!",
+            message: `You earned ${voatPoints} VOAT Points from your purchase of ₹${totalAmount.toLocaleString()}`,
+            relatedId: savedOrder._id.toString(),
+            metadata: {
+              action: "voat_points_earned",
+              pointsEarned: voatPoints,
+              reason: "purchase",
+              amount: totalAmount,
+              orderId: savedOrder._id,
+              newTotal: pointsResult ? pointsResult.newTotal : null,
+              newBadge: pointsResult ? pointsResult.newBadge : null,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch (pointsError) {
+          console.error("❌ Error adding VOAT points:", pointsError);
+        }
+      }
+    }
+
     const users = await User.find({});
     console.log(`Found ${users.length} users to process`);
 
@@ -6401,38 +6446,32 @@ app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
 
     for (const user of users) {
       try {
-        // Find all completed/paid orders for this user
         const userOrders = await Order.find({
           clientId: user._id,
           paymentStatus: "paid",
         });
 
         if (userOrders.length > 0) {
-          // Calculate total amount spent by this user
           const totalSpent = userOrders.reduce(
             (sum, order) => sum + order.totalAmount,
             0
           );
 
-          // Calculate VOAT points (1% of total spent)
-          const voatPointsEarned = Math.floor(totalSpent * 0.001);
+          // ✅ CORRECT: 1 point per ₹1000
+          const voatPointsEarned = Math.floor(totalSpent / 1000);
 
           if (voatPointsEarned > 0) {
             const previousPoints = user.voatPoints || 0;
-
-            // Only add points if user doesn't already have the correct amount
-            // This prevents duplicate points if the script is run multiple times
             const expectedPoints = voatPointsEarned;
 
             if (previousPoints < expectedPoints) {
               const pointsToAdd = expectedPoints - previousPoints;
 
-              // Update user's VOAT points
               user.voatPoints = expectedPoints;
               user.badge = calculateBadge(user.voatPoints);
               await user.save();
 
-              // Create notification for the user
+              // Create notification
               await createNotification({
                 userId: user._id,
                 type: "system",
@@ -6461,10 +6500,6 @@ app.post("/api/admin/update-existing-user-voat-points", async (req, res) => {
                 newTotal: user.voatPoints,
                 newBadge: user.badge,
               });
-            } else {
-              console.log(
-                `User ${user.name} already has correct points: ${previousPoints}`
-              );
             }
           }
         }
@@ -7065,7 +7100,8 @@ app.post("/api/admin/recalculate-all-voat-points", async (req, res) => {
             0
           );
 
-          const correctVoatPoints = Math.floor(totalSpent * 0.001);
+          // ✅ CORRECT: 1 point per ₹1000
+          const correctVoatPoints = Math.floor(totalSpent / 1000);
 
           user.voatPoints = correctVoatPoints;
           user.badge = calculateBadge(user.voatPoints);
